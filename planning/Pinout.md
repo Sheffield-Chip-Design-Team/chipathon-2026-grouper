@@ -10,35 +10,22 @@ GF180MCU MIMO ASIC — logical pad list. Physical pad numbers and positions are 
 
 All signal pads use **GF180 5V-capable IO cells** from the chipathon padring library, operated on a **3.3V `VDD_IO` rail** to match the SX1257/SX1302/RPi board interfaces. Core logic runs at **3.3V**, so no internal level translation is required between the core and SRAM domains.
 
-### RX data from SX1257 (8 pads, input)
-
-| Pad name | Dir | Connected to | Description |
-|---|---|---|---|
-| `IQ_DATA_I[0]` | in | SX1257_1 I_OUT (pin 15) | 1-bit ΣΔ RX I stream, antenna 1 |
-| `IQ_DATA_Q[0]` | in | SX1257_1 Q_OUT (pin 14) | 1-bit ΣΔ RX Q stream, antenna 1 |
-| `IQ_DATA_I[1]` | in | SX1257_2 I_OUT | 1-bit ΣΔ RX I stream, antenna 2 |
-| `IQ_DATA_Q[1]` | in | SX1257_2 Q_OUT | 1-bit ΣΔ RX Q stream, antenna 2 |
-| `IQ_DATA_I[2]` | in | SX1257_3 I_OUT | 1-bit ΣΔ RX I stream, antenna 3 |
-| `IQ_DATA_Q[2]` | in | SX1257_3 Q_OUT | 1-bit ΣΔ RX Q stream, antenna 3 |
-| `IQ_DATA_I[3]` | in | SX1257_4 I_OUT | 1-bit ΣΔ RX I stream, antenna 4 |
-| `IQ_DATA_Q[3]` | in | SX1257_4 Q_OUT | 1-bit ΣΔ RX Q stream, antenna 4 |
-
-> **Polarity note (SX1257 Table 1-1 typo):** Table 1-1 of the SX1257 datasheet v1.2 describes pin 14 Q_OUT as "I channel" and pin 15 I_OUT as "Q channel" — this is a Semtech typo. The §3.7.1 block diagram is correct. Connect I_OUT (pin 15) → `IQ_DATA_I[n]` and Q_OUT (pin 14) → `IQ_DATA_Q[n]`.
-
 ### Clock (1 pad, input)
 
 | Pad name | Dir | Connected to | Description |
 |---|---|---|---|
 | `IQ_CLK` | in | PCB TCXO clock buffer output | 32 MHz master clock. Shared reference: same buffer also drives SX1257_1–4 XTB (pin 8) via separate PCB traces. This pad is the ASIC core clock. |
 
-### ΣΔ re-mod output to SX1302 (2 pads, output)
+### Muxed IO x 8 
+> **Polarity note (SX1257 Table 1-1 typo):** Table 1-1 of the SX1257 datasheet v1.2 describes pin 14 Q_OUT as "I channel" and pin 15 I_OUT as "Q channel" — this is a Semtech typo. The §3.7.1 block diagram is correct. Connect I_OUT (pin 15) → `IQ_DATA_I[n]` and Q_OUT (pin 14) → `IQ_DATA_Q[n]`.
+
+
+### Chip reset (1 pad, input)
 
 | Pad name | Dir | Connected to | Description |
 |---|---|---|---|
-| `REMOD_A_I` | out | SX1302 Radio A I input | 1-bit ΣΔ MRC combined stream |
-| `REMOD_A_Q` | out | SX1302 Radio A Q input | 1-bit ΣΔ MRC combined stream Q |
+| `RESETB` | in | RPi GPIO or power-on RC | Active-low. Resets all logic including PicoRV32. CPU reset is additionally software-controlled via SPI register for BIST-then-boot sequence. |
 
-> **SX1302 clock:** SX1302 CLK_IN is driven by SX1257_1 CLK_OUT (pin 10) directly on the PCB — no ASIC pad required. See board-level pin dispositions in [System Architecture](System%20Architecture.md).
 
 ### SPI bus — shared host config and SX1257 config (6 pads, bidirectional)
 
@@ -87,11 +74,6 @@ All four pads are dual-function, controlled by the `JTAG_EN` config bit (default
 
 **JTAG_EN location:** `DEBUG_CTRL` register (`0x03[0]`) in the register map. `GPIO_DIR` (`0x04`), `GPIO_OUT` (`0x05`), and `GPIO_IN` (`0x06`) control pad direction and drive value in normal mode.
 
-### Chip reset (1 pad, input)
-
-| Pad name | Dir | Connected to | Description |
-|---|---|---|---|
-| `RESETB` | in | RPi GPIO or power-on RC | Active-low. Resets all logic including PicoRV32. CPU reset is additionally software-controlled via SPI register for BIST-then-boot sequence. |
 
 ---
 
@@ -121,21 +103,6 @@ All four pads are dual-function, controlled by the `JTAG_EN` config bit (default
 | GND | 1 |
 | **Supply/ground subtotal** | **3** |
 | **Total** | **25** |
-
----
-
-## Pads NOT on ASIC
-
-The following signals are board-level only — no ASIC pad allocated:
-
-| Signal | Reason | Disposition |
-|---|---|---|
-| SX1257 DIO0–DIO3 (×4 devices) | 0 spare ASIC pads | PLL lock polled via `RegModeStatus` (0x11) over SPI instead |
-| SX1257 individual NSS (×4) | Replaced by 74HC139 decoder | ASIC drives 2-bit address `CS_A[1:0]`; decoder generates individual active-low NSS lines on the PCB |
-| SX1257 RESET (pin 9, ×4) | 0 spare ASIC pads | Decision pending: floating (POR only) or RPi GPIO |
-| SX1257 CLK_IN (pin 11, ×4) | Not needed — XTB shared TCXO used for lock | Leave NC on all 4 devices |
-| SX1257 CLK_OUT (pin 10) | SX1257_1: CLK_OUT → SX1302 CLK_IN (PCB trace, no ASIC pad) | SX1257_2–4: leave NC |
-| SE2435L CTX/CPS (ant 3/4) | Covered by JTAG/GPIO mux pads | GPIO_0–2 (`TMS_GPIO0`, `TDI_GPIO1`, `TDO_GPIO2`) available when `JTAG_EN=0`; see [SE2435L Front-End Module](blocks/SE2435L%20Front-End%20Module.md) |
 
 ---
 
