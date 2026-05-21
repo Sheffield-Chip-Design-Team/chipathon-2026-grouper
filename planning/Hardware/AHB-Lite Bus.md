@@ -1,4 +1,4 @@
-# AHB-Lite Bus
+# AHB-Lite 2-Master Bus
 
 Control block. See [System Architecture](../System%20Diagram.md) for context.
 
