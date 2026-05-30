@@ -1,3 +1,5 @@
 fusesoc_libraries/*
 build/*
 *env/*
+fusesoc.conf
+hw/rtl/.DS_Store
