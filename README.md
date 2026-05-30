@@ -1,7 +1,3 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-cat <<'EOF'
 # Grouper SoC — Quick Start
 
 ## 1) Create + activate a virtual environment
@@ -31,4 +27,3 @@ fusesoc run --no-export --target=tb_top grouper_soc
 ## Notes
 - The simulation uses the SystemVerilog testbench top `picorv32_hello_tb`.
 - Verilator is required in PATH.
-EOF
