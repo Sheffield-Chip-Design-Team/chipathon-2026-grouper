@@ -1,0 +1,73 @@
+CAPI=2:
+name: sharc:soc_ip:grouper_soc:0.0.1
+description: RISC-V 32IM SoC with UART, SPI and GPIO
+
+filesets:
+  rtl:
+    files:
+      - hw/rtl/common/clk_div.sv:                         {file_type: systemVerilogSource}
+      - hw/rtl/common/clk_gate.sv:                        {file_type: systemVerilogSource}
+      - hw/rtl/common/clk_out.sv:                         {file_type: systemVerilogSource}
+      - hw/rtl/common/downcounter.sv:                     {file_type: systemVerilogSource}
+      - hw/rtl/common/pulse_sync.sv:                      {file_type: systemVerilogSource}
+      - hw/rtl/common/shift_reg.sv:                       {file_type: systemVerilogSource}
+      - hw/rtl/common/small_sync_fifo.sv:                 {file_type: systemVerilogSource}
+      - hw/rtl/common/sync.sv:                            {file_type: systemVerilogSource}
+      
+      - hw/rtl/ahb3lite/ahb3lite_pkg.sv:                  {file_type: systemVerilogSource}
+      - hw/rtl/ahb3lite/ahb3lite_intf.sv:                 {file_type: systemVerilogSource}
+
+      - hw/rtl/interconnect/ahb_debug.sv:                 {file_type: systemVerilogSource}
+      - hw/rtl/interconnect/ahb_conn.sv:                  {file_type: systemVerilogSource}
+      - hw/rtl/interconnect/ahb_interconnect.sv:          {file_type: systemVerilogSource}
+
+      - hw/rtl/rom/ahb_rom.sv:                            {file_type: systemVerilogSource}
+      - hw/rtl/sram/ahb_ram.sv:                           {file_type: systemVerilogSource}
+
+      - hw/rtl/uart/uart_clk_div.sv:                      {file_type: systemVerilogSource}
+      - hw/rtl/uart/uart_rx.sv:                           {file_type: systemVerilogSource}
+      - hw/rtl/uart/uart_tx.sv:                           {file_type: systemVerilogSource}
+      - hw/rtl/uart/uart.sv:                              {file_type: systemVerilogSource}
+      - hw/rtl/uart/ahb_uart.sv:                          {file_type: systemVerilogSource}
+
+      - hw/rtl/cpu/cpu_ss.sv:                             {file_type: systemVerilogSource}
+      - hw/rtl/periph/periph_ss.sv:                       {file_type: systemVerilogSource}
+
+      - hw/rtl/picorv32_hello_core.sv:                    {file_type: systemVerilogSource}
+      - hw/rtl/picorv32_hello_top.sv:                     {file_type: systemVerilogSource}
+
+    depend:
+      - ::picorv32:0-r1
+
+  sw:
+    files:
+      - sw/code.vmem:                                     {file_type: systemVerilogSource, is_include_file: true}
+      - sw/code.hex:                                      {file_type: systemVerilogSource, is_include_file: true}
+
+  tb:
+    files:
+      - hw/tb/picorv32_hello_tb.sv:                       {file_type: systemVerilogSource}
+
+targets:
+  default: &sim
+    description: Default.
+    filesets:
+      - rtl
+      - sw
+    toplevel: picorv32_hello_top
+
+  tb_top:
+    <<: *sim
+    description: Grouper SoC top-level simulation.
+    flow: sim
+    flow_options:
+      tool: verilator
+      verilator_options:
+        - -Wno-TIMESCALEMOD
+        - --sv
+        - --trace
+        - --fst
+        - --binary
+    filesets_append:
+      - tb
+    toplevel: picorv32_hello_tb
