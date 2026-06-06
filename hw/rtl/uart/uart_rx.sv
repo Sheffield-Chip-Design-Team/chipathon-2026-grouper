@@ -122,10 +122,12 @@ module uart_rx #(
   always_ff @(posedge clk, negedge rst_n)
     if (~rst_n) begin
       sample_ctr <= '0;
+      resynced_sample_ctr <= '0;
       state <= ST_WAIT_START;
     end else if (enable && uart_clk_en) begin
       if (~enable_r) begin // Go to idle state after being enabled
         sample_ctr <= '0;
+        resynced_sample_ctr <= '0;
         state <= ST_WAIT_START;
       end else begin
         state <= next_state;
