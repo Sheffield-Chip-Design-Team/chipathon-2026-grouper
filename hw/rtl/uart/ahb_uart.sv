@@ -1,10 +1,5 @@
-// AHB BCD Converter Interface
-//
-// Number of addressable locations : 2
-// Size of each addressable location : 32 bits
-// Supported transfer sizes : Word
-// Alignment of base address : Double Word aligned
-//
+// AHB UART 
+
 // Address map :
 //   Base addess + 0 : 
 //     Read BCD Converter Output (5-digit BCD)
@@ -59,6 +54,7 @@ module ahb_uart #(
 
   // AHB transfer codes needed in this module
   localparam bit [1:0] No_Transfer  = 2'b00;
+  
 
   localparam bit [1:0] ADDR_CTRL    = 2'b00;
   localparam bit [1:0] ADDR_STATUS  = 2'b01;
