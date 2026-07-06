@@ -54,8 +54,6 @@ module cpu_ss #(
   logic [31:0]  irq_int;
   logic [31:0]  eoi;
 
-  // TODO instantiate the IBEX
-
   ibex_top #(
     .PMPEnable                       (1'b0),
     .PMPGranularity                  (0),
