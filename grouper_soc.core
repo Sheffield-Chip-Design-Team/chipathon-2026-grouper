@@ -37,7 +37,7 @@ filesets:
       - hw/rtl/picorv32_hello_top.sv:                     {file_type: systemVerilogSource}
 
     depend:
-      - ::picorv32:0-r1
+      - yosys:cpu_ip:picorv32:1.0.0
 
   sw:
     files:
