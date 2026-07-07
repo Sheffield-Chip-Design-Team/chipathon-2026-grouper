@@ -193,6 +193,6 @@ add_pdn_connect \
     -grid macro \
     -layers "$::env(PDN_VERTICAL_LAYER) $::env(PDN_HORIZONTAL_LAYER)"
 
-# SRAM macros
-
-source [file join [file dirname [info script]] "pdn_3v3_sram.tcl"]
+# No custom per-macro PDN grids for the workshop slot: the core
+# holds only a 20-bit counter, no SRAMs, so the generic `macro` grid
+# above covers the chip_id / logo placeholders.

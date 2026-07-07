@@ -19,8 +19,8 @@ if { [info exists ::env(MAX_CAPACITANCE_CONSTRAINT)] } {
 }
 
 # Input Delays (e.g., data arrives 3ns max, 1ns min after clk)
-set_input_delay -clock clk -max 3.0 [get_ports {rst_n uart_rx}]
-set_input_delay -clock clk -min 1.0 [get_ports {rst_n uart_rx}]
+set_input_delay -clock clk -max 3.0 [get_ports {async_rst_n uart_rx}]
+set_input_delay -clock clk -min 1.0 [get_ports {async_rst_n uart_rx}]
 
 # Output Delays (e.g., data required 2ns before clk, and must hold for 0.5ns)
 set_output_delay -clock clk -max 2.0 [all_outputs]
