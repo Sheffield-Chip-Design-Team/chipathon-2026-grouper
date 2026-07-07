@@ -35,11 +35,11 @@ meta:
 
 DESIGN_NAME: picorv32_hello_top
 VERILOG_FILES:
-  - dir::../src/rtl/picorv32_hello_top.sv
-  - dir::../src/rtl/ram_ss.sv
-  - dir::../src/rtl/sync.sv
-  - dir::../src/rtl/picorv32.v
-  - dir::../src/wrappers/sram1024x8_wrapper.sv
+  - dir::../../src/rtl/picorv32_hello_top.sv
+  - dir::../../src/rtl/ram_ss.sv
+  - dir::../../src/rtl/sync.sv
+  - dir::../../src/rtl/picorv32.v
+  - dir::../../src/wrappers/sram1024x8_wrapper.sv
 
 # VERILOG_INCLUDE_DIRS:
   # - dir::../src/rtl/inc
@@ -63,9 +63,9 @@ DIE_AREA: [0.0, 0.0, 1400, 1400]
 PRIMARY_GDSII_STREAMOUT_TOOL: klayout
 
 # SDC files
-PNR_SDC_FILE: dir::../src/rtl/picorv32_hello_top.sdc
-SIGNOFF_SDC_FILE: dir::../src/rtl/picorv32_hello_top.sdc
-FALLBACK_SDC: dir::../src/rtl/picorv32_hello_top.sdc
+PNR_SDC_FILE: dir::../../src/rtl/picorv32_hello_top.sdc
+SIGNOFF_SDC_FILE: dir::../../src/rtl/picorv32_hello_top.sdc
+FALLBACK_SDC: dir::../../src/rtl/picorv32_hello_top.sdc
 
 # Power / ground nets
 VDD_NETS:
@@ -189,11 +189,11 @@ MAGIC_EXT_UNIQUE: notopports
 MACROS:
   gf180mcu_ocd_ip_sram__sram1024x8m8wm1:
     gds:
-      - dir::../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1.gds
+      - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1.gds
     lef:
-      - dir::../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1.lef
+      - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1.lef
     vh:
-      - dir::../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__blackbox_pp.v
+      - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__blackbox_pp.v
     instances:
       # SIZE 301.300 BY 515.810 ; native (unrotated) footprint: 301.3(X) x 515.81(Y).
       # Row of 4 along the bottom of the die, starting from the bottom-left.
@@ -215,7 +215,7 @@ MACROS:
         orientation: S
     lib:
       "*": # default fallback
-        - dir::../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__tt_025C_3v30.lib
+        - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__tt_025C_3v30.lib
 
 # This is an alternative method compared to
 # specifying the power connections in the RTL
