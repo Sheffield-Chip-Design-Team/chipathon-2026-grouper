@@ -152,7 +152,7 @@ PDN_CORE_RING: false            # hierarchical integration; parent owns Metal5
 PDN_HORIZONTAL_HALO: 10
 PDN_VERTICAL_HALO: 10
 
-PDN_CFG: dir::../chip/pdn_cfg.tcl
+PDN_CFG: dir::pdn_cfg.tcl
 
 # ---------------------------------------------------------------------------
 # Corners
