@@ -116,29 +116,32 @@ BOTTOM_MARGIN_MULT: 1
 LEFT_MARGIN_MULT: 1
 RIGHT_MARGIN_MULT: 1
 
-# PDN - Straps
+
+
+# NEW PDN CONFIG
+PDN_MULTILAYER: true
+PDN_ENABLE_RAILS: true
+PDN_RAIL_LAYER: Metal1
+PDN_VERTICAL_LAYER: Metal4      # carries over the SRAMs
+PDN_HORIZONTAL_LAYER: Metal3    # std-cell area only; trimmed at SRAMs
+
+# Straps
 PDN_VWIDTH: 5
 PDN_HWIDTH: 5
 PDN_VSPACING: 1
 PDN_HSPACING: 1
 PDN_VPITCH: 75
 PDN_HPITCH: 75
-PDN_EXTEND_TO: core_ring
+PDN_VOFFSET: 10
+PDN_HOFFSET: 10
 
-# PDN - Core ring
-PDN_CORE_RING: True
+PDN_EXTEND_TO: boundary
+PDN_ENABLE_PINS: true           # Metal3/Metal4 pins for the parent to grab
+PDN_CORE_RING: false
+PDN_HORIZONTAL_HALO: 10
+PDN_VERTICAL_HALO: 10
 
-# Maximum metal width without slotting: 30um
-PDN_CORE_RING_VWIDTH: 12
-PDN_CORE_RING_HWIDTH: 12
-PDN_CORE_RING_CONNECT_TO_PADS: False
-PDN_ENABLE_PINS: False
-PDN_CORE_VERTICAL_LAYER: Metal2
-PDN_CORE_HORIZONTAL_LAYER: Metal3
 PDN_CFG: dir::../chip/pdn_cfg.tcl
-
-PDN_HORIZONTAL_HALO: 6
-PDN_VERTICAL_HALO:   12
 
 "LIB": {
   "*_tt_025C_3v30": [
@@ -224,16 +227,16 @@ MACROS:
       # halos meet without overlapping.
       u_ram_ss.gen_macro_ram.gen_sram[0].u_wrapper.u_sram_macro:
         location: [67.4, 50]
-        orientation: N
+        orientation:  S
       u_ram_ss.gen_macro_ram.gen_sram[1].u_wrapper.u_sram_macro:
         location: [388.7, 50]
-        orientation: N
+        orientation:  S
       u_ram_ss.gen_macro_ram.gen_sram[2].u_wrapper.u_sram_macro:
         location: [710.0, 50]
-        orientation: N
+        orientation:  S
       u_ram_ss.gen_macro_ram.gen_sram[3].u_wrapper.u_sram_macro:
         location: [1031.3, 50]
-        orientation: N  
+        orientation: S
 
     lib:
       "*": # default fallback

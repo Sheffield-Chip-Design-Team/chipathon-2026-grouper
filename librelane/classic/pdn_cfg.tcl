@@ -20,6 +20,25 @@ source $::env(SCRIPTS_DIR)/openroad/common/io.tcl
 source $::env(SCRIPTS_DIR)/openroad/common/set_global_connections.tcl
 set_global_connections
 
+# ---------------------------------------------------------------------------
+# Layer stack assumptions for picorv32_hello_top
+#
+# gf180mcu_ocd_ip_sram__sram1024x8m8wm1 obstructs Metal1, Metal2 and Metal3
+# across its entire interior (3.0 .. 298.3 x 3.0 .. 512.81) and exposes VDD /
+# VSS only on a ~3um Metal3 perimeter frame. Metal4 is unobstructed, so it is
+# the only layer that can carry power over the macro, and Metal3 is the only
+# layer that can receive it.
+#
+# If the strap layers change, sram_grid below silently stops connecting and
+# the SRAM power floats. Fail loudly instead.
+# ---------------------------------------------------------------------------
+if { $::env(PDN_VERTICAL_LAYER) != "Metal4" } {
+    throw APPLICATION "sram_grid requires Metal4 vertical straps (SRAM obstructs Metal1-Metal3), got $::env(PDN_VERTICAL_LAYER)."
+}
+if { $::env(PDN_HORIZONTAL_LAYER) != "Metal3" } {
+    throw APPLICATION "sram_grid requires Metal3 horizontal straps to reach the SRAM power pins, got $::env(PDN_HORIZONTAL_LAYER)."
+}
+
 set secondary []
 foreach vdd $::env(VDD_NETS) gnd $::env(GND_NETS) {
     if { $vdd != $::env(VDD_NET)} {
@@ -119,6 +138,10 @@ if { $::env(PDN_MULTILAYER) == 1 } {
 }
 
 # Adds the standard cell rails if enabled.
+# gf180mcu_fd_sc_mcu7t5v0 exposes VDD / VSS on Metal1 (no li1-style layer),
+# so PDN_RAIL_LAYER must be Metal1. The rail-to-strap connect below is a
+# Metal1 -> Metal4 via stack (Via1 + Via2 + Via3), which is the standard
+# LibreLane structure; repair_pdn_vias cleans up any DRC casualties.
 if { $::env(PDN_ENABLE_RAILS) == 1 } {
     add_pdn_stripe \
         -grid stdcell_grid \
@@ -133,6 +156,13 @@ if { $::env(PDN_ENABLE_RAILS) == 1 } {
 
 
 # Adds the core ring if enabled.
+#
+# NOTE: picorv32_hello_top sets PDN_CORE_RING: false. This macro integrates
+# hierarchically -- it reserves Metal5 (RT_MAX_LAYER: Metal4) so the parent's
+# Metal5 straps pass straight over and via down onto the Metal4 straps here.
+# A core ring would only be needed for the "ring" integration method, or at
+# chip top where it bonds to the padframe. Block retained for upstream diffs.
+
 if { $::env(PDN_CORE_RING) == 1 } {
     if { $::env(PDN_MULTILAYER) == 1 } {
         set arg_list [list]
@@ -182,17 +212,43 @@ if { $::env(PDN_CORE_RING) == 1 } {
     }
 }
 
+# ---------------------------------------------------------------------------
+# SRAM macro grid
+#
+# Four instances of gf180mcu_ocd_ip_sram__sram1024x8m8wm1, placed in a row at
+# y=50 with orientation S.
+#
+# No add_pdn_stripe here on purpose: the vertical Metal4 straps from
+# stdcell_grid already run the full die height and pass over every macro
+# (Metal4 is not obstructed). This grid exists solely to tell pdn to drop
+# Via3 wherever a Metal4 stripe of net N overlaps a Metal3 power pin of the
+# same net N. A Metal4 VDD stripe crossing a Metal3 VSS tab is harmless --
+# different layers, no via, no short.
+#
+# The Metal3 horizontal straps from stdcell_grid are trimmed automatically
+# where they cross the macros, since the SRAM obstructs Metal3.
+#
+# WARNING: vias only form where a Metal4 stripe physically crosses a Metal3
+# pin tab. The native bottom edge of the LEF (= the placed *top* edge, given
+# orientation S) has a ~36.6um gap in its VSS tabs between x=187 and x=224
+# (macro-relative). Verify PDN_VOFFSET does not park a VSS stripe in that
+# band for any of the four macro origins (67.4, 388.7, 710.0, 1031.3).
+# Confirm with: check_power_grid -net VSS
+# ---------------------------------------------------------------------------
 define_pdn_grid \
     -macro \
-    -default \
-    -name macro \
+    -name sram_grid \
+    -instances {
+        u_ram_ss.gen_macro_ram.gen_sram[0].u_wrapper.u_sram_macro
+        u_ram_ss.gen_macro_ram.gen_sram[1].u_wrapper.u_sram_macro
+        u_ram_ss.gen_macro_ram.gen_sram[2].u_wrapper.u_sram_macro
+        u_ram_ss.gen_macro_ram.gen_sram[3].u_wrapper.u_sram_macro
+    } \
     -starts_with POWER \
     -halo "$::env(PDN_HORIZONTAL_HALO) $::env(PDN_VERTICAL_HALO)"
 
+# Metal3 is fixed -- it is what the SRAM LEF exposes. The upper layer is
+# whatever the vertical straps are (asserted to be Metal4 above).
 add_pdn_connect \
-    -grid macro \
-    -layers "$::env(PDN_VERTICAL_LAYER) $::env(PDN_HORIZONTAL_LAYER)"
-
-# No custom per-macro PDN grids for the workshop slot: the core
-# holds only a 20-bit counter, no SRAMs, so the generic `macro` grid
-# above covers the chip_id / logo placeholders.
+    -grid sram_grid \
+    -layers "$::env(PDN_HORIZONTAL_LAYER) $::env(PDN_VERTICAL_LAYER)"
