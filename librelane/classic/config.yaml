@@ -116,13 +116,6 @@ DRT_ANTENNA_REPAIR_MARGIN: 10 # %
 PL_MAX_DISPLACEMENT_X: 800
 PL_MAX_DISPLACEMENT_Y: 500
 
-# Margins
-# Horizontal mults are in site widths (0.56um), vertical in site heights (3.92um).
-TOP_MARGIN_MULT: 4         # 15.68um
-BOTTOM_MARGIN_MULT: 4      # 15.68um -- core bottom sits under the macro halo
-LEFT_MARGIN_MULT: 12       # 6.72um
-RIGHT_MARGIN_MULT: 12      # 6.72um
-
 # ---------------------------------------------------------------------------
 # PDN
 #
@@ -130,29 +123,28 @@ RIGHT_MARGIN_MULT: 12      # 6.72um
 # VDD/VSS only on a ~3um Metal3 perimeter frame. Metal4 is unobstructed, so it
 # is the only layer that can carry power over the macros.
 # ---------------------------------------------------------------------------
+
 PDN_MULTILAYER: true
 PDN_ENABLE_RAILS: true
-PDN_RAIL_LAYER: Metal1          # gf180mcu std cells expose VDD/VSS on Metal1
-PDN_VERTICAL_LAYER: Metal4      # carries over the SRAMs
+PDN_RAIL_LAYER:       Metal1    # gf180mcu std cells expose VDD/VSS on Metal1
+PDN_VERTICAL_LAYER:   Metal4    # carries over the SRAMs
 PDN_HORIZONTAL_LAYER: Metal3    # std-cell area only; trimmed at the macros
 
 # Straps
-PDN_VWIDTH: 5
-PDN_HWIDTH: 5
-PDN_VSPACING: 1
-PDN_HSPACING: 1
-PDN_VPITCH: 75
-PDN_HPITCH: 75
-PDN_VOFFSET: 10
-PDN_HOFFSET: 10
+PDN_VWIDTH: 5         
+PDN_HWIDTH: 5          
+PDN_VPITCH: 130         # was 75
+PDN_HPITCH: 130         # was 75
+PDN_VSPACING: 60        # was 1  -&gt;  (130 - 2*5) / 2 = 60
+PDN_HSPACING: 60        # was 1  -&gt;  (130 - 2*5) / 2 = 60
+PDN_EXTEND_TO: boundary   
 
-PDN_EXTEND_TO: boundary
-PDN_ENABLE_PINS: true           # Metal3/Metal4 pins for the parent to grab
-PDN_CORE_RING: false            # hierarchical integration; parent owns Metal5
+PDN_ENABLE_PINS: true    # Metal3/Metal4 pins for the parent to grab
+PDN_CORE_RING:   false   # hierarchical integration; parent owns Metal5
 PDN_HORIZONTAL_HALO: 10
 PDN_VERTICAL_HALO: 10
 
-PDN_CFG: dir::pdn_cfg.tcl
+PDN_CFG: dir::/pdn_cfg.tcl
 
 # ---------------------------------------------------------------------------
 # Corners
@@ -238,8 +230,10 @@ MACROS:
       - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__blackbox_pp.v
     instances:
       # SIZE 301.300 BY 515.810 ; native (unrotated) footprint: 301.3(X) x 515.81(Y).
-      # Row of 4 along the bottom of the die, centered horizontally: left/right
-      # margins are both 67.4um ((1400 - (4*301.3 + 3*20)) / 2).
+      # Row of 4 along the bottom-right of the die: right edge of the last macro
+      # is flush with the die edge (x=1400, 0 margin -- too tight for any std
+      # cell row to fit), so the whole row is pushed as far right as possible.
+      # Left margin absorbs the remainder: 1400 - (4*301.3 + 3*20) = 134.8um.
       #
       # y=25 with FP_MACRO_VERTICAL_HALO=10 cuts rows from y=15, which is below
       # the core floor at y=15.68. No orphaned rows survive beneath the macros.
@@ -249,16 +243,16 @@ MACROS:
       # 20um gap between macros == FP_MACRO_HORIZONTAL_HALO on each side, so
       # halos meet without overlapping.
       "u_ram_ss.gen_macro_ram.gen_sram[0].u_wrapper.u_sram_macro":
-        location: [67.4, 25]
+        location: [134.8, 25]
         orientation: S
       "u_ram_ss.gen_macro_ram.gen_sram[1].u_wrapper.u_sram_macro":
-        location: [388.7, 25]
+        location: [456.1, 25]
         orientation: S
       "u_ram_ss.gen_macro_ram.gen_sram[2].u_wrapper.u_sram_macro":
-        location: [710.0, 25]
+        location: [777.4, 25]
         orientation: S
       "u_ram_ss.gen_macro_ram.gen_sram[3].u_wrapper.u_sram_macro":
-        location: [1031.3, 25]
+        location: [1098.7, 25]
         orientation: S
 
     lib:
