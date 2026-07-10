@@ -131,18 +131,18 @@ PDN_VERTICAL_LAYER:   Metal4    # carries over the SRAMs
 PDN_HORIZONTAL_LAYER: Metal3    # std-cell area only; trimmed at the macros
 
 # Straps
-PDN_VWIDTH: 5         
-PDN_HWIDTH: 5          
-PDN_VPITCH: 130         # was 75
-PDN_HPITCH: 130         # was 75
-PDN_VSPACING: 60        # was 1  -&gt;  (130 - 2*5) / 2 = 60
-PDN_HSPACING: 60        # was 1  -&gt;  (130 - 2*5) / 2 = 60
+PDN_VWIDTH:    5         
+PDN_HWIDTH:    5          
+PDN_VPITCH:    130       # was 75
+PDN_HPITCH:    130       # was 75
+PDN_VSPACING:  60        # was 1  -&gt;  (130 - 2*5) / 2 = 60
+PDN_HSPACING:  60        # was 1  -&gt;  (130 - 2*5) / 2 = 60
 PDN_EXTEND_TO: boundary   
 
-PDN_ENABLE_PINS: true    # Metal3/Metal4 pins for the parent to grab
-PDN_CORE_RING:   false   # hierarchical integration; parent owns Metal5
+PDN_ENABLE_PINS:     true    # Metal3/Metal4 pins for the parent to grab
+PDN_CORE_RING:       false   # hierarchical integration; parent owns Metal5
 PDN_HORIZONTAL_HALO: 10
-PDN_VERTICAL_HALO: 10
+PDN_VERTICAL_HALO:   10
 
 PDN_CFG: dir::/pdn_cfg.tcl
 
