@@ -162,7 +162,6 @@ if { $::env(PDN_ENABLE_RAILS) == 1 } {
 # Metal5 straps pass straight over and via down onto the Metal4 straps here.
 # A core ring would only be needed for the "ring" integration method, or at
 # chip top where it bonds to the padframe. Block retained for upstream diffs.
-
 if { $::env(PDN_CORE_RING) == 1 } {
     if { $::env(PDN_MULTILAYER) == 1 } {
         set arg_list [list]
@@ -238,17 +237,10 @@ if { $::env(PDN_CORE_RING) == 1 } {
 define_pdn_grid \
     -macro \
     -name sram_grid \
-    -instances {
-        u_ram_ss.gen_macro_ram.gen_sram[0].u_wrapper.u_sram_macro
-        u_ram_ss.gen_macro_ram.gen_sram[1].u_wrapper.u_sram_macro
-        u_ram_ss.gen_macro_ram.gen_sram[2].u_wrapper.u_sram_macro
-        u_ram_ss.gen_macro_ram.gen_sram[3].u_wrapper.u_sram_macro
-    } \
+    -cells "gf180mcu_ocd_ip_sram__sram1024x8m8wm1" \
     -starts_with POWER \
     -halo "$::env(PDN_HORIZONTAL_HALO) $::env(PDN_VERTICAL_HALO)"
 
-# Metal3 is fixed -- it is what the SRAM LEF exposes. The upper layer is
-# whatever the vertical straps are (asserted to be Metal4 above).
 add_pdn_connect \
     -grid sram_grid \
     -layers "$::env(PDN_HORIZONTAL_LAYER) $::env(PDN_VERTICAL_LAYER)"
