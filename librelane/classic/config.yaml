@@ -112,10 +112,9 @@ PL_MAX_DISPLACEMENT_Y: 500
 
 # Margins
 TOP_MARGIN_MULT: 4
-BOTTOM_MARGIN_MULT: 1
-LEFT_MARGIN_MULT: 1
-RIGHT_MARGIN_MULT: 1
-
+BOTTOM_MARGIN_MULT: 4      # was 1  -> core now starts at y = 15.68
+LEFT_MARGIN_MULT: 12       # was 1  -> 6.72um
+RIGHT_MARGIN_MULT: 12      # was 1  -> 6.7
 
 
 # NEW PDN CONFIG
@@ -220,24 +219,17 @@ MACROS:
     vh:
       - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__blackbox_pp.v
     instances:
-      # SIZE 301.300 BY 515.810 ; native (unrotated) footprint: 301.3(X) x 515.81(Y).
-      # Row of 4 along the bottom of the die, centered horizontally: left/right
-      # margins are both 67.4um ((1400 - (4*301.3 + 3*20)) / 2).
-      # Orientation S (rather than N) so the pin row -- which sits on the native
-      # y=0 edge of the cell -- faces up into the core instead of the die edge.
-      # 20um gap between macros == FP_MACRO_HORIZONTAL_HALO on each side, so
-      # halos meet without overlapping.
       u_ram_ss.gen_macro_ram.gen_sram[0].u_wrapper.u_sram_macro:
-        location: [67.4, 50]
-        orientation:  S
+        location: [67.4, 25]
+        orientation: S
       u_ram_ss.gen_macro_ram.gen_sram[1].u_wrapper.u_sram_macro:
-        location: [388.7, 50]
-        orientation:  S
+        location: [388.7, 25]
+        orientation: S
       u_ram_ss.gen_macro_ram.gen_sram[2].u_wrapper.u_sram_macro:
-        location: [710.0, 50]
-        orientation:  S
+        location: [710.0, 25]
+        orientation: S
       u_ram_ss.gen_macro_ram.gen_sram[3].u_wrapper.u_sram_macro:
-        location: [1031.3, 50]
+        location: [1031.3, 25]
         orientation: S
 
     lib:
