@@ -21,7 +21,7 @@ source $::env(SCRIPTS_DIR)/openroad/common/set_global_connections.tcl
 set_global_connections
 
 # ---------------------------------------------------------------------------
-# Layer stack assumptions for picorv32_hello_top
+# Layer stack for picorv32_hello_top
 #
 # gf180mcu_ocd_ip_sram__sram1024x8m8wm1 obstructs Metal1, Metal2 and Metal3
 # across its entire interior (3.0 .. 298.3 x 3.0 .. 512.81) and exposes VDD /
@@ -29,8 +29,22 @@ set_global_connections
 # the only layer that can carry power over the macro, and Metal3 is the only
 # layer that can receive it.
 #
-# If the strap layers change, sram_grid below silently stops connecting and
-# the SRAM power floats. Fail loudly instead.
+# Structure:
+#
+#   Metal5   (reserved -- parent's straps; RT_MAX_LAYER is Metal4)
+#   Metal4   vertical straps, full die height, cross the SRAMs
+#   Metal3   horizontal straps, trimmed at the SRAMs; SRAM power pins
+#   Metal2   vertical straps, coincident with Metal4, trimmed at the SRAMs
+#   Metal1   followpin rails on the std cell VDD/VSS pins
+#
+# Every add_pdn_connect below joins ADJACENT layers. The upstream template
+# connects the Metal1 rails straight to the vertical strap layer, which is a
+# single via when that layer is Metal2 but a three-cut Via1+Via2+Via3 stack
+# when it is Metal4. Rather than rely on that stack, Metal2 stripes are added
+# to give the rails a layer-by-layer path up to the grid.
+#
+# If the strap layers change, sram_grid stops connecting and the SRAM power
+# floats silently. Fail loudly instead.
 # ---------------------------------------------------------------------------
 if { $::env(PDN_VERTICAL_LAYER) != "Metal4" } {
     throw APPLICATION "sram_grid requires Metal4 vertical straps (SRAM obstructs Metal1-Metal3), got $::env(PDN_VERTICAL_LAYER)."
@@ -38,6 +52,12 @@ if { $::env(PDN_VERTICAL_LAYER) != "Metal4" } {
 if { $::env(PDN_HORIZONTAL_LAYER) != "Metal3" } {
     throw APPLICATION "sram_grid requires Metal3 horizontal straps to reach the SRAM power pins, got $::env(PDN_HORIZONTAL_LAYER)."
 }
+if { $::env(PDN_RAIL_LAYER) != "Metal1" } {
+    throw APPLICATION "gf180mcu_fd_sc_mcu7t5v0 exposes VDD/VSS on Metal1, got $::env(PDN_RAIL_LAYER)."
+}
+
+# Intermediate vertical layer bridging the Metal1 rails up to the Metal4 straps.
+set pdn_intermediate_layer "Metal2"
 
 set secondary []
 foreach vdd $::env(VDD_NETS) gnd $::env(GND_NETS) {
@@ -86,6 +106,8 @@ if { $::env(PDN_MULTILAYER) == 1 } {
     append_if_equals arg_list PDN_EXTEND_TO "core_ring" -extend_to_core_ring
     append_if_equals arg_list PDN_EXTEND_TO "boundary" -extend_to_boundary
 
+    # Top vertical straps. These cross the SRAMs (Metal4 is unobstructed) and
+    # are what the parent vias down onto.
     add_pdn_stripe \
         -grid stdcell_grid \
         -layer $::env(PDN_VERTICAL_LAYER) \
@@ -96,6 +118,7 @@ if { $::env(PDN_MULTILAYER) == 1 } {
         -starts_with POWER \
         {*}$arg_list
 
+    # Horizontal mesh. Trimmed where the SRAMs obstruct Metal3.
     add_pdn_stripe \
         -grid stdcell_grid \
         -layer $::env(PDN_HORIZONTAL_LAYER) \
@@ -106,42 +129,43 @@ if { $::env(PDN_MULTILAYER) == 1 } {
         -starts_with POWER \
         {*}$arg_list
 
-    add_pdn_connect \
-        -grid stdcell_grid \
-        -layers "$::env(PDN_VERTICAL_LAYER) $::env(PDN_HORIZONTAL_LAYER)"
-} else {
-
-    set arg_list [list]
-    if { $::env(PDN_ENABLE_PINS) } {
-        lappend arg_list -pins "$::env(PDN_VERTICAL_LAYER)"
-    }
-
-    define_pdn_grid \
-        -name stdcell_grid \
-        -starts_with POWER \
-        -voltage_domain CORE \
-        {*}$arg_list
-
-    set arg_list [list]
-    append_if_equals arg_list PDN_EXTEND_TO "core_ring" -extend_to_core_ring
-    append_if_equals arg_list PDN_EXTEND_TO "boundary" -extend_to_boundary
-
+    # Intermediate vertical stripes, coincident in x with the Metal4 straps
+    # (same pitch, offset and spacing). Metal2 is vertical-preferred in
+    # gf180mcu, so these are in-direction. Trimmed at the SRAMs, which is
+    # harmless -- sram_grid bridges the macro band on Metal4.
+    #
+    # Cost: PDN_VWIDTH every PDN_VPITCH of Metal2, ~7% of the layer.
     add_pdn_stripe \
         -grid stdcell_grid \
-        -layer $::env(PDN_VERTICAL_LAYER) \
+        -layer $pdn_intermediate_layer \
         -width $::env(PDN_VWIDTH) \
         -pitch $::env(PDN_VPITCH) \
         -offset $::env(PDN_VOFFSET) \
         -spacing $::env(PDN_VSPACING) \
         -starts_with POWER \
         {*}$arg_list
+
+    add_pdn_connect \
+        -grid stdcell_grid \
+        -layers "$::env(PDN_VERTICAL_LAYER) $::env(PDN_HORIZONTAL_LAYER)"
+
+    add_pdn_connect \
+        -grid stdcell_grid \
+        -layers "$pdn_intermediate_layer $::env(PDN_HORIZONTAL_LAYER)"
+
+    add_pdn_connect \
+        -grid stdcell_grid \
+        -layers "$pdn_intermediate_layer $::env(PDN_VERTICAL_LAYER)"
+} else {
+
+    throw APPLICATION "picorv32_hello_top requires PDN_MULTILAYER: the SRAM needs a Metal3/Metal4 bridge."
 }
 
-# Adds the standard cell rails if enabled.
+# Standard cell rails.
+#
 # gf180mcu_fd_sc_mcu7t5v0 exposes VDD / VSS on Metal1 (no li1-style layer),
-# so PDN_RAIL_LAYER must be Metal1. The rail-to-strap connect below is a
-# Metal1 -> Metal4 via stack (Via1 + Via2 + Via3), which is the standard
-# LibreLane structure; repair_pdn_vias cleans up any DRC casualties.
+# so PDN_RAIL_LAYER must be Metal1. The rails connect up to the Metal2
+# intermediate stripes -- one Via1, not a three-cut stack.
 if { $::env(PDN_ENABLE_RAILS) == 1 } {
     add_pdn_stripe \
         -grid stdcell_grid \
@@ -151,11 +175,11 @@ if { $::env(PDN_ENABLE_RAILS) == 1 } {
 
     add_pdn_connect \
         -grid stdcell_grid \
-        -layers "$::env(PDN_RAIL_LAYER) $::env(PDN_VERTICAL_LAYER)"
+        -layers "$::env(PDN_RAIL_LAYER) $pdn_intermediate_layer"
 }
 
 
-# Adds the core ring if enabled.
+# Core ring.
 #
 # NOTE: picorv32_hello_top sets PDN_CORE_RING: false. This macro integrates
 # hierarchically -- it reserves Metal5 (RT_MAX_LAYER: Metal4) so the parent's
@@ -214,18 +238,20 @@ if { $::env(PDN_CORE_RING) == 1 } {
 # ---------------------------------------------------------------------------
 # SRAM macro grid
 #
-# Four instances of gf180mcu_ocd_ip_sram__sram1024x8m8wm1, placed in a row at
-# y=50 with orientation S.
+# Four instances of gf180mcu_ocd_ip_sram__sram1024x8m8wm1, in a row along the
+# bottom of the die, orientation S.
 #
-# No add_pdn_stripe here on purpose: the vertical Metal4 straps from
-# stdcell_grid already run the full die height and pass over every macro
-# (Metal4 is not obstructed). This grid exists solely to tell pdn to drop
-# Via3 wherever a Metal4 stripe of net N overlaps a Metal3 power pin of the
-# same net N. A Metal4 VDD stripe crossing a Metal3 VSS tab is harmless --
-# different layers, no via, no short.
+# Matched by -cells rather than -instances: Yosys escapes the generate-block
+# indices, so the DB names contain literal backslashes
+# (u_ram_ss.gen_macro_ram.gen_sram\[0\].u_wrapper.u_sram_macro). These are the
+# only block masters in the design, so matching on the master is equally
+# precise and does not break when names change.
 #
-# The Metal3 horizontal straps from stdcell_grid are trimmed automatically
-# where they cross the macros, since the SRAM obstructs Metal3.
+# No add_pdn_stripe here on purpose: the Metal4 straps from stdcell_grid
+# already run the full die height and pass over every macro. This grid tells
+# pdn to drop Via3 wherever a Metal4 stripe of net N overlaps a Metal3 power
+# pin of the same net N. A Metal4 VDD stripe crossing a Metal3 VSS tab is
+# harmless -- different layers, no via, no short.
 #
 # WARNING: vias only form where a Metal4 stripe physically crosses a Metal3
 # pin tab. The native bottom edge of the LEF (= the placed *top* edge, given
