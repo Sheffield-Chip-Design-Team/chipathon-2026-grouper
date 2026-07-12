@@ -10,10 +10,10 @@
 
 ## Purpose
 
-Two roles, both stated or implied by the Schematic Review:
-
+Two roles:
 1. A general-purpose, firmware-controlled AHB-Lite GPIO peripheral (`GPIO CTRL` in the memory map).
-2. A physical-pin router: per the Schematic Review's Top-Level Testbench Architecture diagram, the peripherals with external pins (SPI Slave, SPI Master, QSPI, UART) are each "routed through GPIO IO MUX and MUX CTRL blocks" — implying this block also arbitrates/multiplexes shared physical IO pins across those peripherals (chipathon per-team pad budgets are tight, so pin-sharing across peripherals is the likely motivation, consistent with GrouperSoC's `CLAUDE.md` pad-budget notes). The exact muxing scheme (which pins are shared, priority/ownership rules, register-controlled vs. static) is **not yet documented** — this needs to come out of the "Detailed Requirements Review" TODO the Schematic Review itself calls out.
+
+2. A physical-pin router: This block also arbitrates/multiplexes shared physical IO pins across those peripherals  The exact muxing scheme (which pins are shared, priority/ownership rules, register-controlled vs. static) is **not yet documented** — this needs to come out of the "Detailed Requirements Review" 
 
 ## Protocols / Standards Conformity
 
