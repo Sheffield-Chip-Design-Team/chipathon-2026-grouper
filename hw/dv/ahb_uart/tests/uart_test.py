@@ -3,17 +3,28 @@ import os
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge
 
 import pyuvm
 from pyuvm import ConfigDB, uvm_test
 
 from ..tbench.ahb_uart_env import UartAhbEnv
-from ..sequences.uart_ahb_sequences import UartHelloWorldSequence, UartSanitySequence
+from ..sequences.uart_ahb_base_sequence import UartAhbBaseSequence
+from ..sequences.uart_ahb_sequence_lib import (
+    UartHelloWorldSequence,
+    UartRandomMoveSequence,
+    UartSanitySequence,
+)
 
 class UartTestBase(uvm_test):
+    RANDOMIZE_BAUD = False  # subclasses opt in; existing tests untouched
+
     def build_phase(self):
-        self.env = UartAhbEnv("env", self)
+        # cocotb already seeds Python's global `random` from RANDOM_SEED (or
+        # COCOTB_RANDOM_SEED) before any pyuvm phase runs, and logs it via
+        # its own logger - this just re-surfaces the value through
+        # self.logger so it's visible in the pyuvm-formatted log stream.
+        self.logger.info(f"cocotb RANDOM_SEED={cocotb.RANDOM_SEED}")
+        self.env = UartAhbEnv("env", self, randomize_baud=self.RANDOMIZE_BAUD)
 
     def start_of_simulation_phase(self):
         # UVM_VERBOSITY=DEBUG|INFO|WARNING|ERROR controls every component's
@@ -33,13 +44,11 @@ class UartTestBase(uvm_test):
         self.ahb_cfg = ConfigDB().get(None, "", "AHB_CFG")
 
         cocotb.start_soon(Clock(cocotb.top.HCLK, self.ahb_cfg.clk_period_ns, "ns").start())
-        cocotb.top.HRESETn.value = 0
-       
-        for _ in range(2):
-            await RisingEdge(cocotb.top.HCLK)
-            
-        cocotb.top.HRESETn.value = 1
-        await RisingEdge(cocotb.top.HCLK)
+
+        # Initial reset goes through the same helper a mid-test reset move
+        # uses (UartRandomResetSequence), so the two can never drift apart.
+        await UartAhbBaseSequence("initial_reset").reset_dut()
+
         await self.main_sequence.start()
         self.drop_objection()
 
@@ -58,3 +67,16 @@ class UartHelloWorldTest(UartTestBase):
 class UartSanityTest(UartTestBase):
     def end_of_elaboration_phase(self):
         self.main_sequence = UartSanitySequence("sanity")
+
+
+@pyuvm.test()
+class UartRandomTest(UartTestBase):
+    """Constrained-random layered test: baud rate picked once at env build
+    time, then a random count/order of config/reset/data moves layered
+    together in a single run (UartRandomMoveSequence), instead of one fixed
+    sequence per test."""
+
+    RANDOMIZE_BAUD = True
+
+    def end_of_elaboration_phase(self):
+        self.main_sequence = UartRandomMoveSequence("random_moves")
