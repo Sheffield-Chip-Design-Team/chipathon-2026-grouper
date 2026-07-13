@@ -22,8 +22,10 @@ module sync #(
     else
       data_r <= {data_r[DEPTH-2:0], data_i};
 
+`ifdef FPGA
   initial
     data_r = '0; // For FPGA
+`endif
 
   assign data_o = data_r[DEPTH-1];
 
