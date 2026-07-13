@@ -28,8 +28,7 @@ targets:
         - --sv
         - --trace
         - --trace-fst
-      # --trace/--trace-fst above only compile tracing support in; the
-      # simulation binary still needs --trace at runtime to actually dump.
+        - --coverage
       run_options:
         - --trace
     filesets: [rtl]
