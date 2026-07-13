@@ -4,15 +4,34 @@ A pyuvm bench for the AHB-wrapped UART (`hw/rtl/uart/ahb_uart.sv`), driven throu
 FuseSoC + cocotb + Verilator target.
 
 ## Layout
-- `tbench/ahb_uart_env.py` — `UartAhbEnv`: wires up the AHB3Lite VIP (`hw/dv/uvc/ahb3lite/`)
-  and the UART VIP (`hw/dv/uvc/uart/`), and registers their `ConfigDB` config/sequencer
-  handles (`UART_CFG`, `UART_AHB_SEQR`, `UART_SEQR`).
+- `tbench/ahb_uart_env.py` — `UartAhbEnv`: wires up the AHB3Lite VIP (`hw/dv/uvc/ahb3lite/`),
+  the UART VIP (`hw/dv/uvc/uart/`, one active agent driving/self-observing `uart_rx`, one
+  passive agent monitoring `uart_tx`), and the pyuvm register model (`uart_reg_model.py`),
+  registering their `ConfigDB` config/sequencer/model handles (`UART_CFG`, `UART_AHB_SEQR`,
+  `UART_SEQR`, `UART_REG_MODEL`, `UART_TX_MONITOR`). Also picks the baud rate once, at
+  `build_phase` time, before any component starts - see `randomize_baud` below.
+- `uart_clk_math.py` — `clk_div_for_baud`/`pick_random_baud_rate`: the DUT-specific baud
+  rate <-> `CTRL.clk_div` register math, and the candidate baud rates used when
+  randomizing.
+- `uart_reg_model.py` — a pyuvm register model (frontdoor only, no backdoor) for
+  CTRL/STATUS/TXDATA/RXDATA: `UartRegBlock` (the four registers + their fields, matching
+  `hw/rtl/uart/ahb_uart.sv`'s actual bit layout) and `Ahb3LiteRegAdapter` (translates
+  generic register reads/writes into `AHB3LiteSeqItem` transactions).
 - `tests/uart_test.py` — the cocotb entrypoint (`ahb_uart_cocotb.core`'s `cocotb_module`
   points straight at this module, not a separate wrapper - see note below). Defines
-  `UartHelloWorldTest` (reset + send one byte through the UART VIP, read it back over AHB)
-  and `UartSanityTest` (an older, pin-bit-banging variant of the same check).
-- `sequences/uart_ahb_sequences.py` — `UartHelloWorldSequence`/`UartSanitySequence` plus
-  the shared `UartAhbBaseSequence` AHB read/write helpers.
+  `UartHelloWorldTest` (reset + send one byte through the UART VIP, read it back over AHB),
+  `UartSanityTest` (an older, pin-bit-banging variant of the same check), and
+  `UartRandomTest` (constrained-random baud/config/reset/data, see below).
+- `sequences/uart_ahb_base_sequence.py` — `UartAhbBaseSequence`: shared AHB
+  read/write/register-access helpers (`reg_write`/`reg_read`, routed through
+  `uart_reg_model.py`), `configure_uart`/`wait_for_status`, DUT reset (`reset_dut`), and
+  raw pin bit-banging (`drive_uart_frame`/`drive_break_condition`).
+- `sequences/uart_ahb_sequence_lib.py` — every concrete sequence: `UartHelloWorldSequence`/
+  `UartSanitySequence` (the two fixed sequences above), plus the constrained-random "move"
+  sequences (`UartRandomResetSequence`, `UartRandomBitbangFrameSequence`,
+  `UartRandomDutTransmitSequence`) and the top-level orchestrator
+  (`UartRandomMoveSequence`) that layers a random selection/order/count of them together
+  in one test run.
 - `tbench/uart_rx_config.py` — superseded by `hw/dv/uvc/uart/uart_config.py`'s `UartConfig`;
   left in place but unused by the current test path.
 - `ahb_uart_cocotb.core` — FuseSoC core file for this testbench.
@@ -41,8 +60,8 @@ on the same command so there's no separate step to forget:
 PYTHONPATH="$PWD:$PYTHONPATH" fusesoc run --target=default sharc:dv:ahb_uart_cocotb
 ```
 
-Both `UartHelloWorldTest` and `UartSanityTest` run by default (cocotb discovers every
-`@pyuvm.test()` in the imported module). To run just one:
+`UartHelloWorldTest`, `UartSanityTest`, and `UartRandomTest` all run by default (cocotb
+discovers every `@pyuvm.test()` in the imported module). To run just one:
 
 ```bash
 PYTHONPATH="$PWD:$PYTHONPATH" TESTCASE=UartHelloWorldTest fusesoc run --target=default sharc:dv:ahb_uart_cocotb
@@ -55,6 +74,28 @@ to quiet it down:
 
 ```bash
 PYTHONPATH="$PWD:$PYTHONPATH" UVM_VERBOSITY=DEBUG fusesoc run --target=default sharc:dv:ahb_uart_cocotb
+```
+
+## Constrained-random testing
+
+`UartRandomTest` picks a random valid baud rate once at env build time (before any
+component starts - baud can't be changed live mid-sequence, since `UartDriver`/
+`UartMonitor` each cache their bit period once in `start_of_simulation_phase`), then runs
+`UartRandomMoveSequence`, which layers a random count/order of smaller "moves" together in
+one test: mid-test DUT resets, clean/bad-stop-bit/break bit-banged frames, constrained-random
+bytes sent through the real VIP (`UartRandomByteSequence` in `hw/dv/uvc/uart/uart_sequences.py`),
+and bytes written to `TXDATA` that the DUT itself transmits (checked via the passive
+`uart_tx_agent`'s monitor).
+
+Reproducibility rides on cocotb's own `RANDOM_SEED` env var (seeds Python's global `random`
+before any pyuvm phase runs, and is always logged - `UartTestBase.build_phase` re-logs it
+through `self.logger` too, so it shows up in the pyuvm-formatted log stream):
+
+```bash
+PYTHONPATH="$PWD:$PYTHONPATH" TESTCASE=UartRandomTest fusesoc run --target=default sharc:dv:ahb_uart_cocotb
+
+# reproduce a specific failure
+PYTHONPATH="$PWD:$PYTHONPATH" TESTCASE=UartRandomTest RANDOM_SEED=12345 fusesoc run --target=default sharc:dv:ahb_uart_cocotb
 ```
 
 ## Coverage
