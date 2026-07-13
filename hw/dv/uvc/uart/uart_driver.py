@@ -1,3 +1,5 @@
+import random
+
 import cocotb
 from cocotb.triggers import Timer
 
@@ -11,13 +13,16 @@ class UartDriver(uvm_driver):
         self.ap = uvm_analysis_port("ap", self)
 
     def start_of_simulation_phase(self):
-        self.dut = cocotb.top
-        self.uart_cfg = ConfigDB().get(None, "", "UART_CFG")
-        self.tx = self.uart_cfg.resolve_handle(self.dut, self.uart_cfg.tx_pin)
-        self.logger.info(f"UartDriver driving DUT tx pin: {self.uart_cfg.tx_pin}")
+        self.dut        = cocotb.top
+        self.uart_cfg   = ConfigDB().get(self, "", "UART_CFG")
+        self.bit_period = self.uart_cfg.bit_period_ns
+        self.tx         = self.uart_cfg.resolve_handle(self.dut, self.uart_cfg.vip_tx)
+
+        self.logger.info(f"Driving DUT pin: {self.uart_cfg.vip_tx}")
+        self.tx.value = UART_IDLE
 
     async def run_phase(self):
-        await self.drive_idle(1)
+        # Connection to the sequencer is already established by pyuvm's uvm_driver base class.
         while True:
             item = await self.seq_item_port.get_next_item()
             await self.drive_frame(item)
@@ -25,41 +30,39 @@ class UartDriver(uvm_driver):
             self.seq_item_port.item_done()
 
     async def drive_frame(self, item):
-        await self.drive_idle(item.idle_bits)
-        await self.drive_start_bit()
+        # Random delay before sending
+        delay_time = random.randint(
+            0, self.bit_period
+        )  
+        await Timer(delay_time, unit="ns")
+
+        # Start bit
+        self.tx.value = UART_START
+        await Timer(self.bit_period, unit="ns")
+
+        # Data bits
         for bit_index in range(8):
-            await self.drive_data_bit((item.byte_value >> bit_index) & 1)
+            self.tx.value = (item.data >> bit_index) & 0x1
+            await Timer(self.bit_period, unit="ns")
+
+        #  Break Condition
         if item.break_condition:
             self.logger.debug("Driving break condition instead of stop bits")
-            await self.drive_break(item.post_bits)
+             # Random delay for break condition duration
+            break_delay_time = random.randint(self.bit_period, self.bit_period*3)
+            await Timer(break_delay_time, unit="ns")
+
+        # Stop bits
         elif item.bad_stop_bit:
             self.logger.debug("Driving bad stop bit")
-            await self.drive_data_bit(UART_START)
-            await self.drive_idle(item.post_bits)
+            self.tx.value = UART_START
         else:
-            await self.drive_stop_bits(item.stop_bits)
-            await self.drive_idle(item.post_bits)
-        self.logger.info(f"Driving UART frame: byte=0x{item.byte_value:02x}")
+            for n in range(item.stop_bits):
+                self.tx.value = UART_IDLE
+                await Timer(self.bit_period, unit="ns")
+          
+        await Timer(self.bit_period, unit="ns")
 
-    async def drive_idle(self, bit_count: int):
+        self.logger.info(f"Driven UART frame: byte=0x{item.data:02x}")
         self.tx.value = UART_IDLE
-        await self.drive_bit_time(bit_count)
 
-    async def drive_start_bit(self):
-        self.tx.value = UART_START
-        await self.drive_bit_time(1)
-
-    async def drive_data_bit(self, bit_value: int):
-        self.tx.value = int(bit_value)
-        await self.drive_bit_time(1)
-
-    async def drive_stop_bits(self, bit_count: int):
-        self.tx.value = UART_IDLE
-        await self.drive_bit_time(bit_count)
-
-    async def drive_break(self, bit_count: int):
-        self.tx.value = UART_START
-        await self.drive_bit_time(bit_count)
-
-    async def drive_bit_time(self, bit_count: int):
-        await Timer(bit_count * self.uart_cfg.bit_period_ns, unit="ns")
