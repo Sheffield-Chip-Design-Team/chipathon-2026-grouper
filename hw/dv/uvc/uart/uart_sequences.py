@@ -23,3 +23,27 @@ class UartByteSequence(UartBaseSequence):
     async def body(self):
         self.get_config()
         await self.send_items([UartItem("byte_item", data=self.byte_value)])
+
+
+class UartRandomByteSequence(UartBaseSequence):
+    """Constrained-random counterpart to UartByteSequence: randomizes data/
+    stop_bits/break_condition/bad_stop_bit instead of always using defaults.
+    Exposes the sent item as self.item so a caller (e.g. an AHB-side
+    orchestrator) can read back what was actually generated."""
+
+    def __init__(self, name="uart_random_byte_sequence", byte_value: int = None,
+                 allow_break: bool = True, allow_bad_stop: bool = True):
+        super().__init__(name)
+        self.byte_value = byte_value
+        self.allow_break = allow_break
+        self.allow_bad_stop = allow_bad_stop
+        self.item = None
+
+    async def body(self):
+        self.get_config()
+        item = UartItem("random_byte_item").randomize(
+            byte_value=self.byte_value, allow_break=self.allow_break,
+            allow_bad_stop=self.allow_bad_stop,
+        )
+        self.item = item
+        await self.send_items([item])
