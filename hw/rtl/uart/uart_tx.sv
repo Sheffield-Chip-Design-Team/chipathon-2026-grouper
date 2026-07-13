@@ -115,11 +115,48 @@ module uart_tx #(
 
   assign tx_active = enable && state != ST_IDLE;
 
+  // Split into two processes so Verilator can order them acyclically: this
+  // one drives shift_load (u_shift_reg.load) and must not read shift_out
+  // (u_shift_reg.out, combinational since REGISTERED_OUT=0) - otherwise it
+  // and the block below form an UNOPTFLAT self-loop through the submodule
+  // (this block -> shift_load -> u_shift_reg -> shift_out -> this block).
   always_comb begin
     next_state = state;
-    next_tx = uart_tx;
     fifo_read = '0;
     shift_load = '0;
+
+    if (enable && shift_bit) begin
+      unique case (state)
+        ST_IDLE: begin
+          if (!tx_break && !tx_empty && !flush_tx_fifo && uart_tx) begin // 1 cycle high after break before start bit
+            next_state = ST_START_BIT;
+            fifo_read = '1;
+          end
+        end
+        ST_START_BIT: begin
+          next_state = ST_DATA;
+          shift_load = '1;
+        end
+        ST_DATA: begin
+          if (shift_ctr_zero) begin
+            next_state = ST_STOP_BIT;
+          end
+        end
+        ST_STOP_BIT: begin
+          next_state = ST_IDLE;
+          if (!tx_break && !tx_empty && !flush_tx_fifo) begin
+            next_state = ST_START_BIT;
+            fifo_read = '1;
+          end
+        end
+        default: next_state = ST_IDLE;
+      endcase
+    end
+  end
+
+  // Reads shift_out (fine here - this block never drives shift_load).
+  always_comb begin
+    next_tx = uart_tx;
 
     if (enable && shift_bit) begin
       unique case (state)
@@ -128,34 +165,26 @@ module uart_tx #(
           if (tx_break) begin
             next_tx = '0; // Break
           end else if (!tx_empty && !flush_tx_fifo && uart_tx) begin // 1 cycle high after break before start bit
-            next_state = ST_START_BIT;
             next_tx = '0; // Start bit
-            fifo_read = '1;
           end
         end
         ST_START_BIT: begin
-          next_state = ST_DATA;
-          shift_load = '1;
           next_tx = shift_out; // Shift reg output not registered, so will read the first bit we are loading
         end
         ST_DATA: begin
           next_tx = shift_out;
           if (shift_ctr_zero) begin
-            next_state = ST_STOP_BIT;
             next_tx = '1; // Stop bit
           end
         end
         ST_STOP_BIT: begin
-          next_state = ST_IDLE;
           if (tx_break) begin
             next_tx = '0; // Break
           end else if (!tx_empty && !flush_tx_fifo) begin
-            next_state = ST_START_BIT;
             next_tx = '0; // Start bit
-            fifo_read = '1;
           end
         end
-        default: next_state = ST_IDLE;
+        default: ;
       endcase
     end
   end
