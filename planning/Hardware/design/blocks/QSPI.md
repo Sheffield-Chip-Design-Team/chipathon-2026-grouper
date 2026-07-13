@@ -6,8 +6,6 @@
 
 **Related:** [Grouper SoC Specification](../Grouper%20SoC%20Specification.md) — boot sequence, memory map | [QSPI Verification Plan](../../../verification/blocks/QSPI%20Verification%20Plan.md)
 
-> **Correction to source.** The Schematic Review's QSPI section states its purpose includes "storing, reading, and replaying incoming I/Q sample data," and its Parameters/Performance sections list I/Q-streaming-specific figures (a 2 MB/s "continuous-write requirement," "write + delayed read"/"write + replay read" cycle budgets, a 256 kB storage sizing tied to a specific spreading-factor calculation, and status bits `REPLAY_ACTIVE`/`REPLAY_MISSED`/`SAMPLE_SKIP`). GrouperSoC has no I/Q sample path, no radio front-end, and no "replay" concept anywhere else in this repo — this is the same sibling-project (RF/DSP chip) contamination found throughout the rest of `planning/`, leaking into an otherwise-authoritative section. Per user clarification, QSPI's real purpose is external NOR flash + PSRAM access (the parts the doc already names: Micron N25Q032A, APS6404L), consistent with the boot-sequence note that QSPI extends storage after the UART-loaded boot stage. All I/Q/replay-specific wording and the associated performance figures are dropped below; the underlying generic QSPI mechanics (QPI protocol, command set, clocking, CDC) are kept since nothing else in the source material contradicts them.
-
 ---
 
 ## Purpose
@@ -93,26 +91,26 @@ TBD after RTL synthesis (per source).
 
 | Req ID | Verification Item(s) |
 |---|---|
-| `GRPR-QSPI-001` | `V-QSPI-STM-001`, `V-QSPI-CHK-001` |
-| `GRPR-QSPI-002` | `V-QSPI-STM-002`, `V-QSPI-CHK-002` |
-| `GRPR-QSPI-003` | `V-QSPI-STM-003`, `V-QSPI-CHK-003` |
-| `GRPR-QSPI-004` | `V-QSPI-STM-004`, `V-QSPI-COV-001` |
-| `GRPR-QSPI-005` | `V-QSPI-STM-005`, `V-QSPI-CHK-004` |
-| `GRPR-QSPI-006` | `V-QSPI-STM-006`, `V-QSPI-CHK-005` |
-| `GRPR-QSPI-007` | `V-QSPI-STM-007`, `V-QSPI-COV-002` |
-| `GRPR-QSPI-008` | `V-QSPI-STM-008`, `V-QSPI-CHK-006` |
-| `GRPR-QSPI-009` | `V-QSPI-STM-009`, `V-QSPI-COV-003` |
-| `GRPR-QSPI-010` | `V-QSPI-STM-010` |
-| `GRPR-QSPI-011` | `V-QSPI-STM-011` |
-| `GRPR-QSPI-012` | `V-QSPI-STM-012`, `V-QSPI-CHK-007` |
-| `GRPR-QSPI-013` | `V-QSPI-STM-013` |
-| `GRPR-QSPI-014` | `V-QSPI-CHK-008` |
-| `GRPR-QSPI-015` | `V-QSPI-CHK-009` (blocked on open status-bit definition) |
-| `GRPR-QSPI-016` | `V-QSPI-CHK-010` (blocked on open clock-plan question) |
-| `GRPR-QSPI-017` | `V-QSPI-STM-014`, `V-QSPI-CHK-011` |
-| `GRPR-QSPI-018` | `V-QSPI-CHK-012` |
-| `GRPR-QSPI-019` | `V-QSPI-CHK-013` |
-| `GRPR-QSPI-020` | `V-QSPI-CHK-014` |
-| `GRPR-QSPI-021` | `V-QSPI-CHK-015` |
+| `GRPR-QSPI-001` | [`V-QSPI-STM-001`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-stm-001), [`V-QSPI-CHK-001`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-chk-001) |
+| `GRPR-QSPI-002` | [`V-QSPI-STM-002`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-stm-002), [`V-QSPI-CHK-002`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-chk-002) |
+| `GRPR-QSPI-003` | [`V-QSPI-STM-003`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-stm-003), [`V-QSPI-CHK-003`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-chk-003) |
+| `GRPR-QSPI-004` | [`V-QSPI-STM-004`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-stm-004), [`V-QSPI-COV-001`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-cov-001) |
+| `GRPR-QSPI-005` | [`V-QSPI-STM-005`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-stm-005), [`V-QSPI-CHK-004`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-chk-004) |
+| `GRPR-QSPI-006` | [`V-QSPI-STM-006`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-stm-006), [`V-QSPI-CHK-005`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-chk-005) |
+| `GRPR-QSPI-007` | [`V-QSPI-STM-007`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-stm-007), [`V-QSPI-COV-002`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-cov-002) |
+| `GRPR-QSPI-008` | [`V-QSPI-STM-008`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-stm-008), [`V-QSPI-CHK-006`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-chk-006) |
+| `GRPR-QSPI-009` | [`V-QSPI-STM-009`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-stm-009), [`V-QSPI-COV-003`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-cov-003) |
+| `GRPR-QSPI-010` | [`V-QSPI-STM-010`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-stm-010) |
+| `GRPR-QSPI-011` | [`V-QSPI-STM-011`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-stm-011) |
+| `GRPR-QSPI-012` | [`V-QSPI-STM-012`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-stm-012), [`V-QSPI-CHK-007`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-chk-007) |
+| `GRPR-QSPI-013` | [`V-QSPI-STM-013`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-stm-013) |
+| `GRPR-QSPI-014` | [`V-QSPI-CHK-008`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-chk-008) |
+| `GRPR-QSPI-015` | [`V-QSPI-CHK-009`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-chk-009) (blocked on open status-bit definition) |
+| `GRPR-QSPI-016` | [`V-QSPI-CHK-010`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-chk-010) (blocked on open clock-plan question) |
+| `GRPR-QSPI-017` | [`V-QSPI-STM-014`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-stm-014), [`V-QSPI-CHK-011`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-chk-011) |
+| `GRPR-QSPI-018` | [`V-QSPI-CHK-012`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-chk-012) |
+| `GRPR-QSPI-019` | [`V-QSPI-CHK-013`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-chk-013) |
+| `GRPR-QSPI-020` | [`V-QSPI-CHK-014`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-chk-014) |
+| `GRPR-QSPI-021` | [`V-QSPI-CHK-015`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-chk-015) |
 
 See [QSPI Verification Plan](../../../verification/blocks/QSPI%20Verification%20Plan.md) for the full item definitions and test list.
