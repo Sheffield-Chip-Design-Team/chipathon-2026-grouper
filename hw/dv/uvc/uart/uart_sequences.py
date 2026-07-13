@@ -22,4 +22,4 @@ class UartByteSequence(UartBaseSequence):
 
     async def body(self):
         self.get_config()
-        await self.send_items([UartItem("byte_item", byte_value=self.byte_value)])
+        await self.send_items([UartItem("byte_item", data=self.byte_value)])
