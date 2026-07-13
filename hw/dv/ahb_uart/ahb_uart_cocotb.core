@@ -1,0 +1,36 @@
+CAPI=2:
+
+name: sharc:dv:ahb_uart_cocotb:0.0.1
+description: AHB UART cocotb/pyuvm testbench (Verilator)
+
+filesets:
+  rtl:
+    files:
+      - ../../rtl/common/shift_reg.sv:        {file_type: systemVerilogSource}
+      - ../../rtl/common/downcounter.sv:      {file_type: systemVerilogSource}
+      - ../../rtl/common/small_sync_fifo.sv:  {file_type: systemVerilogSource}
+      - ../../rtl/common/sync.sv:             {file_type: systemVerilogSource}
+      - ../../rtl/ahb3lite/ahb3lite_pkg.sv:   {file_type: systemVerilogSource}
+      - ../../rtl/uart/uart_clk_div.sv:       {file_type: systemVerilogSource}
+      - ../../rtl/uart/uart_rx.sv:            {file_type: systemVerilogSource}
+      - ../../rtl/uart/uart_tx.sv:            {file_type: systemVerilogSource}
+      - ../../rtl/uart/uart.sv:               {file_type: systemVerilogSource}
+      - ../../rtl/uart/ahb_uart.sv:           {file_type: systemVerilogSource}
+
+targets:
+  default:
+    flow: sim
+    flow_options:
+      tool: verilator
+      cocotb_module: hw.dv.ahb_uart.tests.uart_test
+      verilator_options:
+        - -Wno-TIMESCALEMOD
+        - --sv
+        - --trace
+        - --trace-fst
+      # --trace/--trace-fst above only compile tracing support in; the
+      # simulation binary still needs --trace at runtime to actually dump.
+      run_options:
+        - --trace
+    filesets: [rtl]
+    toplevel: ahb_uart
