@@ -1,8 +1,8 @@
 from pyuvm import uvm_sequence_item
 
 
-class UartRxItem(uvm_sequence_item):
-    def __init__(self, name: str = "uart_rx_item", byte_value: int = 0):
+class UartItem(uvm_sequence_item):
+    def __init__(self, name: str = "uart_item", byte_value: int = 0):
         super().__init__(name)
         self.byte_value = byte_value & 0xFF
         self.idle_bits = 2
