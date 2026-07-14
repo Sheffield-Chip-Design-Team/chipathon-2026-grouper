@@ -19,6 +19,15 @@ AHB-Lite UART peripheral. Two roles: (1) the boot-load path — the boot ROM rec
 
 ## Key Functionality
 
+# UART Features
+- Configurable UART enable and independent TX/RX enables
+- RX resynchronization enable (`rx_resync_en`)
+- TX break generation (`tx_break`)
+- Flush controls for TX/RX FIFOs (write-one-shot control bits)
+- RX break detection and sticky RX error/break status flags
+- FIFO status reporting: empty/full for TX and RX
+- Oversampling architecture inside UART core (`OVERSAMPLE=8`)
+
 | ID | Requirement |
 |---|---|
 | `GRPR-UART-001` | The block shall expose 4 word-aligned AHB-Lite registers: `CTRL` (0x0, R/W), `STATUS` (0x4, R), `TXDATA` (0x8, W), `RXDATA` (0xC, R). |
@@ -68,7 +77,54 @@ Single active-low reset (`HRESETn`), asynchronous assert / synchronous de-assert
 
 ## Performance Targets
 
-Not yet documented in the source deck. `GRPR-UART-010`'s formula gives the achievable baud range as a function of `HCLK` and the `CLK_DIV` register; no specific target baud rate (e.g. 115200) is recorded yet. **Open item** — needs a target baud rate for the boot-load path, since boot-load throughput directly affects boot time.
+TODO: List of Baud Rates at the 16/20MHz Clock.
+
+`GRPR-UART-010`'s formula gives the achievable baud range as a function of `HCLK` and the `CLK_DIV` register; no specific target baud rate (e.g. 115200) is recorded yet. **Open item** — needs a target baud rate for the boot-load path, since boot-load throughput directly affects boot time.
+
+## AHB3-Lite Interface Behavior
+- Access is valid when `HREADYIN && HSEL && (HTRANS != HTRANS_IDLE)`
+- Read and write operations are accepted in address phase and acted on in data phase
+- Byte-lane decode uses `generate_byte_select_32(HSIZE, HADDR[1:0])`
+- Register decode uses `HADDR[3:2]` (word addressing)
+- Error response (`HRESP=1`) on invalid accesses
+- No wait states from slave (`HREADYOUT=1`)
+
+## Register Map (base + offset)
+- `0x00` (`ADDR_CTRL`,   RW)
+- `0x04` (`ADDR_STATUS`, RO)
+- `0x08` (`ADDR_TXDATA`, WO)
+- `0x0C` (`ADDR_RXDATA`, RO)
+
+### CTRL Register (`0x00`, RW)
+- `bit[0]`  `enable`
+- `bit[1]`  `tx_en`
+- `bit[2]`  `rx_en`
+- `bit[3]`  `rx_resync_en`
+- `bit[4]`  `tx_break`
+- `bit[5]`  `flush_tx_fifo` (pulse / one-shot)
+- `bit[6]`  `flush_rx_fifo` (pulse / one-shot)
+- `bit[25:16]` `clk_div[9:0]`
+
+### STATUS Register (`0x04`, RO)
+- `bit[0]` `tx_empty`
+- `bit[1]` `tx_full`
+- `bit[2]` `rx_empty`
+- `bit[3]` `rx_full`
+- `bit[4]` `tx_active`
+- `bit[5]` `rx_frame_error` (sticky)
+- `bit[6]` `rx_break` (sticky)
+
+### TXDATA Register (`0x08`, WO)
+- `bit[7:0]` data written into TX FIFO when not full
+
+### RXDATA Register (`0x0C`, RO)
+- `bit[7:0]` data read from RX FIFO when not empty
+
+## Invalid Access Rules (`HRESP=1`)
+- Write to `STATUS` is invalid
+- Write to `RXDATA` is invalid
+- Write to `TXDATA` is invalid when TX FIFO is full
+- Read from `RXDATA` is invalid when RX FIFO is empty
 
 ## Size Estimate
 
@@ -76,7 +132,7 @@ Not yet documented in the source deck or estimated from synthesis. **Open item.*
 
 ## Open Items
 
-- All of "Performance Targets" and "Size Estimate" above — genuinely undocumented, not filled in speculatively.
+- All of "Performance Targets" and "Size Estimate".
 - Boot-load baud rate / target throughput not specified anywhere yet — needed to validate the boot-sequence timing budget in the top-level spec.
 - `ahb_uart.sv` carries a stale header comment (lines 1–11) describing a "BCD Converter" register map — leftover from an earlier/different module template. The actual implementation below it (the 4-register UART map documented above) is what's real; the comment should be deleted by whoever next touches that file.
 - `STATUS.RX_FRAME_ERROR`/`RX_BREAK` read-clear behavior: the RTL clears `status_rx_frame_error` on a `STATUS` read but does not appear to clear `status_rx_break` the same way (`hw/rtl/uart/ahb_uart.sv` lines 240–250) — worth a directed test to confirm intended behavior before relying on it.
