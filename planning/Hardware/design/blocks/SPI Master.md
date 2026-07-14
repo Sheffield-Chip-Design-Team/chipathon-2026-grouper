@@ -27,7 +27,7 @@ SPI master peripheral that lets the PicoRV32 CPU issue SPI transactions to an ex
 | `GRPR-SPIM-005` | The block shall receive read/write commands from the CPU over AHB-Lite and translate them into SPI transactions per the APS6404L command set. |
 | `GRPR-SPIM-006` | The block shall support `SPI_READ`, `FAST_READ`, `SPI_WRITE`, and `FAST_WRITE` commands. |
 | `GRPR-SPIM-007` | The block shall drive the target external SPI device and support both read and write transactions. |
-| `GRPR-SPIM-008` | The block shall expose a busy flag to the CPU. |
+| `GRPR-SPIM-008` | The block shall expose a transaction complete  flag to the CPU. |
 | `GRPR-SPIM-009` | `CPOL` and `CPHA` shall be independently programmable (SPI mode 0 or mode 3). |
 
 ## Block Diagram
