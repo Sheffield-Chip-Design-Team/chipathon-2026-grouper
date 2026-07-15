@@ -11,22 +11,27 @@
 Per the Schematic Review's block-level testbench diagram: **UART VIP (active) ↔ UART (DUT) ↔ AHB VIP (active)**, feeding a **Scoreboard**.
 
 ```
-        ┌──────────────┐        ┌──────────────┐
-        │  UART Agent  │◄──────►│              │
-        │ (active VIP) │  DUT   │  ahb_uart    │
-        └──────────────┘  pins  │  (+ uart     │
-        ┌──────────────┐        │   core)      │
-        │  AHB3Lite    │◄──────►│              │
-        │  Agent       │  AHB   └──────────────┘
-        │ (active VIP) │  bus
+        ┌──────────────┐          ┌──────────────┐
+        │UART RX Agent │◄────────►│ RX           │
+        │ (active VIP) │          │              │
+        └──────────────┘          │   AHB UART   │◄────────► IRQ interface.
+                                  │              │
+        ┌──────────────┐          │              │
+        │UART TX Agent │◄────────►│ TX           │
+        │(passive VIP) │          │              │ 
+        └──────────────┘          │              │
+        ┌──────────────┐          │              │
+        │  AHB3Lite    │◄────────►│              │
+        │  Agent       │ AHBlite  └──────────────┘
+        │ (active VIP) │   bus
         └──────┬───────┘
                │
         ┌──────▼───────┐
-        │  Scoreboard   │  (does not exist yet — see gap below)
-        └───────────────┘
+        │  Scoreboard  │  (does not exist yet — see gap below)
+        └──────────────┘
 ```
 
-Both VIPs are **active** (the AHB agent drives CPU-side register transactions; the UART agent drives/monitors the serial pins), matching the Schematic Review's diagram exactly.
+ The AHB agent Drives + Monitors CPU-side register transactions; the UART RX agent drives/monitors the RX serial pin wheras the TX agent just monitors the tx pin passively.
 
 ## Verification Components Needed
 
@@ -34,8 +39,8 @@ Both VIPs are **active** (the AHB agent drives CPU-side register transactions; t
 |---|---|---|
 | AHB3Lite Agent (driver/monitor/sequencer/item) | **Exists** — `hw/dv/uvc/ahb3lite/` | Reuse as-is. |
 | UART Agent (driver/monitor/sequencer/item) | **Exists** — `hw/dv/uvc/uart/` | Reuse as-is; drives/monitors `uart_tx`/`uart_rx` at the serial-bit level. |
-| UART env (wires agents together) | **Exists** — `hw/dv/ahb_uart/tbench/ahb_uart_env.py` | Note: this file currently imports from `hw.dv.ahb3.*`, a path that doesn't match the real `hw/dv/uvc/ahb3lite/` location — likely a stale import left over from a refactor; fix before adding new tests on top of it. |
-| Scoreboard / reference model | **Missing** | No scoreboard exists anywhere in `hw/dv/` yet. For UART this needs to: (a) mirror the 4-register `CTRL`/`STATUS`/`TXDATA`/`RXDATA` map from AHB transactions, (b) independently model FIFO fill/empty/full state and baud timing from `CLK_DIV`, (c) compare bytes driven on `uart_rx` against bytes popped via `RXDATA` reads, and bytes pushed via `TXDATA` against bytes observed on `uart_tx`. |
+| UART env (wires agents together) | **Exists** — `hw/dv/ahb_uart/tbench/ahb_uart_env.py` | Note: this file currently imports from `hw.dv.ahb3.*`, a path that doesn't match the real `hw/dv/uvc/ahb3lite/` |
+| Scoreboard / reference model | **TODO** | No scoreboard exists anywhere in `hw/dv/` yet. For UART this needs to: (a) mirror the 4-register `CTRL`/`STATUS`/`TXDATA`/`RXDATA` map from AHB transactions, (b) independently model FIFO fill/empty/full state and baud timing from `CLK_DIV`, (c) compare bytes driven on `uart_rx` against bytes popped via `RXDATA` reads, and bytes pushed via `TXDATA` against bytes observed on `uart_tx`. |
 | Functional coverage collector | **Missing** | New — see `V-UART-COV-*` below. |
 
 ## Traceability Matrix
@@ -65,19 +70,24 @@ Both VIPs are **active** (the AHB agent drives CPU-side register transactions; t
 | `V-UART-STM-009` | Stimulus | Fill and drain both FIFOs across their full 4-entry depth, including simultaneous TX+RX traffic | `GRPR-UART-011` | New directed + randomized test |
 | `V-UART-CHK-010` | Check | FIFO full/empty flags transition at exactly the 4th entry boundary in both directions | `GRPR-UART-011` | Scoreboard |
 
-## Suggested Tests
+## Testscases
 
-- **`UartSanityTest`** (exists — `hw/dv/ahb_uart/tests/uart_test.py`): basic AHB register sanity. Keep as the smoke test.
-- **Baud-rate sweep**: parametrize `CLK_DIV` across corner + random values, verify measured bit period (`V-UART-STM-008`/`COV-003`).
-- **TX/RX loopback**: tie `uart_tx` back to `uart_rx` externally in the testbench, send a random byte stream, verify round-trip integrity through the FIFOs.
-- **Framing-error injection**: force a bad start/stop bit via the UART agent driver, verify `RX_FRAME_ERROR`/`RX_BREAK` (`V-UART-STM-006`/`CHK-007`).
-- **FIFO boundary test**: fill/drain both FIFOs to exactly 4 entries, confirm full/empty flag edges (`V-UART-STM-009`/`CHK-010`).
-- **Illegal-access test**: writes to `STATUS`/`RXDATA`, write-while-full, read-while-empty — confirm `HRESP` error and no corruption (`V-UART-STM-003/004/005`).
-- **Break test**: assert `TX_BREAK` mid-byte and idle, confirm line behavior (`V-UART-STM-007`).
-- **Randomized register/FIFO stress**: pyuvm sequence issuing random AHB register traffic interleaved with random serial traffic, scoreboard checking end-to-end.
+- **`UartSanityTest`** (exists — `hw/dv/ahb_uart/tests/uart_test.py`): basic configuration, receive data and then send data ( simple ASCII messages). (Not full duplex)'
+- **`UartFullDuplexTest`** : basic configuration, receive data and then send data ( simple ASCII messages). (Not full duplex)'
+- **`UartResetTest`** : advanced configuration, full-duplex data transmission, resets mid-transmission.
+- **`UartErrorInjectTest`** : advanced configuration (different test cases), full duplex.'
+        - **Baud-rate sweep**: parametrize `CLK_DIV` across corner + random values, verify measured bit period (`V-UART-STM-008`/`COV-003`).
+        - **Framing-error injection**: force a bad start/stop bit via the UART agent driver, verify `RX_FRAME_ERROR`/`RX_BREAK` (`V-UART-STM-006`/`CHK-007`).
+        - **Illegal-access**: writes to `STATUS`/`RXDATA`, write-while-full, read-while-empty — confirm `HRESP` error and no corruption (`V-UART-STM-003/004/005`).
+- **`UartRandomTest`** : chaos.'
 
 ## Open Items
-
+- UVM-style testcases just fail.
+- The random sequences don't seem to really work that concurrently.
+- Is the 'UVM' methodology creep too heavy? can I simplifiy the reg model + randomness etc
+- The Monitor warns about bad start and stop bits - this should not be the case.
+- Currently the checks are in the sequences (bad UVM separation of concerns)
 - No scoreboard exists yet — this blocks every `CHK` item above from actually running; building it is the top DV priority for this block.
 - `hw/dv/ahb_uart/tbench/ahb_uart_env.py` imports from a stale `hw.dv.ahb3` path — needs fixing to point at `hw/dv/uvc/ahb3lite/` before new tests are layered on top.
 - No committed cocotb runner/Makefile for this flow (see the top-level `CLAUDE.md`) — needed before any of the above tests can actually be executed in CI or locally in a repeatable way.
+- No coverage yet + No Scoreboard
