@@ -1,7 +1,7 @@
 CAPI=2:
 
-name: sharc:comms_ip:ahb_uart_pyuvm:0.0.1
-description: AHB UART cocotb/pyuvm testbench (Verilator)
+name: sharc:comms_ip:ahb_uart_directed:0.0.1
+description: Simple directed cocotb testbench for ahb_uart (Verilator)
 
 filesets:
   rtl:
@@ -13,13 +13,12 @@ targets:
     flow: sim
     flow_options:
       tool: verilator
-      cocotb_module: hw.dv.ahb_uart.tests.uart_test
+      cocotb_module: hw.tb.uart.test_uart
       verilator_options:
         - -Wno-TIMESCALEMOD
         - --sv
         - --trace
         - --trace-fst
-        - --coverage
       run_options:
         - --trace
     filesets: [rtl]

@@ -1,0 +1,13 @@
+CAPI=2:
+
+name: sharc:amba_ip:ahb3lite_pkg:0.0.1
+description: AHB3-Lite package (transfer-type constants, byte-select helpers)
+
+filesets:
+  rtl:
+    files:
+      - ahb3lite_pkg.sv: {file_type: systemVerilogSource}
+
+targets:
+  default:
+    filesets: [rtl]
