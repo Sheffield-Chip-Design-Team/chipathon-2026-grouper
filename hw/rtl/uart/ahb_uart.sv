@@ -1,21 +1,12 @@
 // AHB UART 
 
-// Address map :
-//   Base addess + 0 : 
-//     Read BCD Converter Output (5-digit BCD)
-//     Write BCD Converter Input (16-bit unsigned) (This triggers a conversion to start)
-//   Base addess + 4 : 
-//     Read BCD Converter Status Register
-//
-// Bits within BCD Converter status register :
-//   Bit 0   BCD Conversion Done (1 = Done)
 
 module ahb_uart #(
   parameter int ADDR_WIDTH = 32,
   parameter int DATA_WIDTH = 32
 ) (
-  input logic HCLK,
-  input logic HRESETn,
+  input logic                   HCLK,
+  input logic                   HRESETn,
 
   // AHB Slave Interface
     
