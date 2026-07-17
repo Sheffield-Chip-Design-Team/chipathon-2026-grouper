@@ -1,0 +1,33 @@
+CAPI=2:
+
+name: sharc:comms_ip:ahb_uart:0.0.1
+description: AHB-Lite wrapped UART (RTL only, no testbench)
+
+filesets:
+  rtl:
+    files:
+      - uart_clk_div.sv:              {file_type: systemVerilogSource}
+      - uart_rx.sv:                   {file_type: systemVerilogSource}
+      - uart_tx.sv:                   {file_type: systemVerilogSource}
+      - uart.sv:                      {file_type: systemVerilogSource}
+      - ahb_uart.sv:                  {file_type: systemVerilogSource}
+    depend:
+      - sharc:common_ip:common:0.0.1
+      - sharc:amba_ip:ahb3lite_pkg:0.0.1
+
+targets:
+  default: &rtl
+    filesets: [rtl]
+    toplevel: ahb_uart
+
+  lint:
+    <<: *rtl
+    description: Verilator lint-only check (no simulation)
+    flow: sim
+    flow_options:
+      tool: verilator
+      mode: lint-only
+      verilator_options:
+        - --sv
+        - -Wall
+        - -Wno-fatal
