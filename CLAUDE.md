@@ -27,7 +27,7 @@ Simulation uses [FuseSoC](https://github.com/olofk/fusesoc) + Verilator, driven 
 python3 -m venv .env
 source .env/bin/activate
 pip install --upgrade pip
-pip install fusesoc
+pip install -r requirements-dv.txt
 
 # register this repo and the picorv32 core library with fusesoc
 fusesoc library add grouper_soc .
