@@ -19,5 +19,4 @@ class AHB3LiteAgent(uvm_component):
 
     def connect_phase(self):
         if self.is_active:
-            self.driver.ap.connect(self.sequencer.ap) 
-            
+            self.driver.seq_item_port.connect(self.sequencer.seq_item_export)

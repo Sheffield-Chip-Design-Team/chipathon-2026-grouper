@@ -4,19 +4,13 @@ description: RISC-V 32IM SoC with UART, SPI and GPIO
 
 filesets:
   rtl:
-    files:
-      - hw/rtl/common/clk_div.sv:                         {file_type: systemVerilogSource}
-      - hw/rtl/common/clk_gate.sv:                        {file_type: systemVerilogSource}
-      - hw/rtl/common/clk_out.sv:                         {file_type: systemVerilogSource}
-      - hw/rtl/common/downcounter.sv:                     {file_type: systemVerilogSource}
-      - hw/rtl/common/pulse_sync.sv:                      {file_type: systemVerilogSource}
-      - hw/rtl/common/shift_reg.sv:                       {file_type: systemVerilogSource}
-      - hw/rtl/common/small_sync_fifo.sv:                 {file_type: systemVerilogSource}
-      - hw/rtl/common/sync.sv:                            {file_type: systemVerilogSource}
-      
-      - hw/rtl/ahb3lite/ahb3lite_pkg.sv:                  {file_type: systemVerilogSource}
-      - hw/rtl/ahb3lite/ahb3lite_intf.sv:                 {file_type: systemVerilogSource}
+    depend:
+      - sharc:common_ip:common:0.0.1
+      - sharc:amba_ip:ahb3lite_pkg:0.0.1
+      - yosys:cpu_ip:picorv32:1.0.0
+      - sharc:comms_ip:ahb_uart:0.0.1
 
+    files:
       - hw/rtl/interconnect/ahb_debug.sv:                 {file_type: systemVerilogSource}
       - hw/rtl/interconnect/ahb_conn.sv:                  {file_type: systemVerilogSource}
       - hw/rtl/interconnect/ahb_interconnect.sv:          {file_type: systemVerilogSource}
@@ -24,26 +18,15 @@ filesets:
       - hw/rtl/rom/ahb_rom.sv:                            {file_type: systemVerilogSource}
       - hw/rtl/sram/ahb_ram.sv:                           {file_type: systemVerilogSource}
 
-      - hw/rtl/uart/uart_clk_div.sv:                      {file_type: systemVerilogSource}
-      - hw/rtl/uart/uart_rx.sv:                           {file_type: systemVerilogSource}
-      - hw/rtl/uart/uart_tx.sv:                           {file_type: systemVerilogSource}
-      - hw/rtl/uart/uart.sv:                              {file_type: systemVerilogSource}
-      - hw/rtl/uart/ahb_uart.sv:                          {file_type: systemVerilogSource}
-
       - hw/rtl/cpu/cpu_ss.sv:                             {file_type: systemVerilogSource}
       - hw/rtl/periph/periph_ss.sv:                       {file_type: systemVerilogSource}
 
       - hw/rtl/picorv32_hello_core.sv:                    {file_type: systemVerilogSource}
       - hw/rtl/picorv32_hello_top.sv:                     {file_type: systemVerilogSource}
-
-    depend:
-      - yosys:cpu_ip:picorv32:1.0.0
-
   sw:
     files:
       - sw/code.vmem:                                     {file_type: systemVerilogSource, is_include_file: true}
       - sw/code.hex:                                      {file_type: systemVerilogSource, is_include_file: true}
-
   tb:
     files:
       - hw/tb/picorv32_hello_tb.sv:                       {file_type: systemVerilogSource}
@@ -64,10 +47,13 @@ targets:
       tool: verilator
       verilator_options:
         - -Wno-TIMESCALEMOD
+        - -Wno-fatal
         - --sv
         - --trace
         - --trace-fst
         - --binary
+        - --coverage
+        - -DDEBUG_PERIPH
     filesets_append:
       - tb
     toplevel: picorv32_hello_tb

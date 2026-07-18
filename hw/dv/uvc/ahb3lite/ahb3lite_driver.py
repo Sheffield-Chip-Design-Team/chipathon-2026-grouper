@@ -1,17 +1,18 @@
 import cocotb
 from cocotb.triggers import RisingEdge, Timer
-from pyuvm import uvm_analysis_port, uvm_driver, ConfigDB
+from pyuvm import uvm_analysis_port, uvm_driver
+
+from .ahb3lite_config import DEFAULT_SIGNAL_MAP
 
 HTRANS_IDLE   = 0b00
 HTRANS_NONSEQ = 0b10
 
-class AHB3LiteDriver(uvm_driver): 
+class AHB3LiteDriver(uvm_driver):
     def __init__(self, name, parent, signal_map=None):
         super().__init__(name, parent)
-        default_signal_map = ConfigDB.get(self, "", "signal_map") or {}
-        self.signal_map = dict(default_signal_map)
+        self.signal_map = dict(DEFAULT_SIGNAL_MAP)
         if signal_map:
-            self.signal_map.update(signal_map)     
+            self.signal_map.update(signal_map)
 
     def _sig(self, signal_name):
         return getattr(self.dut, self.signal_map[signal_name])
@@ -62,7 +63,20 @@ class AHB3LiteDriver(uvm_driver):
         if not item.is_write:
             item.rdata = int(self._sig("HRDATA").value) & 0xFFFF_FFFF
 
+        direction = "WR" if item.is_write else "RD"
+        data = item.wdata if item.is_write else item.rdata
+        
+        self.logger.debug(f"AHB {direction} addr=0x{item.addr:08x} data=0x{data:08x}")
+        
+        if item.hresp:
+            self.logger.warning(f"AHB {direction} addr=0x{item.addr:08x} returned HRESP=ERROR")
+
         self._sig("HTRANS").value = HTRANS_IDLE
         self._sig("HSEL").value = 0
         self._sig("HWRITE").value = 0
-        self._sig("HWDATA").value = 0
+        # Deliberately not clearing HWDATA here: ahb_uart.sv (and likely
+        # other slaves using the same "capture address phase, act one cycle
+        # later" pattern) latch write data one cycle after HREADYOUT already
+        # reported the transfer done. Clearing HWDATA immediately raced that
+        # latch and wrote zeros instead of the intended data. The next
+        # transfer's address phase always overwrites this before it matters.
