@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Merge every metrics-<target>.json produced by report_target.py (one per
 CI job, downloaded into --results-dir) into a single metrics.json/metrics.csv
-pair for the dv-metrics artifact. Runs once, in the final always() job, so it
+pair for the sim-metrics artifact. Runs once, in the final always() job, so it
 still produces output even when some simulation jobs failed.
 """
 import argparse
@@ -10,6 +10,17 @@ import datetime
 import json
 import os
 from pathlib import Path
+
+from report_target import COVERAGE_CATEGORIES
+
+
+def _coverage_cell(value):
+    """A category's value in metrics-<target>.json's "coverage" dict is
+    either a {pct,hit,total} detail dict or the literal string "N/A" (see
+    report_target.apply_coverage_scope) - the CSV only wants the percentage,
+    or "N/A" verbatim.
+    """
+    return value["pct"] if isinstance(value, dict) else value
 
 
 def default_run_metadata():
@@ -61,13 +72,14 @@ def main():
         writer.writerow([
             "timestamp", "git_sha", "run_id", "target",
             "tests_total", "tests_passed", "tests_failed", "pass_rate",
-            "coverage_line_pct",
+            *[f"coverage_{cat}_pct" for cat in COVERAGE_CATEGORIES],
         ])
         for t in targets:
+            coverage = t.get("coverage") or {}
             writer.writerow([
                 run_meta["timestamp"], run_meta["git_sha"], run_meta["run_id"], t["target"],
                 t["tests_total"], t["tests_passed"], t["tests_failed"], t["pass_rate"],
-                t["coverage_line_pct"],
+                *[_coverage_cell(coverage.get(cat, "N/A")) for cat in COVERAGE_CATEGORIES],
             ])
 
     print(f"Wrote {args.out_dir / 'metrics.json'} and {csv_path} for {len(targets)} target(s)")
