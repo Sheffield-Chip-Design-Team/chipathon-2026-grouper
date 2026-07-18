@@ -56,6 +56,7 @@ jobs:
             --kind "${{ matrix.kind }}" \
             --fusesoc-args="${{ matrix.fusesoc_args }}" \
             --success-pattern="${{ matrix.success_pattern }}" \
+            --coverage-scope="${{ matrix.coverage_scope }}" \
             --out-dir ci-results
 
       - name: Upload results

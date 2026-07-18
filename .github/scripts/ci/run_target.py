@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 from report_target import (
+    COVERAGE_SCOPES,
     parse_cocotb_results,
     parse_exit_code,
     parse_log_grep,
@@ -81,6 +82,9 @@ def main():
     ap.add_argument("--kind", required=True, choices=["cocotb", "log-grep", "exit-code"])
     ap.add_argument("--fusesoc-args", default="", help="Extra `fusesoc run` flags, e.g. --build")
     ap.add_argument("--success-pattern", default="", help="Required text in the log (--kind log-grep)")
+    ap.add_argument("--coverage-scope", default="full", choices=COVERAGE_SCOPES,
+                     help="full = report every coverage category, line = only line (rest N/A), "
+                          "none = no coverage at all (all categories N/A)")
     ap.add_argument("--out-dir", required=True, type=Path)
     args = ap.parse_args()
 
@@ -112,7 +116,7 @@ def main():
     else:
         tests = parse_exit_code(exit_code)
 
-    return write_metrics(args.name, args.kind, tests, coverage_dat, args.out_dir)
+    return write_metrics(args.name, args.kind, tests, coverage_dat, args.coverage_scope, args.out_dir)
 
 
 if __name__ == "__main__":

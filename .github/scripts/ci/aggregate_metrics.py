@@ -11,9 +11,16 @@ import json
 import os
 from pathlib import Path
 
-# Matches the categories verilator_coverage's flat summary reports - see
-# report_target.coverage_breakdown().
-COVERAGE_CATEGORIES = ["line", "toggle", "branch", "expr", "fsm_state", "fsm_arc"]
+from report_target import COVERAGE_CATEGORIES
+
+
+def _coverage_cell(value):
+    """A category's value in metrics-<target>.json's "coverage" dict is
+    either a {pct,hit,total} detail dict or the literal string "N/A" (see
+    report_target.apply_coverage_scope) - the CSV only wants the percentage,
+    or "N/A" verbatim.
+    """
+    return value["pct"] if isinstance(value, dict) else value
 
 
 def default_run_metadata():
@@ -72,7 +79,7 @@ def main():
             writer.writerow([
                 run_meta["timestamp"], run_meta["git_sha"], run_meta["run_id"], t["target"],
                 t["tests_total"], t["tests_passed"], t["tests_failed"], t["pass_rate"],
-                *[coverage.get(cat, {}).get("pct") for cat in COVERAGE_CATEGORIES],
+                *[_coverage_cell(coverage.get(cat, "N/A")) for cat in COVERAGE_CATEGORIES],
             ])
 
     print(f"Wrote {args.out_dir / 'metrics.json'} and {csv_path} for {len(targets)} target(s)")

@@ -23,6 +23,15 @@ _COVERAGE_SUMMARY_RE = re.compile(
     r"^\s*(?P<category>\w+)\s*:\s*(?P<pct>[\d.]+)%\s*\(\s*(?P<hit>\d+)\s*/\s*(?P<total>\d+)\s*\)\s*$"
 )
 
+# All categories verilator_coverage's flat summary can report. Every
+# metrics-<target>.json's "coverage" object always has exactly these keys -
+# either a {pct,hit,total} detail dict, or the literal string "N/A" for a
+# category that --coverage-scope suppressed (or that has no coverage.dat
+# at all, e.g. a lint-only target). aggregate_metrics.py imports this list
+# too, so the CSV's coverage_*_pct columns can't drift out of sync with it.
+COVERAGE_CATEGORIES = ["line", "toggle", "branch", "expr", "fsm_state", "fsm_arc"]
+COVERAGE_SCOPES = ["full", "line", "none"]
+
 
 def parse_cocotb_results(results_xml: Path):
     root = ET.parse(results_xml).getroot()
@@ -103,14 +112,37 @@ def coverage_breakdown(coverage_dat: Path) -> dict | None:
     return breakdown or None
 
 
-def write_metrics(target: str, kind: str, tests: list, coverage_dat: Path | None, out_dir: Path) -> int:
+def apply_coverage_scope(full_breakdown: dict | None, coverage_scope: str) -> dict:
+    """Always returns a dict with every COVERAGE_CATEGORIES key present -
+    either the {pct,hit,total} detail for a category that was both
+    collected and surfaced, or the literal string "N/A" for one that
+    --coverage-scope suppressed, or that was never collected at all (no
+    coverage.dat, e.g. a lint-only target).
+    """
+    result = {}
+    for cat in COVERAGE_CATEGORIES:
+        if coverage_scope == "none":
+            result[cat] = "N/A"
+        elif coverage_scope == "line" and cat != "line":
+            result[cat] = "N/A"
+        elif full_breakdown and cat in full_breakdown:
+            result[cat] = full_breakdown[cat]
+        else:
+            result[cat] = "N/A"
+    return result
+
+
+def write_metrics(
+    target: str, kind: str, tests: list, coverage_dat: Path | None, coverage_scope: str, out_dir: Path
+) -> int:
     """Write metrics-<target>.json and return the process exit code to use
     (0 if every test passed, 1 otherwise). Shared by report_target's own CLI
     and run_target.py, so both produce identical metrics output.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    coverage = coverage_breakdown(coverage_dat) if coverage_dat else None
+    full_breakdown = coverage_breakdown(coverage_dat) if coverage_dat and coverage_scope != "none" else None
+    coverage = apply_coverage_scope(full_breakdown, coverage_scope)
 
     tests_total = len(tests)
     tests_passed = sum(1 for t in tests if t["passed"])
@@ -131,9 +163,10 @@ def write_metrics(target: str, kind: str, tests: list, coverage_dat: Path | None
 
     out_file = out_dir / f"metrics-{target}.json"
     out_file.write_text(json.dumps(metrics, indent=2))
-    cov_summary = ""
-    if coverage:
-        cov_summary = ", " + ", ".join(f"{cat}={v['pct']:.1f}%" for cat, v in coverage.items())
+    cov_summary = ", " + ", ".join(
+        f"{cat}={v['pct']:.1f}%" if isinstance(v, dict) else f"{cat}={v}"
+        for cat, v in coverage.items()
+    )
     print(f"Wrote {out_file}: {tests_passed}/{tests_total} passed{cov_summary}")
 
     return 1 if tests_failed else 0
@@ -149,6 +182,9 @@ def main():
     ap.add_argument("--success-pattern", help="Substring that must appear in --log-file")
     ap.add_argument("--exit-code", type=int, help="Recorded process exit code (--kind exit-code)")
     ap.add_argument("--coverage-dat", type=Path, help="Optional Verilator coverage.dat to summarize")
+    ap.add_argument("--coverage-scope", default="full", choices=COVERAGE_SCOPES,
+                     help="full = report every category, line = only line (rest N/A), "
+                          "none = no coverage at all (all categories N/A)")
     args = ap.parse_args()
 
     if args.kind == "cocotb":
@@ -181,7 +217,7 @@ def main():
             ap.error("--kind exit-code requires --exit-code")
         tests = parse_exit_code(args.exit_code)
 
-    return write_metrics(args.target, args.kind, tests, args.coverage_dat, args.out_dir)
+    return write_metrics(args.target, args.kind, tests, args.coverage_dat, args.coverage_scope, args.out_dir)
 
 
 if __name__ == "__main__":
