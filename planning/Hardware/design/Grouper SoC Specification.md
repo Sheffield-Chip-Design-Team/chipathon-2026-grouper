@@ -70,6 +70,27 @@ Target memory map, per the Schematic Review §3b:
 
 | `GRPR-SOC-012` | Reset shall be active-low (`HRESETn`/`rst_n`), asynchronous assert / synchronous de-assert, distributed to all synchronous logic. |
 
+
+## Boot Flow 
+TODO
+
+
+
+## Interrupt Handling Scheme
+TODO
+
+
+
+## GPIO Multiplexing Scheme
+TODO
+
+
+
+## Debug/Test Features
+TODO
+
+
+
 ## Physical Design Requirements
 
 | ID | Requirement |
