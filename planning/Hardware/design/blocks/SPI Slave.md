@@ -1,6 +1,6 @@
 # AHB SPI Slave
 
-**Owner:** Safaa
+**Owner:** Thiri
 **Status:** RTL design starting (per [Schematic Review](../../Schematic%20Review.md) §4). No RTL committed yet under `hw/rtl/`.
 
 **Related:** [Grouper SoC Specification](../Grouper%20SoC%20Specification.md) — boot sequence, memory map | [SPI Slave Verification Plan](../../verification/blocks/SPI%20Slave%20Verification%20Plan.md)
