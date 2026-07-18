@@ -10,10 +10,18 @@ place to compute per-target pass/fail for the cocotb-based jobs.
 """
 import argparse
 import json
+import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+# Matches lines from `verilator_coverage <file>`'s flat "Coverage Summary:"
+# block, e.g. "  fsm_state : 0.0% (  0/  0)" - padding/width varies with the
+# magnitude of the counts, so whitespace is deliberately loose here.
+_COVERAGE_SUMMARY_RE = re.compile(
+    r"^\s*(?P<category>\w+)\s*:\s*(?P<pct>[\d.]+)%\s*\(\s*(?P<hit>\d+)\s*/\s*(?P<total>\d+)\s*\)\s*$"
+)
 
 
 def parse_cocotb_results(results_xml: Path):
@@ -64,28 +72,35 @@ def parse_exit_code(exit_code: int):
     ]
 
 
-def coverage_line_pct(coverage_dat: Path, info_out: Path) -> float | None:
+def coverage_breakdown(coverage_dat: Path) -> dict | None:
+    """Parse verilator_coverage's flat "Coverage Summary:" block (line,
+    toggle, branch, expr, fsm_state, fsm_arc) straight from stdout - no
+    --write-info/.info file needed, and unlike the lcov format it actually
+    has a place for toggle/branch/FSM data, not just line coverage.
+    """
     if not coverage_dat.is_file():
         return None
     try:
-        subprocess.run(
-            ["verilator_coverage", "--write-info", str(info_out), str(coverage_dat)],
-            check=True,
-        )
+        out = subprocess.run(
+            ["verilator_coverage", str(coverage_dat)],
+            check=True, capture_output=True, text=True,
+        ).stdout
     except subprocess.CalledProcessError as e:
         print(f"warning: verilator_coverage failed on {coverage_dat}: {e}", file=sys.stderr)
         return None
-    # Verilator's lcov output has no LF:/LH: summary lines, just raw
-    # DA:<line>,<hits> records - compute lines-found/lines-hit ourselves.
-    lines_found = lines_hit = 0
-    for line in info_out.read_text().splitlines():
-        if line.startswith("DA:"):
-            lines_found += 1
-            if int(line[3:].split(",", 1)[1]) > 0:
-                lines_hit += 1
-    if lines_found == 0:
-        return None
-    return 100.0 * lines_hit / lines_found
+
+    breakdown = {}
+    for line in out.splitlines():
+        m = _COVERAGE_SUMMARY_RE.match(line)
+        if m:
+            hit, total = int(m["hit"]), int(m["total"])
+            # 0/0 means there was nothing of this category to cover at all
+            # (e.g. fsm_state on a design with no Verilator-recognizable
+            # FSMs) - that's vacuously fully covered, not 0% covered, even
+            # though Verilator's own summary text prints "0.0%" for it.
+            pct = 100.0 if total == 0 else float(m["pct"])
+            breakdown[m["category"]] = {"pct": pct, "hit": hit, "total": total}
+    return breakdown or None
 
 
 def write_metrics(target: str, kind: str, tests: list, coverage_dat: Path | None, out_dir: Path) -> int:
@@ -95,9 +110,7 @@ def write_metrics(target: str, kind: str, tests: list, coverage_dat: Path | None
     """
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    coverage_pct = None
-    if coverage_dat:
-        coverage_pct = coverage_line_pct(coverage_dat, out_dir / f"{target}.info")
+    coverage = coverage_breakdown(coverage_dat) if coverage_dat else None
 
     tests_total = len(tests)
     tests_passed = sum(1 for t in tests if t["passed"])
@@ -110,7 +123,7 @@ def write_metrics(target: str, kind: str, tests: list, coverage_dat: Path | None
         "tests_passed": tests_passed,
         "tests_failed": tests_failed,
         "pass_rate": (tests_passed / tests_total) if tests_total else None,
-        "coverage_line_pct": coverage_pct,
+        "coverage": coverage,
         "sim_time_ns_total": sum(t["sim_time_ns"] or 0 for t in tests) or None,
         "wall_time_s_total": sum(t["wall_time_s"] or 0 for t in tests) or None,
         "tests": tests,
@@ -118,8 +131,10 @@ def write_metrics(target: str, kind: str, tests: list, coverage_dat: Path | None
 
     out_file = out_dir / f"metrics-{target}.json"
     out_file.write_text(json.dumps(metrics, indent=2))
-    print(f"Wrote {out_file}: {tests_passed}/{tests_total} passed"
-          + (f", {coverage_pct:.1f}% line coverage" if coverage_pct is not None else ""))
+    cov_summary = ""
+    if coverage:
+        cov_summary = ", " + ", ".join(f"{cat}={v['pct']:.1f}%" for cat, v in coverage.items())
+    print(f"Wrote {out_file}: {tests_passed}/{tests_total} passed{cov_summary}")
 
     return 1 if tests_failed else 0
 

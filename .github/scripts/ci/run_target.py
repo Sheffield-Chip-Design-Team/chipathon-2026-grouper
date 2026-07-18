@@ -9,18 +9,21 @@ convention (build/<resolved VLNV with ':' -> '_'>/<fusesoc_target>/) rather
 than passed in, so they can't drift out of sync with the core/target names.
 """
 import argparse
+import datetime
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 from report_target import (
-    coverage_line_pct,  # noqa: F401 (re-exported for callers that only need this)
     parse_cocotb_results,
     parse_exit_code,
     parse_log_grep,
     write_metrics,
 )
+
+WAVEFORM_EXTENSIONS = (".fst", ".vcd")
 
 
 def resolve_vlnv(core: str) -> str:
@@ -38,6 +41,23 @@ def resolve_vlnv(core: str) -> str:
 
 def work_root(core: str, fusesoc_target: str) -> Path:
     return Path("build") / resolve_vlnv(core).replace(":", "_") / fusesoc_target
+
+
+def collect_waveforms(root: Path, name: str, date_prefix: str, out_dir: Path) -> list:
+    """Copy any waveform dumps FuseSoC/Verilator left in the work root into
+    out_dir, renamed <date_prefix>-<name>.<ext>, so they ride along in the
+    same results-<name> artifact as the log/metrics/coverage. Extension is
+    whatever the source file actually has (.fst/.vcd) - every target in
+    this repo uses --trace-fst today, so that's what shows up in practice.
+    """
+    found = sorted(p for ext in WAVEFORM_EXTENSIONS for p in root.glob(f"*{ext}"))
+    copied = []
+    for i, src in enumerate(found):
+        suffix = "" if len(found) == 1 else f"-{i}"
+        dest = out_dir / f"{date_prefix}-{name}{suffix}{src.suffix}"
+        shutil.copyfile(src, dest)
+        copied.append(dest)
+    return copied
 
 
 def run_fusesoc(core: str, fusesoc_target: str, fusesoc_args: str, log_file: Path) -> int:
@@ -67,12 +87,16 @@ def main():
     if args.kind == "log-grep" and not args.success_pattern:
         ap.error("--kind log-grep requires --success-pattern")
 
+    date_prefix = datetime.date.today().strftime("%d-%m-%Y")
+
     root = work_root(args.core, args.fusesoc_target)
-    log_file = args.out_dir / f"{args.name}.log"
+    log_file = args.out_dir / f"{date_prefix}-{args.name}.log"
     exit_code = run_fusesoc(args.core, args.fusesoc_target, args.fusesoc_args, log_file)
 
     results_xml = root / "results.xml"
     coverage_dat = root / "coverage.dat"
+    for wave in collect_waveforms(root, args.name, date_prefix, args.out_dir):
+        print(f"Collected waveform: {wave}")
 
     if args.kind == "cocotb":
         if not results_xml.is_file():

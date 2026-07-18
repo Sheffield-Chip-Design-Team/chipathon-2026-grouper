@@ -1,11 +1,11 @@
-# DV CI target list, consumed by .github/workflows/dv-ci.yml's load-config job.
+# Simulation CI target list, consumed by .github/workflows/sim-ci.yml's load-config job.
 # Every entry must set all of these keys (fail_ok included) so the matrix
 # entries GitHub Actions builds via fromJson() have a uniform shape.
 #
 #   name:            short label used for the metrics/artifact/job name
 #   core:            FuseSoC CAPI2 VLNV, e.g. sharc:comms_ip:ahb_uart
 #   fusesoc_target:  target within that core's .core file
-#   kind:            cocotb | log-grep | exit-code (see scripts/ci/report_target.py)
+#   kind:            cocotb | log-grep | exit-code (see .github/scripts/ci/report_target.py)
 #   fusesoc_args:    extra flags passed to `fusesoc run`, "" if none
 #   success_pattern: required text in the captured log, kind: log-grep only, else ""
 #   fail_ok:         true = failures don't block CI (shown yellow, not red);
