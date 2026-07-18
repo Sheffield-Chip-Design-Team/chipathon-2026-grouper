@@ -2,7 +2,7 @@
 
 ## 1) Create + activate a virtual environment
 ```bash
-python3 -m venv .env
+python3.12 -m venv .env
 source .env/bin/activate
 ```
 
@@ -26,4 +26,5 @@ fusesoc run --no-export --target=tb_top grouper_soc
 
 ## Notes
 - The simulation uses the SystemVerilog testbench top `picorv32_hello_tb`.
+- This flow requires at least python 3.12 (3.13 is the maximum version for fusesoc + cocotb)
 - Verilator 5+ is required in PATH.

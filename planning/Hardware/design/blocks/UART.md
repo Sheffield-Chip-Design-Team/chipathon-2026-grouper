@@ -38,11 +38,75 @@ AHB-Lite UART peripheral. Two roles: (1) the boot-load path — the boot ROM rec
 | `GRPR-UART-006` | Writes to `STATUS` and reads/writes that target invalid combinations (write to `RXDATA`, write to `STATUS`) shall be rejected with `HRESP` error. |
 | `GRPR-UART-007` | The block shall detect and flag framing errors (bad start or stop bit) via `RX_FRAME_ERROR`, and shall detect a break condition (sustained line-low past a stop bit) via `RX_BREAK`. |
 | `GRPR-UART-008` | `TX_BREAK` shall force the TX line low continuously (break transmission), overriding normal FIFO-driven transmission. |
-| `GRPR-UART-009` | The RX input shall be double-flop synchronized (2-stage, per `hw/rtl/common/sync.sv`) before use, since `uart_rx` is asynchronous to `HCLK`. |
+
 
 ## Block Diagram
+```
 
-TODO...
+                  +--------------------------------------------+
+                  |                  ahb_uart                  |
+                  |                                            |
+                  |                       +------------------+ |  uart_tx
+                  |                       |   uart (core)    | |  -------->
+                  |                       |                  | |   
+                  |                       | +--------------+ | |
+   AHB-Lite       | +-----------------+   | | uart_clk_div | | |  uart_rx
+Slave Interface   | |  Register bank  |   | +--------------+ | |  <--------
+                  | |                 |   |                  | |   
+    <-------->    | | CTRL / STATUS / |   | +---------+      | |
+                  | | TXDATA / RXDATA |   | | uart_tx |      | |  
+                  | +-----------------+   | +---------+      | |  
+                  |                       |                  | |
+                  |                       | +---------+      | | IRQs
+                  |                       | | uart_rx |      | | -------->
+                  |                       | +---------+      | |
+                  |                       +------------------+ |
+                  +--------------------------------------------+
+```
+## uArch Diagram
+```
+
+                  +-----------------------------------------------------------------------------------+
+                  |                                      ahb_uart                                     |
+                  |                                                                                   |
+                  |                       +---------------------------------------------------------+ |
+                  |                       |                       uart (core)                       | |
+                  |                       |                                                         | |
+                  |                       | +--------------+                                        | |
+                  |                       | | uart_clk_div |                                        | |
+                  |                       | +--------------+                                        | |
+                  |                       |                                                         | |
+                  |                       | +------------------------------------------------+      | |
+                  |                       | |                    uart_tx                     |      | |
+                  |                       | |                                                |      | |
+AHB-Lite          |                       | | tx_data,tx_write                               |      | |  uart_tx
+Master            |                       | |        |                                       |      | |  -------->
+                  |                       | |        v                                       |      | |    (TX serial out)
+HADDR,HBURST,     |                       | |   [ TX FIFO ]                                  |      | |
+HMASTLOCK,HPROT,  | +-----------------+   | |        |                                       |      | |  uart_rx
+HSIZE,HTRANS,     | |  Register bank  |   | |        v                                       |      | |  <--------
+HWDATA,HWRITE,    | |                 |-->| |   [ shift_reg ] --> [ serializer ] --> uart_tx |      | |    (RX serial in)
+HREADYIN,HSEL     | | CTRL / STATUS / |<--| |                                                |      | |
+  -------->       | | TXDATA / RXDATA |   | | tx_full, tx_empty, tx_active --> STATUS        |      | |  rx_irq
+                  | +-----------------+   | +------------------------------------------------+      | |  -------->
+  <--------       |                       |                                                         | |
+HRDATA,           |                       | +-----------------------------------------------------+ | |  rx_error_irq
+HREADYOUT,HRESP   |                       | |                       uart_rx                       | | |  -------->
+                  |                       | |                                                     | | |
+                  |                       | | uart_rx                                             | | |
+                  |                       | |    |                                                | | |
+                  |                       | |    v                                                | | |
+                  |                       | | [ sync ] --> [ shift_reg ]                          | | |
+                  |                       | |                     |                               | | |
+                  |                       | |                     v                               | | |
+                  |                       | |               [ RX FIFO ]   -->  rx_data            | | |
+                  |                       | |                                                     | | |
+                  |                       | | rx_full, rx_empty,                                  | | |
+                                          | |   rx_frame_error,rx_break --> STATUS                | | |
+                  |                       | +-----------------------------------------------------+ | |
+                  |                       +---------------------------------------------------------+ |
+                  +-----------------------------------------------------------------------------------+
+```
 
 ## Parameters and Configurations
 
@@ -58,42 +122,58 @@ TODO...
 | `HADDR`/`HBURST`/`HMASTLOCK`/`HPROT`/`HSIZE`/`HTRANS`/`HWDATA`/`HWRITE` | in | — | AHB-Lite master-driven signals |
 | `HRDATA`/`HREADYOUT`/`HRESP` | out | — | AHB-Lite subordinate response |
 | `HREADYIN`/`HSEL` | in | — | AHB-Lite decoder signals |
-| `rx_irq` | out | 1 | Pulses on byte received (mirrors `uart` core's `received`) |
-| `rx_error_irq` | out | 1 | Pulses on RX frame error |
 | `uart_tx` | out | 1 | Serial TX line |
 | `uart_rx` | in | 1 | Serial RX line (async, synchronized internally) |
+| `rx_irq` | out | 1 | Pulses on byte received (mirrors `uart` core's `received`) |
+| `rx_error_irq` | out | 1 | Pulses on RX frame error |
 
 ## Clocking Strategy
 
-Single clock domain (`HCLK`); no internal clock division into a separate domain — `uart_clk_div` generates an enable pulse (`uart_clk_en`) within the `HCLK` domain, it does not gate or divide the clock tree itself.
+`GRPR-UART-012` THe IP shall operate on a single clock domain (`HCLK`).
 
 ## Reset Strategy
 
-Single active-low reset (`HRESETn`), asynchronous assert / synchronous de-assert (standard `always_ff @(posedge clk, negedge rst_n)` style throughout).
+`GRPR-UART-013` THe IP shall prove a single active-low reset (`HRESETn`), that is asynchronously asserted and synchronous de-asserted.
 
 ## CDC Strategy
 
-`uart_rx` is the only asynchronous input; it passes through a 2-stage synchronizer (`hw/rtl/common/sync.sv`, `DEPTH=2`) before entering the RX FSM. All other signals are synchronous to `HCLK`. No CDC needed on the AHB-Lite side (single clock domain bus).
+`GRPR-UART-009` `uart_rx` shall be passed through a 2-stage synchronizer before use. All other signals are synchronous to `HCLK`. No CDC is needed on the AHB-Lite side (single clock domain bus).
 
 ## Performance Targets
 
-TODO: List of Baud Rates at the 16/20MHz Clock.
+### Standard baud rates at 16 MHz
 
-`GRPR-UART-010`'s formula gives the achievable baud range as a function of `HCLK` and the `CLK_DIV` register; no specific target baud rate (e.g. 115200) is recorded yet. **Open item** — needs a target baud rate for the boot-load path, since boot-load throughput directly affects boot time.
+| HCLK | target baud rate| CLK_DIV+1 (ideal) | actual | error |
+|---|---|---|---|---|
+| 16MHz | 2400 | 833.33 | 2400.96 (÷833) | +0.04% |
+| 16MHz | 4800 | 416.67 | 4796.16 (÷417) | −0.08% |
+| 16MHz | 9600 | 208.33 | 9615.38 (÷208) | +0.16% |
+| 16MHz | 19200 | 104.17 | 19230.8 (÷104) | +0.16% |
+| 16MHz | 38400 | 52.08 | 38461.5 (÷52) | +0.16% |
+| 16MHz | 57600 | 34.72 | 57142.9 (÷35) | −0.79% |
+| 16MHz | 76800 | 26.04 | 76923.1 (÷26) | +0.16% |
+| 16MHz | 115200 | 17.36 | 117647 (÷17) |  +2.12% |
+
+### Exact (binary-divisible) rates at 16 MHz
+| HCLK | target | CLK_DIV+1 (ideal) | actual | error |
+|---|---|---|---|---|
+| 16MHz | 2000000 | 1 | 2000000 (÷1) | 0.00% |
+| 16MHz | 1000000 | 2 | 1000000 (÷2) | 0.00% |
+| 16MHz | 500000 | 4 | 500000 (÷4) | 0.00% |
+| 16MHz | 250000 | 8 | 250000 (÷8) | 0.00% |
+| 16MHz | 125000 | 16 | 125000 (÷16) | 0.00% |
+| 16MHz | 62500 | 32 | 62500 (÷32) | 0.00% |
+| 16MHz | 31250 | 64 | 31250 (÷64) | 0.00% |
+| 16MHz | 15625 | 128 | 15625 (÷128) | 0.00% |
 
 ## AHB3-Lite Interface Behavior
-- Access is valid when `HREADYIN && HSEL && (HTRANS != HTRANS_IDLE)`
-- Read and write operations are accepted in address phase and acted on in data phase
-- Byte-lane decode uses `generate_byte_select_32(HSIZE, HADDR[1:0])`
-- Register decode uses `HADDR[3:2]` (word addressing)
-- Error response (`HRESP=1`) on invalid accesses
 - No wait states from slave (`HREADYOUT=1`)
 
 ## Register Map (base + offset)
-- `0x00` (`ADDR_CTRL`,   RW)
-- `0x04` (`ADDR_STATUS`, RO)
-- `0x08` (`ADDR_TXDATA`, WO)
-- `0x0C` (`ADDR_RXDATA`, RO)
+- `0x00` (`CTRL`,   RW)
+- `0x04` (`STATUS`,  RO)
+- `0x08` (`TDATA`,   WO)
+- `0x0C` (`RXDATA`,  RO)
 
 ### CTRL Register (`0x00`, RW)
 - `bit[0]`  `enable`
@@ -101,8 +181,8 @@ TODO: List of Baud Rates at the 16/20MHz Clock.
 - `bit[2]`  `rx_en`
 - `bit[3]`  `rx_resync_en`
 - `bit[4]`  `tx_break`
-- `bit[5]`  `flush_tx_fifo` (pulse / one-shot)
-- `bit[6]`  `flush_rx_fifo` (pulse / one-shot)
+- `bit[5]`  `flush_tx_fifo`  (pulse / one-shot)
+- `bit[6]`  `flush_rx_fifo`  (pulse / one-shot)
 - `bit[25:16]` `clk_div[9:0]`
 
 ### STATUS Register (`0x04`, RO)
@@ -112,7 +192,7 @@ TODO: List of Baud Rates at the 16/20MHz Clock.
 - `bit[3]` `rx_full`
 - `bit[4]` `tx_active`
 - `bit[5]` `rx_frame_error` (sticky)
-- `bit[6]` `rx_break` (sticky)
+- `bit[6]` `rx_break`       (sticky)
 
 ### TXDATA Register (`0x08`, WO)
 - `bit[7:0]` data written into TX FIFO when not full
@@ -121,9 +201,9 @@ TODO: List of Baud Rates at the 16/20MHz Clock.
 - `bit[7:0]` data read from RX FIFO when not empty
 
 ## Invalid Access Rules (`HRESP=1`)
-- Write to `STATUS` is invalid
-- Write to `RXDATA` is invalid
-- Write to `TXDATA` is invalid when TX FIFO is full
+- Write to `STATUS`  is invalid
+- Write to `RXDATA`  is invalid
+- Write to `TXDATA`  is invalid when TX FIFO is full
 - Read from `RXDATA` is invalid when RX FIFO is empty
 
 ## Size Estimate
@@ -132,10 +212,14 @@ Not yet documented in the source deck or estimated from synthesis. **Open item.*
 
 ## Open Items
 
-- All of "Performance Targets" and "Size Estimate".
+- "Size Estimate".
 - Boot-load baud rate / target throughput not specified anywhere yet — needed to validate the boot-sequence timing budget in the top-level spec.
+
 - `ahb_uart.sv` carries a stale header comment (lines 1–11) describing a "BCD Converter" register map — leftover from an earlier/different module template. The actual implementation below it (the 4-register UART map documented above) is what's real; the comment should be deleted by whoever next touches that file.
-- `STATUS.RX_FRAME_ERROR`/`RX_BREAK` read-clear behavior: the RTL clears `status_rx_frame_error` on a `STATUS` read but does not appear to clear `status_rx_break` the same way (`hw/rtl/uart/ahb_uart.sv` lines 240–250) — worth a directed test to confirm intended behavior before relying on it.
+
+- `STATUS.RX_FRAME_ERROR`/`RX_BREAK` read-clear behavior: the RTL clears `status_rx_frame_error` on a `STATUS` read but does not appear to clear 
+
+`status_rx_break` the same way (`hw/rtl/uart/ahb_uart.sv` lines 240–250) — worth a directed test to confirm intended behavior before relying on it.
 
 ## Verification Cross-Reference
 

@@ -44,12 +44,21 @@ Main blocks: Control/Status Registers, Init + QPI Transaction FSM, Buffer/Addres
 | ID | Requirement |
 |---|---|
 | `GRPR-QSPI-014` | APS6404L interface: capacity 64 Mbit / 8 MB, 23-bit byte addressing, four-bit QPI data interface, target QPI clock 32 MHz (subject to the same clock-plan open item as SPI Master — see below). Memory refresh is handled internally by the PSRAM. |
-| `GRPR-QSPI-015` | Status reporting shall include `INIT_DONE` (QSPI device initialization complete). **Open — the source additionally lists `BUF_ACTIVE`, `REPLAY_ACTIVE`, `REPLAY_MISSED`, `OVERFLOW`, `SAMPLE_SKIP`; the latter three are unambiguous Trouper "sample replay" leftovers and are dropped. `BUF_ACTIVE`/`OVERFLOW` are plausible for a generic buffered QSPI controller but their exact meaning in a non-replay context isn't established — needs its own definition, not inherited from the contaminated source.** |
 
 ## IOs and External Interfaces
 
-- **AHB-Lite interface** — CPU bus with control/status signals.
-- **Core command interface:** `cmd_en` (chip-enable for transaction duration), `cmd_read` (1-cycle pulse), `cmd_write` (1-cycle pulse), `cmd_wdata[7:0]`, `cmd_rdata[7:0]`, `cmd_ready`.
+| Port | Direction | Width | Description |
+|---|---|---|---|
+| `HADDR`/`HBURST`/`HMASTLOCK`/`HPROT`/`HSIZE`/`HTRANS`/`HWDATA`/`HWRITE` | in | — | AHB-Lite master-driven signals |
+| `HRDATA`/`HREADYOUT`/`HRESP` | out | — | AHB-Lite subordinate response |
+| `HREADYIN`/`HSEL` | in | — | AHB-Lite decoder signals |
+| `mosi_o` | out | — | Master OUT, Slave IN |
+| `qspi_sio_i`  | in  | 4 | Master IN, Slave OUT |
+| `qspi_sio_o`  | out | 4 | Master OUT, Slave IN |
+| `qspi_sio_oe` | out | 4 | Chip Select Output|
+| `irq`    | out | — | Combined interrupt output|
+
+- **Internal Core command interface:** `cmd_en` (chip-enable for transaction duration), `cmd_read` (1-cycle pulse), `cmd_write` (1-cycle pulse), `cmd_wdata[7:0]`, `cmd_rdata[7:0]`, `cmd_ready`.
 - **External QSPI interface** — described in the source as "three four-bit SIO buses" connecting through the GPIO mux onto the same four physical bidirectional `SIO[3:0]` pins. **Open — the source doesn't explain why there are three logical 4-bit buses onto one physical 4-bit bus (e.g. one per external device — NOR flash, PSRAM, and a third — vs. some other split); needs clarification from whoever owns this block.**
 
 ## Clocking Strategy
@@ -58,7 +67,8 @@ Main blocks: Control/Status Registers, Init + QPI Transaction FSM, Buffer/Addres
 
 ## Reset Strategy
 
-`GRPR-QSPI-017`: Single reset, active-low async assert / sync de-assert. At startup, SCK shall run at a reduced rate (~500 kHz per source) with synchronisers enabled for reliable transfers; frequency can be raised and the 2-FF synchroniser disabled afterward for performance.
+`GRPR-QSPI-017`: Single reset, active-low async assert / sync de-assert. 
+`GRPR-QSPI-018`: At startup, SCK shall run at a reduced rate (~500 kHz per source) with synchronisers enabled for reliable transfers; frequency can be raised and the 2-FF synchroniser disabled afterward for performance.
 
 ## CDC Strategy
 
@@ -71,8 +81,6 @@ Main blocks: Control/Status Registers, Init + QPI Transaction FSM, Buffer/Addres
 | `GRPR-QSPI-019` | QPI clock target 32 MHz (subject to the clock-plan open item). |
 | `GRPR-QSPI-020` | Raw four-bit link bandwidth: 16 MB/s (arithmetic consequence of `GRPR-QSPI-019`, generically true regardless of use case). |
 | `GRPR-QSPI-021` | Initialisation time ≤ 1 ms. |
-
-**Dropped from source as I/Q-streaming-specific (not applicable to GrouperSoC's actual use case):** the 2 MB/s "continuous-write requirement," the 44/64-cycle "write + delayed read" and 56/64-cycle "write + replay read" budgets, the ~256 kB storage-sizing requirement, and the "no skipped samples or buffer overflow" requirement. If GrouperSoC ever needs a genuine sustained-throughput target for QSPI (e.g. for a specific firmware use case), it should be derived fresh from that use case, not inherited from Trouper's sample-replay numbers.
 
 ## Size Estimate
 

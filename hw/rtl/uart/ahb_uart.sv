@@ -260,6 +260,8 @@ module ahb_uart #(
   end
 
   assign HREADYOUT = '1; // Single cycle Write & Read. Zero Wait state operations
+
+  // FIXME - add 2-cycle error response for invalid access.
   assign HRESP = invalid_access ? 1'b1 : 1'b0;
 
 endmodule
