@@ -22,8 +22,12 @@ RUN autoconf && ./configure --prefix=/opt/verilator \
     && make install
 
 FROM ubuntu:24.04
+# lsb-release: not needed by Verilator itself, but actions/setup-python
+# (run inside this image as the sim job's container) shells out to
+# `lsb_release` to detect the distro when picking a Python build, and fails
+# hard if it's missing - confirmed via a real CI run.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      g++ make perl zlib1g libfl2 ca-certificates \
+      g++ make perl zlib1g libfl2 ca-certificates lsb-release \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /opt/verilator /opt/verilator
 ENV PATH="/opt/verilator/bin:${PATH}"

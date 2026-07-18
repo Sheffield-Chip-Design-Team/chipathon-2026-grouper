@@ -1,4 +1,4 @@
-name: Publish DV Verilator image
+name: Publish Verilator image
 
 on:
   push:
