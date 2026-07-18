@@ -31,7 +31,7 @@ AHB-Lite-controlled QPI master compatible with the APS6404L PSRAM and Micron N25
 | `GRPR-QSPI-008` | Manual command execution with read-back via a single command/data/control register interface, for both write and read. |
 | `GRPR-QSPI-009` | Programmable clock divider, plus CPHA/CPOL (likely mode 0/3 only). |
 | `GRPR-QSPI-010` | Configuration bit for single/quad SPI mode. |
-| `GRPR-QSPI-011` | Configuration fields for the read command (8-bit) and write command (8-bit) opcodes. |
+| `GRPR-QSPI-011` | A per-transaction `FAST_TXN_EN` field shall select between fixed normal and fast read/write command variants. Command opcodes are selected internally according to the target device and operating mode. |
 | `GRPR-QSPI-012` | Configuration bit to enable AHB writes to flash (in the AHB wrapper) — presumably a write-protect/enable gate distinct from the PSRAM path. |
 | `GRPR-QSPI-013` | Fast-read dummy-cycle count shall be configurable. |
 
@@ -63,13 +63,13 @@ Main blocks: Control/Status Registers, Init + QPI Transaction FSM, Buffer/Addres
 
 ## Register Map
 
-| Offset | Name     | Access | Reset         | Purpose                                                 |
-| ------ | -------- | ------ | ------------- | ------------------------------------------------------- |
-| `0x00` | `CTRL`   | R/W    | TBD           | Static mode, clock, opcode and protection configuration |
-| `0x04` | `CMD`    | R/W    | `0x0000_0000` | Per-transfer descriptor and `START`                     |
-| `0x08` | `STATUS` | Mixed  | `0x0000_0000` | Live transaction state and latched events               |
-| `0x0C` | `ADDR`   | R/W    | `0x0000_0000` | External-memory address                                 |
-| `0x10` | `DATA`   | R/W    | `0x0000_0000` | Manual transmit and receive data                        |
+| Offset | Name | Access | Reset | Purpose |
+| --- | --- | --- | --- | --- |
+| `0x00` | `CTRL` | R/W | TBD | Static mode, clock, interrupt and protection configuration |
+| `0x04` | `CMD` | R/W | `0x0000_0000` | Per-transfer descriptor and `START` |
+| `0x08` | `STATUS` | Mixed | `0x0000_0000` | Live transaction state and latched events |
+| `0x0C` | `ADDR` | R/W | `0x0000_0000` | External-memory address payload |
+| `0x10` | `DATA` | R/W | `0x0000_0000` | Manual transmit and receive data |
 
 Unlisted bits are reserved: write 0, read 0.
 
@@ -78,33 +78,26 @@ Unlisted bits are reserved: write 0, read 0.
 Persistent configuration. Normally written during initialisation rather than
 for every transfer.
 
-| Bits    | Field            | Access | Description                                    |
-| ------- | ---------------- | ------ | ---------------------------------------------- |
-| `0`     | `CPHA`           | R/W    | Clock phase                                    |
-| `1`     | `CPOL`           | R/W    | Clock polarity                                 |
-| `9:2`   | `CLKDIV`         | R/W    | `SCK = fclk / (2 × (CLKDIV + 1))`              |
-| `10`    | `QUAD_MODE`      | R/W    | `0` = single-bit SPI, `1` = four-bit QPI       |
-| `11`    | `FLASH_WRITE_EN` | R/W    | Enables write transactions targeting NOR flash |
-| `12`    | `IE_DONE`        | R/W    | Interrupt enable for `STATUS.DONE`             |
-| `13`    | `IE_ERR`         | R/W    | Interrupt enable for status error bits         |
-| `23:16` | `READ_OPCODE`    | R/W    | Opcode used for read transactions              |
-| `31:24` | `WRITE_OPCODE`   | R/W    | Opcode used for write transactions             |
+| Bits | Field | Access | Description |
+| --- | --- | --- | --- |
+| `0` | `CPHA` | R/W | Clock phase |
+| `1` | `CPOL` | R/W | Clock polarity |
+| `2` | `QUAD_MODE` | R/W | `0` = single-bit SPI, `1` = four-bit QPI |
+| `3` | `FLASH_WRITE_EN` | R/W | Enables the AHB wrapper's NOR-flash write path |
+| `4` | `IE_DONE` | R/W | Interrupt enable for `STATUS.DONE` |
+| `5` | `IE_ERR` | R/W | Interrupt enable for status error bits |
+| `7:6` | Reserved | — | Write zero, read zero |
+| `15:8` | `CLKDIV` | R/W | `SCK = fclk / (2 × (CLKDIV + 1))` |
+| `31:16` | Reserved | — | Write zero, read zero |
 
 `QUAD_MODE` implements `GRPR-QSPI-007` and `GRPR-QSPI-010`.
 
 `CLKDIV`, `CPOL`, and `CPHA` implement `GRPR-QSPI-009`.
 
-`READ_OPCODE` and `WRITE_OPCODE` implement `GRPR-QSPI-011`.
-
 `FLASH_WRITE_EN` implements `GRPR-QSPI-012`.
 
 The reset value of `CLKDIV` remains TBD until the system-clock plan is
-confirmed. The proposed default opcodes are:
-
-* `READ_OPCODE = 8'h03`
-* `WRITE_OPCODE = 8'h02`
-
-All other control fields reset to zero.
+confirmed. All other control fields reset to zero.
 
 Writing `CTRL` while `STATUS.BUSY = 1` is ignored and sets
 `STATUS.CFG_ERR`.
@@ -113,17 +106,33 @@ Writing `CTRL` while `STATUS.BUSY = 1` is ignored and sets
 
 Write with `START = 1` to launch one transaction. Single-store kickoff.
 
-| Bits  | Field     | Access | Description                                   |
-| ----- | --------- | ------ | --------------------------------------------- |
-| `0`   | `START`   | R/W    | Self-clearing. Always reads zero              |
-| `1`   | `DIR`     | R/W    | `0` = write, `1` = read                       |
-| `2`   | `ADDR_EN` | R/W    | Emit the three-byte address phase from `ADDR` |
-| `3`   | `DATA_EN` | R/W    | Emit a one-byte data phase                    |
-| `4`   | `TARGET`  | R/W    | `0` = PSRAM, `1` = NOR flash                  |
-| `9:5` | `DUMMY`   | R/W    | `0–31` dummy SCK cycles before the data phase |
+| Bits | Field | Access | Description |
+| --- | --- | --- | --- |
+| `0` | `START` | R/W | Self-clearing. Always reads zero |
+| `1` | `DIR` | R/W | `0` = write, `1` = read |
+| `2` | `ADDR_EN` | R/W | Emit the three-byte address phase from `ADDR` |
+| `3` | `DATA_EN` | R/W | Emit a one-byte data phase |
+| `4` | `TARGET` | R/W | `0` = PSRAM, `1` = NOR flash |
+| `5` | `FAST_TXN_EN` | R/W | `0` = normal transaction, `1` = fast transaction |
+| `7:6` | Reserved | — | Write zero, read zero |
+| `12:8` | `DUMMY` | R/W | `0–31` dummy SCK cycles before the data phase |
+| `15:13` | Reserved | — | Write zero, read zero |
+| `31:16` | Reserved | — | Write zero, read zero |
 
-The opcode is selected from `CTRL.WRITE_OPCODE` or `CTRL.READ_OPCODE`
-according to `DIR`.
+`DUMMY` begins at bit 8 and is contained entirely within byte `[15:8]`.
+
+The command opcode is selected internally from the supported fixed command set
+using `TARGET`, `DIR`, `FAST_TXN_EN`, and `QUAD_MODE`.
+
+| `DIR` | `FAST_TXN_EN` | Transaction type |
+| --- | --- | --- |
+| `0` | `0` | Normal write |
+| `0` | `1` | Fast write |
+| `1` | `0` | Normal read |
+| `1` | `1` | Fast read |
+
+The fixed command mapping and any device-control commands required during
+initialisation are handled internally by the transaction-control logic.
 
 Phase order:
 
@@ -133,28 +142,35 @@ COMMAND → ADDRESS → DUMMY → DATA
 
 The address and data phases may be omitted using `ADDR_EN` and `DATA_EN`.
 
-A command-only transaction is issued with both `ADDR_EN` and `DATA_EN`
-cleared. This can be used for operations such as entering QPI mode after
-programming the required opcode into `CTRL`.
+`DUMMY` is ignored for transaction types that do not require dummy cycles.
 
 Writing `START = 1` while `STATUS.BUSY = 1` does not begin another
 transaction and sets `STATUS.CFG_ERR`.
+
+`FAST_TXN_EN` implements `GRPR-QSPI-011`.
 
 `DUMMY` implements `GRPR-QSPI-013`.
 
 ## STATUS — 0x08
 
-| Bits | Field           | Access | Description                                              |
-| ---- | --------------- | ------ | -------------------------------------------------------- |
-| `0`  | `BUSY`          | R/O    | Transaction in progress                                  |
-| `1`  | `INIT_DONE`     | R/O    | Startup initialisation completed                         |
-| `2`  | `DONE`          | W1C    | Transaction completed                                    |
-| `3`  | `RX_VALID`      | W1C    | `DATA` contains valid received data                      |
-| `4`  | `CFG_ERR`       | W1C    | Illegal configuration or `START` while busy              |
-| `5`  | `WRITE_BLOCKED` | W1C    | Protected NOR-flash write was requested                  |
-| `6`  | `ADDR_ERR`      | W1C    | Address is outside the selected device's supported range |
+| Bits | Field | Access | Description |
+| --- | --- | --- | --- |
+| `0` | `BUSY` | R/O | Transaction in progress |
+| `1` | `INIT_DONE` | R/O | Startup initialisation completed |
+| `2` | `DONE` | W1C | Transaction completed |
+| `3` | `RX_VALID` | W1C | `DATA` contains valid received data |
+| `4` | `CFG_ERR` | W1C | Illegal configuration or `START` while busy |
+| `5` | `WRITE_BLOCKED` | W1C | Invalid or disabled NOR-flash write was requested |
+| `6` | `ADDR_ERR` | W1C | Address is outside the selected device's supported range |
+| `31:7` | Reserved | — | Write zero, read zero |
 
 Writing one to a W1C field clears that field.
+
+An unsupported transaction combination is rejected, leaves `BUSY` low and
+sets `STATUS.CFG_ERR`.
+
+A prohibited write targeting NOR flash is rejected, leaves `BUSY` low and
+sets `STATUS.WRITE_BLOCKED`.
 
 The combined interrupt output asserts when:
 
@@ -167,26 +183,26 @@ This is the proposed initial status-bit definition for `GRPR-QSPI-015`.
 
 ## ADDR — 0x0C
 
-| Bits    | Field    | Access | Description           |
-| ------- | -------- | ------ | --------------------- |
-| `22:0`  | `ADDR`   | R/W    | External byte address |
-| `31:23` | Reserved | —      | Write zero, read zero |
+| Bits | Field | Access | Description |
+| --- | --- | --- | --- |
+| `23:0` | `ADDR` | R/W | Three-byte external-memory address payload |
+| `31:24` | Reserved | — | Write zero, read zero |
 
-When `CMD.ADDR_EN = 1`, the address is transmitted as three bytes, MSB
+When `CMD.ADDR_EN = 1`, `ADDR[23:0]` is transmitted as three bytes, MSB
 first.
 
-The 23-bit address field supports the APS6404L 8 MB address space required
-by `GRPR-QSPI-014`.
+The APS6404L uses 23-bit byte addressing, so its valid address range is
+`0x000000–0x7FFFFF` and `ADDR[23]` must be zero.
 
-Addresses outside the selected device's supported range are rejected and set
-`STATUS.ADDR_ERR`.
+Address validation for each target follows the supported capacity of that
+device. An out-of-range address is rejected and sets `STATUS.ADDR_ERR`.
 
 ## DATA — 0x10
 
-| Access | Behaviour                                             |
-| ------ | ----------------------------------------------------- |
-| Write  | Supplies one byte of transmit data in bits `7:0`      |
-| Read   | Returns the most recently received byte in bits `7:0` |
+| Access | Behaviour |
+| --- | --- |
+| Write | Supplies one byte of transmit data in bits `7:0` |
+| Read | Returns the most recently received byte in bits `7:0` |
 
 Bits `31:8` are reserved and read as zero.
 
