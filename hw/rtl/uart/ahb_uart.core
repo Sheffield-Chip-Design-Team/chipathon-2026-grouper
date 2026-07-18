@@ -16,13 +16,12 @@ filesets:
       - sharc:amba_ip:ahb3lite_pkg:0.0.1
 
 targets:
-  rtl: &rtl
+  default: &rtl
     filesets: [rtl]
     toplevel: ahb_uart
 
-  # fusesoc run --build ahb_uart  (or --target=lint, same thing)
- 
-  lint: &lint
+  # fusesoc run --target=lint --build ahb_uart
+  lint:
     <<: *rtl
     description: Verilator lint-only check (no simulation)
     flow: sim
@@ -33,5 +32,3 @@ targets:
         - --sv
         - -Wall
         - -Wno-fatal
-
-  default: *lint

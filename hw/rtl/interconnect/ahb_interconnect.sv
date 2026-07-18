@@ -18,7 +18,6 @@ module ahb_interconnect #(
   ahb3lite_intf.master ahb_debug_m,
 `endif
 
-
   // AHB Slave Interface
   
   // Master Signals
