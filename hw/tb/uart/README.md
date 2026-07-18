@@ -32,8 +32,9 @@ Environment setup (first time only)
 # run at the repo root
 python3.12 -m venv .env
 source .env/bin/activate            # repo venv, see top-level CLAUDE.md
-pip install fusesoc cocotb
-pip install -e .                    # editable-installs `hw` so hw.tb.../hw.dv... imports        
+pip install -r requirements-dv.txt  # pinned fusesoc/cocotb/pyuvm/edalize versions
+pip install -e .                    # editable-installs `hw` so hw.tb.../hw.dv... imports
+                                     # resolve inside the sim without any PYTHONPATH juggling
 fusesoc library add grouper_soc .   # only needed once per checkout
 ```
 
