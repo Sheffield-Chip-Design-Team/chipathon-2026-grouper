@@ -1,0 +1,55 @@
+name: Setup DV environment
+description: >
+  Builds/caches the pinned Verilator toolchain, installs the pinned
+  fusesoc/cocotb/pyuvm/edalize versions from requirements-dv.txt, and
+  registers this repo's FuseSoC libraries. Assumes actions/checkout has
+  already run in the calling job.
+
+runs:
+  using: composite
+  steps:
+    - name: Cache Verilator build
+      id: verilator-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/verilator
+        key: verilator-${{ runner.os }}-dde8de0a0dd5360e29df366d05dc595636e97bb3
+
+    - name: Build Verilator from source (cache miss)
+      if: steps.verilator-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y git help2man perl python3 make autoconf g++ flex bison \
+          libfl2 libfl-dev zlib1g zlib1g-dev liblz4-dev
+        git clone https://github.com/verilator/verilator ~/verilator
+        cd ~/verilator
+        git checkout dde8de0a0dd5360e29df366d05dc595636e97bb3
+        autoconf
+        ./configure
+        make -j"$(nproc)"
+
+    - name: Add Verilator to PATH
+      shell: bash
+      run: echo "$HOME/verilator/bin" >> "$GITHUB_PATH"
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+        cache: pip
+        cache-dependency-path: requirements-dv.txt
+
+    - name: Install pinned Python DV toolchain
+      shell: bash
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements-dv.txt
+        pip install -e .
+
+    - name: Register FuseSoC libraries
+      shell: bash
+      run: |
+        fusesoc library add grouper_soc .
+        fusesoc library add https://github.com/Sheffield-Chip-Design-Team/picorv32
+        fusesoc library update picorv32
