@@ -40,7 +40,7 @@ Must be run from the repo root (`chipathon-2026-grouper`), with `PYTHONPATH`
 including it so the `hw.tb...`/`hw.dv...` imports resolve inside the sim:
 
 ```bash
-PYTHONPATH="$PWD:$PYTHONPATH" fusesoc run --target=default sharc:comms_ip:uart_directed_cocotb
+PYTHONPATH="$PWD:$PYTHONPATH" fusesoc run --target=default sharc:comms_ip:ahb_uart_directed
 ```
 
 Both `test_uart_tx_byte` and `test_uart_rx_byte` run by default (cocotb
