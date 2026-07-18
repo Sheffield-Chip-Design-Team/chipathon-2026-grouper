@@ -1,7 +1,7 @@
 # AHB QSPI
 
 **Owner:** Tristan
-**Status:** RTL design starting (per [Schematic Review](../../Schematic%20Review.md) §4). No RTL committed yet under `hw/rtl/`.
+**Status:** RTL scaffold committed. Register map under design review; functional QSPI RTL not yet implemented.
 **Source:** [Schematic Review](../../Schematic%20Review.md) §"Block-Level Design Checklists → 5. AHB QSPI", with corrections noted below.
 
 **Related:** [Grouper SoC Specification](../Grouper%20SoC%20Specification.md) — boot sequence, memory map | [QSPI Verification Plan](../../../verification/blocks/QSPI%20Verification%20Plan.md)
@@ -60,6 +60,22 @@ Main blocks: Control/Status Registers, Init + QPI Transaction FSM, Buffer/Addres
 
 - **Internal Core command interface:** `cmd_en` (chip-enable for transaction duration), `cmd_read` (1-cycle pulse), `cmd_write` (1-cycle pulse), `cmd_wdata[7:0]`, `cmd_rdata[7:0]`, `cmd_ready`.
 - **External QSPI interface** — described in the source as "three four-bit SIO buses" connecting through the GPIO mux onto the same four physical bidirectional `SIO[3:0]` pins. **Open — the source doesn't explain why there are three logical 4-bit buses onto one physical 4-bit bus (e.g. one per external device — NOR flash, PSRAM, and a third — vs. some other split); needs clarification from whoever owns this block.**
+
+## Proposed Register Map
+
+The QSPI block occupies a 4 KiB AHB-Lite peripheral region. The initial
+microarchitecture proposes five 32-bit, word-aligned registers.
+
+| Offset | Name | Access | Purpose |
+|---|---|---|---|
+| `0x00` | `CTRL` | R/W | Persistent mode, clock, opcode and protection configuration |
+| `0x04` | `CMD` | R/W | Manual transaction descriptor and start control |
+| `0x08` | `STATUS` | RO | Live transaction state and error reporting |
+| `0x0C` | `ADDR` | R/W | External memory command address |
+| `0x10` | `DATA` | R/W | Manual write data and read-back data |
+
+The exact field positions, reset values and status/event behaviour remain
+subject to design review.
 
 ## Clocking Strategy
 
