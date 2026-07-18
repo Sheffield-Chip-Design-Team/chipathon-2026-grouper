@@ -22,14 +22,20 @@ RUN autoconf && ./configure --prefix=/opt/verilator \
     && make install
 
 FROM ubuntu:24.04
-# lsb-release: not needed by Verilator itself, but actions/setup-python
-# (run inside this image as the sim job's container) shells out to
-# `lsb_release` to detect the distro when picking a Python build, and fails
-# hard if it's missing - confirmed via a real CI run.
+# python3.12/python3.12-venv/python3-pip: baked in directly rather than
+# relying on actions/setup-python's hermetic prebuilt Python. Pinned to
+# python3.12 explicitly (not the generic python3 metapackage) so this stays
+# the exact version this repo pins everywhere else even if a future Ubuntu
+# 24.04 point release ever changed which interpreter "python3" defaults to.
+# python3-pip isn't version-suffixed in Debian/Ubuntu packaging (it's pure
+# Python, tied to whichever interpreter invokes it, not packaged per-minor-
+# version like the interpreter/venv module are).
 RUN apt-get update && apt-get install -y --no-install-recommends \
       g++ make perl zlib1g libfl2 ca-certificates lsb-release \
-    && rm -rf /var/lib/apt/lists/*
+      python3.12 python3.12-venv python3-pip \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.12 /usr/bin/python3
 COPY --from=builder /opt/verilator /opt/verilator
 ENV PATH="/opt/verilator/bin:${PATH}"
 
-RUN verilator --version
+RUN verilator --version && python3.12 --version && python3 --version && pip3 --version
