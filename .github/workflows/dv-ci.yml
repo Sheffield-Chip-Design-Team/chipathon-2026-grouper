@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.load.outputs.matrix }}
+      verilator-image: ${{ steps.image.outputs.image }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,8 +25,15 @@ jobs:
           cfg = yaml.safe_load(open('.github/dv-ci-targets.yaml'))
           print('matrix=' + json.dumps(cfg['targets']))
           " >> "$GITHUB_OUTPUT"
+      - id: image
+        run: |
+          # ghcr.io requires a lowercase path; github.repository preserves case.
+          repo_lower="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          version="$(cat .github/verilator-version)"
+          echo "image=ghcr.io/${repo_lower}/dv-verilator:${version}" >> "$GITHUB_OUTPUT"
 
   sim:
+    name: run ${{ matrix.name }}
     needs: load-config
     continue-on-error: ${{ matrix.fail_ok }}
     strategy:
@@ -33,6 +41,8 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.load-config.outputs.matrix) }}
     runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.load-config.outputs.verilator-image }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-dv-env
