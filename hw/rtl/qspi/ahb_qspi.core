@@ -1,0 +1,33 @@
+CAPI=2:
+
+name: sharc:comms_ip:ahb_qspi:0.0.1
+description: AHB-Lite wrapped QSPI controller template
+
+filesets:
+  rtl:
+    files:
+      - qspi_clk_div.sv: {file_type: systemVerilogSource}
+      - qspi_rx.sv:      {file_type: systemVerilogSource}
+      - qspi_tx.sv:      {file_type: systemVerilogSource}
+      - qspi.sv:         {file_type: systemVerilogSource}
+      - ahb_qspi.sv:     {file_type: systemVerilogSource}
+    depend:
+      - sharc:common_ip:common:0.0.1
+      - sharc:amba_ip:ahb3lite_pkg:0.0.1
+
+targets:
+  default: &rtl
+    filesets: [rtl]
+    toplevel: ahb_qspi
+
+  lint:
+    <<: *rtl
+    description: Verilator lint-only check
+    flow: sim
+    flow_options:
+      tool: verilator
+      mode: lint-only
+      verilator_options:
+        - --sv
+        - -Wall
+        - -Wno-fatal

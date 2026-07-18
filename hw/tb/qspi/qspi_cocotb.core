@@ -1,0 +1,25 @@
+CAPI=2:
+
+name: sharc:comms_ip:ahb_qspi_directed:0.0.1
+description: Simple directed cocotb testbench for ahb_qspi using Verilator
+
+filesets:
+  rtl:
+    depend:
+      - sharc:comms_ip:ahb_qspi:0.0.1
+
+targets:
+  default:
+    flow: sim
+    flow_options:
+      tool: verilator
+      cocotb_module: hw.tb.qspi.test_qspi
+      verilator_options:
+        - -Wno-TIMESCALEMOD
+        - --sv
+        - --trace
+        - --trace-fst
+      run_options:
+        - --trace
+    filesets: [rtl]
+    toplevel: ahb_qspi
