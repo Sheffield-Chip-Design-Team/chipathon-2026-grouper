@@ -83,7 +83,7 @@ for every transfer.
 | `0` | `CPHA` | R/W | Clock phase |
 | `1` | `CPOL` | R/W | Clock polarity |
 | `2` | `QUAD_MODE` | R/W | `0` = single-bit SPI, `1` = four-bit QPI |
-| `3` | `FLASH_WRITE_EN` | R/W | Enables the AHB wrapper's NOR-flash write path |
+| `3` | `FLASH_WRITE_EN` | R/W | Enables AHB write requests targeting NOR flash |
 | `4` | `IE_DONE` | R/W | Interrupt enable for `STATUS.DONE` |
 | `5` | `IE_ERR` | R/W | Interrupt enable for status error bits |
 | `7:6` | Reserved | — | Write zero, read zero |
@@ -115,11 +115,11 @@ Write with `START = 1` to launch one transaction. Single-store kickoff.
 | `4` | `TARGET` | R/W | `0` = PSRAM, `1` = NOR flash |
 | `5` | `FAST_TXN_EN` | R/W | `0` = normal transaction, `1` = fast transaction |
 | `7:6` | Reserved | — | Write zero, read zero |
-| `12:8` | `DUMMY` | R/W | `0–31` dummy SCK cycles before the data phase |
-| `15:13` | Reserved | — | Write zero, read zero |
+| `15:8` | `DUMMY` | R/W | `0–255` dummy SCK cycles before the data phase |
 | `31:16` | Reserved | — | Write zero, read zero |
 
-`DUMMY` begins at bit 8 and is contained entirely within byte `[15:8]`.
+`DUMMY` occupies the complete byte `[15:8]` and therefore does not cross an
+AHB byte boundary.
 
 The command opcode is selected internally from the supported fixed command set
 using `TARGET`, `DIR`, `FAST_TXN_EN`, and `QUAD_MODE`.
@@ -130,9 +130,6 @@ using `TARGET`, `DIR`, `FAST_TXN_EN`, and `QUAD_MODE`.
 | `0` | `1` | Fast write |
 | `1` | `0` | Normal read |
 | `1` | `1` | Fast read |
-
-The fixed command mapping and any device-control commands required during
-initialisation are handled internally by the transaction-control logic.
 
 Phase order:
 
@@ -243,6 +240,7 @@ TBD after RTL synthesis (per source).
 - No sustained-throughput / storage-sizing requirement currently exists for QSPI's real (non-replay) use case — needs deriving if one is actually needed.
 - External pin ownership depends on the unresolved [GPIO Mux](GPIO%20Mux.md) pin-sharing scheme.
 - Size estimate not yet available.
+- Device-control commands outside the fixed normal/fast read/write set, including PSRAM entry into QPI mode, require clarification: they may be generated automatically by the initialisation FSM or exposed through a separate control mechanism.
 
 ## Verification Cross-Reference
 
