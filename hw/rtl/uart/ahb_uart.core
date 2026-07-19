@@ -20,6 +20,7 @@ targets:
     filesets: [rtl]
     toplevel: ahb_uart
 
+  # fusesoc run --target=lint --build ahb_uart
   lint:
     <<: *rtl
     description: Verilator lint-only check (no simulation)

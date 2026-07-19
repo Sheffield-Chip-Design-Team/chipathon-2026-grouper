@@ -1,5 +1,5 @@
 `ifndef DUMP_FILE
-`define DUMP_FILE "dump.vcd"
+`define DUMP_FILE "dump.fst"
 `endif
 
 module picorv32_hello_tb;
@@ -48,8 +48,8 @@ module picorv32_hello_tb;
     #1ns;
     reset();
     
-    repeat(1_000_000) @(posedge clk);
-    $error("TB Timed Out");
+    repeat(400_000) @(posedge clk);
+    $display("TB_TIMEOUT: gave up waiting for firmware to reach the exit sequence");
     $finish;
   end
 

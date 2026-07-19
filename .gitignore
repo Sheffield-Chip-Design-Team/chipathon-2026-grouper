@@ -4,3 +4,4 @@ build/*
 fusesoc.conf
 hw/rtl/.DS_Store
 *.pyc
+*.egg-info/

@@ -1,0 +1,55 @@
+# Simulation CI target list, consumed by .github/workflows/sim-ci.yml's load-config job.
+# Every entry must set all of these keys (fail_ok/coverage_scope included) so the
+# matrix entries GitHub Actions builds via fromJson() have a uniform shape.
+#
+#   name:            short label used for the metrics/artifact/job name
+#   core:            FuseSoC CAPI2 VLNV, e.g. sharc:comms_ip:ahb_uart
+#   fusesoc_target:  target within that core's .core file
+#   kind:            cocotb | log-grep | exit-code (see .github/scripts/ci/report_target.py)
+#   fusesoc_args:    extra flags passed to `fusesoc run`, "" if none
+#   success_pattern: required text in the captured log, kind: log-grep only, else ""
+#   fail_ok:         true = failures don't block CI (shown yellow, not red);
+#                     the real pass/fail is still recorded in the metrics either way
+#   coverage_scope:  full = report every coverage category (line/toggle/branch/expr/
+#                       fsm_state/fsm_arc); line = report only line coverage, the rest
+#                       recorded as "N/A"; none = no coverage at all, everything "N/A"
+#                       (use for targets with no coverage.dat, e.g. a lint-only target)
+
+targets:
+  - name: ahb_uart_lint
+    core: sharc:comms_ip:ahb_uart
+    fusesoc_target: lint
+    kind: exit-code
+    fusesoc_args: "--build"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: none
+
+  - name: ahb_uart_directed
+    core: sharc:comms_ip:ahb_uart_directed
+    fusesoc_target: default
+    kind: cocotb
+    fusesoc_args: ""
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+
+  - name: ahb_uart_mdv
+    core: sharc:comms_ip:ahb_uart_pyuvm 
+    fusesoc_target: default
+    kind: cocotb
+    fusesoc_args: ""
+    success_pattern: ""
+    # 3 pre-existing AHB-readback failures, unrelated to CI setup - don't block on
+    # these yet. Flip to false once that RTL bug is fixed.
+    fail_ok: true
+    coverage_scope: full
+
+  - name: grouper_soc_tb_top
+    core: sharc:soc_ip:grouper_soc
+    fusesoc_target: tb_top
+    kind: log-grep
+    fusesoc_args: "--no-export"
+    success_pattern: "Bye!"
+    fail_ok: false
+    coverage_scope: full

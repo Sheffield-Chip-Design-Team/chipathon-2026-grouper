@@ -1,0 +1,70 @@
+name: Sync Verilator version with chipathon26 image
+
+# Periodically checks the actual Verilator version inside
+# hpretl/iic-osic-tools:chipathon26 (by pulling it and running
+# `verilator --version` directly - GitHub-hosted runners have Docker
+# preinstalled, so this doesn't need any new dependency) and opens a PR
+# updating .github/verilator-version if it's drifted from our pin. That
+# file change is what triggers publish-sim-image.yml to rebuild the slim
+# sim-verilator image at the new version.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract Verilator version from the chipathon26 image
+        id: chipathon
+        run: |
+          docker run --rm hpretl/iic-osic-tools:chipathon26 verilator --version \
+            | tee /tmp/verilator-version-raw.txt
+          # "Verilator 5.048 2026-04-26 rev v5.048" -> "v5.048"
+          version="v$(grep -oP 'Verilator \K[0-9.]+' /tmp/verilator-version-raw.txt)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Compare against our pin
+        id: compare
+        run: |
+          current="$(cat .github/verilator-version)"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          if [ "$current" != "${{ steps.chipathon.outputs.version }}" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open PR with the updated pin
+        if: steps.compare.outputs.changed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_VERSION: ${{ steps.chipathon.outputs.version }}
+          OLD_VERSION: ${{ steps.compare.outputs.current }}
+        run: |
+          branch="sync-verilator-${NEW_VERSION}"
+          echo -n "$NEW_VERSION" > .github/verilator-version
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git commit -am "ci: sync Verilator to ${NEW_VERSION} (matches hpretl/iic-osic-tools:chipathon26)"
+          git push origin "$branch" --force
+          gh pr create --title "Sync Verilator to ${NEW_VERSION}" --base main --head "$branch" --body "$(cat <<EOF
+          hpretl/iic-osic-tools:chipathon26 now reports Verilator ${NEW_VERSION} (was ${OLD_VERSION}).
+
+          This updates .github/verilator-version, which publish-sim-image.yml will pick up to
+          rebuild and republish the sim-verilator image once merged.
+
+          **Re-run the DV suite against the new version before merging** - Verilator version
+          bumps have changed lint warnings, \`--coverage\` output format, and other behavior
+          in this repo before (see the session that introduced this pin).
+          EOF
+          )" || echo "A PR for this branch may already be open"

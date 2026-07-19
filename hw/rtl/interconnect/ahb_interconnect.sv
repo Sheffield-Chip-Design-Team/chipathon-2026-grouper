@@ -18,7 +18,6 @@ module ahb_interconnect #(
   ahb3lite_intf.master ahb_debug_m,
 `endif
 
-
   // AHB Slave Interface
   
   // Master Signals
@@ -95,15 +94,23 @@ module ahb_interconnect #(
     end
   endgenerate
 
+  // Split signals into their own processes to avoid lint issues with multiple drivers on the same signal
   always_comb begin
-    HREADY  = 1;
-    HRDATA  = 32'hBAADBEEF;  // "hexspeak" to indicate an error has occured
-    HRESP   = invalid_addr;
+    HREADY = 1;
+    for (int j = 0; j < NUM_SLAVES; j++)
+      if (mux_sel[j] == 1'b1) HREADY = HREADYOUT_SIGNALS[j];
+  end
 
+  always_comb begin
+    HRESP   = invalid_addr;
+    for (int j = 0; j < NUM_SLAVES; j++)
+      if (mux_sel[j] == 1'b1) HRESP = HRESP_SIGNALS[j];
+  end
+
+  always_comb begin
+    HRDATA  = 32'hBAADBEEF;  // "hexspeak" to indicate an error has occured
     for (int j = 0; j < NUM_SLAVES; j++)
       if (mux_sel[j] == 1'b1) begin
-        HREADY  = HREADYOUT_SIGNALS[j];
-        HRESP   = HRESP_SIGNALS[j];
         HRDATA  = HRDATA_SIGNALS[j];
       end
   end

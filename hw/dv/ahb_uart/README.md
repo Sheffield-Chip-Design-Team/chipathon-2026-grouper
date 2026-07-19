@@ -47,24 +47,23 @@ hidden object doesn't travel with the class if something else re-imports it, so 
 
 ```bash
 source .env/bin/activate            # repo venv, see top-level CLAUDE.md
-pip install fusesoc cocotb pyuvm
+pip install -r sim-requirements.txt  # pinned fusesoc/cocotb/pyuvm/edalize versions
+pip install -e .                    # editable-installs `hw` so hw.dv... imports resolve
+                                     # inside the sim without any PYTHONPATH juggling
 fusesoc library add grouper_soc .   # only needed once per checkout
 ```
 
-Must be run from the repo root (`chipathon-2026-grouper`), and `PYTHONPATH` must include
-it so `hw.dv...` imports resolve inside the sim — edalize's cocotb support inherits your
-shell's environment as-is, it does not set `PYTHONPATH` itself. Easiest to set it inline
-on the same command so there's no separate step to forget:
+Must be run from the repo root (`chipathon-2026-grouper`):
 
 ```bash
-PYTHONPATH="$PWD:$PYTHONPATH" fusesoc run --target=default sharc:dv:ahb_uart_cocotb
+fusesoc run --target=default sharc:comms_ip:ahb_uart_pyuvm
 ```
 
 `UartHelloWorldTest`, `UartSanityTest`, and `UartRandomTest` all run by default (cocotb
 discovers every `@pyuvm.test()` in the imported module). To run just one:
 
 ```bash
-PYTHONPATH="$PWD:$PYTHONPATH" TESTCASE=UartHelloWorldTest fusesoc run --target=default sharc:dv:ahb_uart_cocotb
+TESTCASE=UartHelloWorldTest fusesoc run --target=default sharc:comms_ip:ahb_uart_pyuvm
 ```
 
 Every component logs through pyuvm's built-in `self.logger` (not a custom logging setup — see
@@ -73,7 +72,7 @@ per AHB transfer). Set `UVM_VERBOSITY=DEBUG` for per-bit/per-condition detail, o
 to quiet it down:
 
 ```bash
-PYTHONPATH="$PWD:$PYTHONPATH" UVM_VERBOSITY=DEBUG fusesoc run --target=default sharc:dv:ahb_uart_cocotb
+UVM_VERBOSITY=DEBUG fusesoc run --target=default sharc:comms_ip:ahb_uart_pyuvm
 ```
 
 ## Constrained-random testing
@@ -92,16 +91,16 @@ before any pyuvm phase runs, and is always logged - `UartTestBase.build_phase` r
 through `self.logger` too, so it shows up in the pyuvm-formatted log stream):
 
 ```bash
-PYTHONPATH="$PWD:$PYTHONPATH" TESTCASE=UartRandomTest fusesoc run --target=default sharc:dv:ahb_uart_cocotb
+TESTCASE=UartRandomTest fusesoc run --target=default sharc:comms_ip:ahb_uart_pyuvm
 
 # reproduce a specific failure
-PYTHONPATH="$PWD:$PYTHONPATH" TESTCASE=UartRandomTest RANDOM_SEED=12345 fusesoc run --target=default sharc:dv:ahb_uart_cocotb
+TESTCASE=UartRandomTest RANDOM_SEED=12345 fusesoc run --target=default sharc:comms_ip:ahb_uart_pyuvm
 ```
 
 ## Coverage
 
 `ahb_uart_cocotb.core` compiles with Verilator's `--coverage` (line/toggle/functional),
-which writes `coverage.dat` into the work root (`build/sharc_dv_ahb_uart_cocotb_0.0.1/default/`)
+which writes `coverage.dat` into the work root (`build/sharc_comms_ip_ahb_uart_pyuvm_0.0.1/default/`)
 once the test finishes.
 
 There's no CAPI2-hook-based report: edalize's cocotb-aware `Sim` flow (`edalize/flows/sim.py`)
@@ -123,5 +122,5 @@ existing `coverage.dat`.
 For an annotated per-line source view instead of the summary:
 
 ```bash
-verilator_coverage --annotate coverage_annotated build/sharc_dv_ahb_uart_cocotb_0.0.1/default/coverage.dat
+verilator_coverage --annotate coverage_annotated build/sharc_comms_ip_ahb_uart_pyuvm_0.0.1/default/coverage.dat
 ```

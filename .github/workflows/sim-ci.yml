@@ -1,0 +1,92 @@
+name: Simulation CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  load-config:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.load.outputs.matrix }}
+      verilator-image: ${{ steps.image.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      - id: load
+        run: |
+          python3 -c "
+          import yaml, json
+          cfg = yaml.safe_load(open('.github/sim-ci-targets.yaml'))
+          print('matrix=' + json.dumps(cfg['targets']))
+          " >> "$GITHUB_OUTPUT"
+      - id: image
+        run: |
+          # ghcr.io requires a lowercase path; github.repository preserves case.
+          repo_lower="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          version="$(cat .github/verilator-version)"
+          echo "image=ghcr.io/${repo_lower}/sim-verilator:${version}" >> "$GITHUB_OUTPUT"
+
+  sim:
+    name: run ${{ matrix.name }}
+    needs: load-config
+    continue-on-error: ${{ matrix.fail_ok }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.load-config.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.load-config.outputs.verilator-image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-sim-env
+
+      - name: Run and report ${{ matrix.name }}
+        run: |
+          python3 .github/scripts/ci/run_target.py \
+            --name "${{ matrix.name }}" \
+            --core "${{ matrix.core }}" \
+            --fusesoc-target "${{ matrix.fusesoc_target }}" \
+            --kind "${{ matrix.kind }}" \
+            --fusesoc-args="${{ matrix.fusesoc_args }}" \
+            --success-pattern="${{ matrix.success_pattern }}" \
+            --coverage-scope="${{ matrix.coverage_scope }}" \
+            --out-dir ci-results
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ matrix.name }}
+          path: ci-results/
+
+  metrics:
+    needs: sim
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download all per-target results
+        uses: actions/download-artifact@v4
+        with:
+          path: all-results
+          pattern: results-*
+
+      - name: Aggregate metrics
+        run: python3 .github/scripts/ci/aggregate_metrics.py --results-dir all-results --out-dir sim-metrics
+
+      - name: Upload sim-metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-metrics
+          path: sim-metrics/

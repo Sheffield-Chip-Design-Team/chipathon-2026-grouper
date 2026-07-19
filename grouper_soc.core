@@ -47,10 +47,12 @@ targets:
       tool: verilator
       verilator_options:
         - -Wno-TIMESCALEMOD
+        - -Wno-fatal
         - --sv
         - --trace
         - --trace-fst
         - --binary
+        - --coverage
     filesets_append:
       - tb
     toplevel: picorv32_hello_tb

@@ -32,22 +32,23 @@ Environment setup (first time only)
 # run at the repo root
 python3.12 -m venv .env
 source .env/bin/activate            # repo venv, see top-level CLAUDE.md
-pip install fusesoc cocotb
+pip install -r sim-requirements.txt  # pinned fusesoc/cocotb/pyuvm/edalize versions
+pip install -e .                    # editable-installs `hw` so hw.tb.../hw.dv... imports
+                                     # resolve inside the sim without any PYTHONPATH juggling
 fusesoc library add grouper_soc .   # only needed once per checkout
 ```
 
-Must be run from the repo root (`chipathon-2026-grouper`), with `PYTHONPATH`
-including it so the `hw.tb...`/`hw.dv...` imports resolve inside the sim:
+Must be run from the repo root (`chipathon-2026-grouper`):
 
 ```bash
-PYTHONPATH="$PWD:$PYTHONPATH" fusesoc run --target=default sharc:comms_ip:ahb_uart_directed
+fusesoc run --target=default sharc:comms_ip:ahb_uart_directed
 ```
 
 Both `test_uart_tx_byte` and `test_uart_rx_byte` run by default (cocotb
 discovers every `@cocotb.test()` in the module). To run just one:
 
 ```bash
-PYTHONPATH="$PWD:$PYTHONPATH" TESTCASE=test_uart_tx_byte fusesoc run --target=default sharc:comms_ip:uart_directed_cocotb
+TESTCASE=test_uart_tx_byte fusesoc run --target=default sharc:comms_ip:ahb_uart_directed
 ```
 
 Waveforms (`--trace-fst`) are written into the FuseSoC work root
