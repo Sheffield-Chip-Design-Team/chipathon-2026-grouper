@@ -1,10 +1,10 @@
-name: Publish Verilator image
+name: Publish Simulation Image
 
 on:
   push:
     branches: [main]
     paths:
-      - .github/docker/dv-verilator/**
+      - .github/docker/sim/**
       - .github/verilator-version
       - .github/workflows/publish-dv-image.yml
   workflow_dispatch:

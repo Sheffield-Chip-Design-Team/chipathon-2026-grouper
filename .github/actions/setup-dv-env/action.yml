@@ -1,30 +1,40 @@
 name: Setup DV environment
 description: >
-  Installs the pinned fusesoc/cocotb/pyuvm/edalize versions from
-  requirements-dv.txt and registers this repo's FuseSoC libraries. Assumes
-  actions/checkout has already run in the calling job, and that Verilator
-  plus a system python3/pip3 are already available - the calling job is
-  expected to run inside the ghcr.io/.../dv-verilator container image (see
-  .github/workflows/sim-ci.yml and .github/docker/dv-verilator/) rather than
-  building Verilator from source or using actions/setup-python here; both
-  used to happen in this action, but building Verilator made every parallel
-  matrix leg redundantly rebuild it from source on a cold cache, and
-  actions/setup-python's downloaded Python doesn't work inside this minimal
-  a container (fails with "spawn .../pip ENOENT" - confirmed via a real CI
-  run), so we rely on the image's own python3 instead.
+  Creates a venv, installs the pinned fusesoc/cocotb/pyuvm/edalize versions
+  from sim-requirements.txt into it, and registers this repo's FuseSoC
+  libraries. Assumes actions/checkout has already run in the calling job,
+  and that Verilator plus a system python3 (with the venv module) are
+  already available - the calling job is expected to run inside the
+  ghcr.io/.../dv-verilator container image (see .github/workflows/sim-ci.yml
+  and .github/docker/dv-verilator/) rather than building Verilator from
+  source or using actions/setup-python here; both used to happen in this
+  action, but building Verilator made every parallel matrix leg redundantly
+  rebuild it from source on a cold cache, and actions/setup-python's
+  downloaded Python doesn't work inside this minimal a container (fails
+  with "spawn .../pip ENOENT" - confirmed via a real CI run), so we rely on
+  the image's own python3 instead.
 
 runs:
   using: composite
   steps:
+    - name: Create venv
+      shell: bash
+      run: |
+        # $RUNNER_TEMP, not the repo checkout: fusesoc's `library add grouper_soc .`
+        # below treats the whole repo dir as the library source, so keep the venv
+        # out from under it. Persisted across the rest of this job (including the
+        # caller's later `fusesoc run` step) by prepending to $GITHUB_PATH, since
+        # composite-action steps don't share shell state, so a plain `source
+        # .../activate` here wouldn't survive past this step.
+        python3 -m venv "$RUNNER_TEMP/sim-venv"
+        echo "$RUNNER_TEMP/sim-venv/bin" >> "$GITHUB_PATH"
+
     - name: Install pinned Python DV toolchain
       shell: bash
       run: |
-        # Ubuntu 24.04's system Python is PEP 668 externally-managed; this
-        # container only ever runs this one throwaway CI job, so there's no
-        # "other system packages" to protect it from.
-        
-        pip3 install --ignore-installed -r requirements-dv.txt --break-system-packages
-        pip3 install --ignore-installed -e . --break-system-packages
+
+        pip install -r sim-requirements.txt
+        pip install -e .
 
     - name: Register FuseSoC libraries
       shell: bash

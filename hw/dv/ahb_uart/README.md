@@ -47,7 +47,7 @@ hidden object doesn't travel with the class if something else re-imports it, so 
 
 ```bash
 source .env/bin/activate            # repo venv, see top-level CLAUDE.md
-pip install -r requirements-dv.txt  # pinned fusesoc/cocotb/pyuvm/edalize versions
+pip install -r sim-requirements.txt  # pinned fusesoc/cocotb/pyuvm/edalize versions
 pip install -e .                    # editable-installs `hw` so hw.dv... imports resolve
                                      # inside the sim without any PYTHONPATH juggling
 fusesoc library add grouper_soc .   # only needed once per checkout
