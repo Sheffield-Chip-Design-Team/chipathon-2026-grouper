@@ -5,8 +5,8 @@ name: Sync Verilator version with chipathon26 image
 # `verilator --version` directly - GitHub-hosted runners have Docker
 # preinstalled, so this doesn't need any new dependency) and opens a PR
 # updating .github/verilator-version if it's drifted from our pin. That
-# file change is what triggers publish-dv-image.yml to rebuild the slim
-# dv-verilator image at the new version.
+# file change is what triggers publish-sim-image.yml to rebuild the slim
+# sim-verilator image at the new version.
 
 on:
   schedule:
@@ -60,8 +60,8 @@ jobs:
           gh pr create --title "Sync Verilator to ${NEW_VERSION}" --base main --head "$branch" --body "$(cat <<EOF
           hpretl/iic-osic-tools:chipathon26 now reports Verilator ${NEW_VERSION} (was ${OLD_VERSION}).
 
-          This updates .github/verilator-version, which publish-dv-image.yml will pick up to
-          rebuild and republish the dv-verilator image once merged.
+          This updates .github/verilator-version, which publish-sim-image.yml will pick up to
+          rebuild and republish the sim-verilator image once merged.
 
           **Re-run the DV suite against the new version before merging** - Verilator version
           bumps have changed lint warnings, \`--coverage\` output format, and other behavior

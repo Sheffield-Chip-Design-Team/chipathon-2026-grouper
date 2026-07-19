@@ -34,8 +34,8 @@ targets:
     fail_ok: false
     coverage_scope: full
 
-  - name: ahb_uart_pyuvm
-    core: sharc:comms_ip:ahb_uart_pyuvm
+  - name: ahb_uart_mdv
+    core: sharc:comms_ip:ahb_uart_pyuvm 
     fusesoc_target: default
     kind: cocotb
     fusesoc_args: ""

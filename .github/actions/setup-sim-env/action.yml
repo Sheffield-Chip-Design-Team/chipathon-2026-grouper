@@ -1,12 +1,12 @@
-name: Setup DV environment
+name: Setup Simulation environment
 description: >
   Creates a venv, installs the pinned fusesoc/cocotb/pyuvm/edalize versions
   from sim-requirements.txt into it, and registers this repo's FuseSoC
   libraries. Assumes actions/checkout has already run in the calling job,
   and that Verilator plus a system python3 (with the venv module) are
   already available - the calling job is expected to run inside the
-  ghcr.io/.../dv-verilator container image (see .github/workflows/sim-ci.yml
-  and .github/docker/dv-verilator/) rather than building Verilator from
+  ghcr.io/.../sim-verilator container image (see .github/workflows/sim-ci.yml
+  and .github/docker/sim/) rather than building Verilator from
   source or using actions/setup-python here; both used to happen in this
   action, but building Verilator made every parallel matrix leg redundantly
   rebuild it from source on a cold cache, and actions/setup-python's
@@ -29,10 +29,9 @@ runs:
         python3 -m venv "$RUNNER_TEMP/sim-venv"
         echo "$RUNNER_TEMP/sim-venv/bin" >> "$GITHUB_PATH"
 
-    - name: Install pinned Python DV toolchain
+    - name: Install pinned Python RTL Simulation toolchain
       shell: bash
       run: |
-
         pip install -r sim-requirements.txt
         pip install -e .
 
