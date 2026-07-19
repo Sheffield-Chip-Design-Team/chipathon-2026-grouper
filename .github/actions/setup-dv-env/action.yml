@@ -3,28 +3,28 @@ description: >
   Installs the pinned fusesoc/cocotb/pyuvm/edalize versions from
   requirements-dv.txt and registers this repo's FuseSoC libraries. Assumes
   actions/checkout has already run in the calling job, and that Verilator
-  is already on PATH - the calling job is expected to run inside the
-  ghcr.io/.../dv-verilator container image (see .github/workflows/dv-ci.yml
-  and .github/docker/dv-verilator/) rather than building it from source
-  here; that used to happen in this action but made every parallel matrix
-  leg redundantly build Verilator from source on a cold cache.
+  plus a system python3/pip3 are already available - the calling job is
+  expected to run inside the ghcr.io/.../dv-verilator container image (see
+  .github/workflows/sim-ci.yml and .github/docker/dv-verilator/) rather than
+  building Verilator from source or using actions/setup-python here; both
+  used to happen in this action, but building Verilator made every parallel
+  matrix leg redundantly rebuild it from source on a cold cache, and
+  actions/setup-python's downloaded Python doesn't work inside this minimal
+  a container (fails with "spawn .../pip ENOENT" - confirmed via a real CI
+  run), so we rely on the image's own python3 instead.
 
 runs:
   using: composite
   steps:
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.12"
-        cache: pip
-        cache-dependency-path: requirements-dv.txt
-
     - name: Install pinned Python DV toolchain
       shell: bash
       run: |
-        pip install --upgrade pip
-        pip install -r requirements-dv.txt
-        pip install -e .
+        # Ubuntu 24.04's system Python is PEP 668 externally-managed; this
+        # container only ever runs this one throwaway CI job, so there's no
+        # "other system packages" to protect it from.
+        pip3 install --upgrade pip --break-system-packages
+        pip3 install -r requirements-dv.txt --break-system-packages
+        pip3 install -e . --break-system-packages
 
     - name: Register FuseSoC libraries
       shell: bash
