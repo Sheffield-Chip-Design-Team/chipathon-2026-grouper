@@ -22,9 +22,9 @@ runs:
         # Ubuntu 24.04's system Python is PEP 668 externally-managed; this
         # container only ever runs this one throwaway CI job, so there's no
         # "other system packages" to protect it from.
-        pip3 install --upgrade pip --break-system-packages
-        pip3 install -r requirements-dv.txt --break-system-packages
-        pip3 install -e . --break-system-packages
+        
+        pip3 install --ignore-installed -r requirements-dv.txt --break-system-packages
+        pip3 install --ignore-installed -e . --break-system-packages
 
     - name: Register FuseSoC libraries
       shell: bash
