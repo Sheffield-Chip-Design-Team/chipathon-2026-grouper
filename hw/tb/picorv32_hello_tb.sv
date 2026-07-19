@@ -1,5 +1,5 @@
 `ifndef DUMP_FILE
-`define DUMP_FILE "dump.vcd"
+`define DUMP_FILE "dump.fst"
 `endif
 
 module picorv32_hello_tb;
