@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one DV target's `fusesoc run` (per a .github/dv-ci-targets.yaml entry)
+"""Run one DV target's `fusesoc run` (per a .github/sim-ci-targets.yaml entry)
 and report its results, in one step. Used by the CI 'sim' matrix job - see
 report_target.py for the standalone equivalent that works against results
 already sitting in a build/ work root from a previous run.
@@ -31,7 +31,7 @@ def resolve_vlnv(core: str) -> str:
     """FuseSoC work-root directory names use the fully-resolved VLNV
     (name:library:name:VERSION), not whatever partial/unversioned core
     string was passed to `fusesoc run` - resolve it via `core-info` rather
-    than requiring every dv-ci-targets.yaml entry to hardcode a version.
+    than requiring every sim-ci-targets.yaml entry to hardcode a version.
     """
     out = subprocess.run(["fusesoc", "core-info", core], capture_output=True, text=True, check=True).stdout
     for line in out.splitlines():

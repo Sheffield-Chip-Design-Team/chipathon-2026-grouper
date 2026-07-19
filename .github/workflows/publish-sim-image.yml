@@ -6,7 +6,7 @@ on:
     paths:
       - .github/docker/sim/**
       - .github/verilator-version
-      - .github/workflows/publish-dv-image.yml
+      - .github/workflows/publish-sim-image.yml
   workflow_dispatch:
 
 permissions:
@@ -24,7 +24,7 @@ jobs:
           echo "version=$(cat .github/verilator-version)" >> "$GITHUB_OUTPUT"
           # ghcr.io requires a lowercase path; github.repository preserves case
           # (e.g. Sheffield-Chip-Design-Team/... ), so lowercase it ourselves.
-          echo "image=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')/dv-verilator" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')/sim-verilator" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -36,7 +36,7 @@ jobs:
 
       - uses: docker/build-push-action@v6
         with:
-          context: .github/docker/dv-verilator
+          context: .github/docker/sim
           build-args: |
             VERILATOR_VERSION=${{ steps.version.outputs.version }}
           push: true

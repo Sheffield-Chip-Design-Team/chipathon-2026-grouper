@@ -22,7 +22,7 @@ jobs:
         run: |
           python3 -c "
           import yaml, json
-          cfg = yaml.safe_load(open('.github/ci-sim-targets.yaml'))
+          cfg = yaml.safe_load(open('.github/sim-ci-targets.yaml'))
           print('matrix=' + json.dumps(cfg['targets']))
           " >> "$GITHUB_OUTPUT"
       - id: image
@@ -30,7 +30,7 @@ jobs:
           # ghcr.io requires a lowercase path; github.repository preserves case.
           repo_lower="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
           version="$(cat .github/verilator-version)"
-          echo "image=ghcr.io/${repo_lower}/dv-verilator:${version}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${repo_lower}/sim-verilator:${version}" >> "$GITHUB_OUTPUT"
 
   sim:
     name: run ${{ matrix.name }}
@@ -45,7 +45,7 @@ jobs:
       image: ${{ needs.load-config.outputs.verilator-image }}
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-dv-env
+      - uses: ./.github/actions/setup-sim-env
 
       - name: Run and report ${{ matrix.name }}
         run: |
