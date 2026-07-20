@@ -1,180 +1,469 @@
 import cocotb
-from cocotb.triggers import RisingEdge, Timer
+from cocotb.triggers import RisingEdge
 
 from pyuvm import ConfigDB, uvm_sequence
 from pyuvm.s24_uvm_reg_includes import check_t, path_t, uvm_resp_t
 
 from hw.dv.uvc.ahb3lite import AHB3LiteSeqItem
 
-from ..qspi_clk_math import clk_div_for_baud
-
-# UART MEMORY MAP (register names/fields/addresses now live in
-# uart_reg_model.py - kept here are just the bitmask constants convenient
-# for composing/checking raw ints in sequence bodies, e.g.
-# `if status_val & STATUS_RX_BREAK`).
-CTRL_ENABLE = 1 << 0
-CTRL_TX_EN = 1 << 1
-CTRL_RX_EN = 1 << 2
-CTRL_RX_RESYNC_EN = 1 << 3
-
-STATUS_TX_EMPTY = 1 << 0
-STATUS_TX_FULL = 1 << 1
-STATUS_RX_EMPTY = 1 << 2
-STATUS_RX_FULL = 1 << 3
-STATUS_TX_ACTIVE = 1 << 4
-STATUS_RX_FRAME_ERROR = 1 << 5
-STATUS_RX_BREAK = 1 << 6
+from ..qspi_reg_model import (
+    ADDR_OFFSET,
+    CMD_OFFSET,
+    CTRL_OFFSET,
+    DATA_OFFSET,
+    STATUS_OFFSET,
+)
+from ..tbench.ahb_qspi_env import (
+    AHB_CFG_KEY,
+    QSPI_AHB_SEQR_KEY,
+    QSPI_REG_MODEL_KEY,
+)
 
 
-def _decode_reg(reg, value: int) -> str:
-    """Generic register-field decoder driven entirely by the register
-    model's own field metadata (get_fields()/get_lsb_pos()/get_n_bits()) -
-    works for any register in UartRegBlock without a per-register decoder."""
+# -----------------------------------------------------------------------------
+# AHB transfer constants
+# -----------------------------------------------------------------------------
+
+HSIZE_BYTE = 0b000
+HSIZE_HALFWORD = 0b001
+HSIZE_WORD = 0b010
+
+HTRANS_IDLE = 0b00
+HTRANS_BUSY = 0b01
+HTRANS_NONSEQ = 0b10
+HTRANS_SEQ = 0b11
+
+
+# -----------------------------------------------------------------------------
+# CTRL field masks
+# -----------------------------------------------------------------------------
+
+CTRL_CPHA = 1 << 0
+CTRL_CPOL = 1 << 1
+CTRL_QUAD_MODE = 1 << 2
+CTRL_FLASH_WRITE_EN = 1 << 3
+CTRL_IE_DONE = 1 << 4
+CTRL_IE_ERR = 1 << 5
+
+CTRL_CLKDIV_SHIFT = 8
+CTRL_CLKDIV_MASK = 0xFF << CTRL_CLKDIV_SHIFT
+
+CTRL_IMPLEMENTED_MASK = (
+    CTRL_CPHA
+    | CTRL_CPOL
+    | CTRL_QUAD_MODE
+    | CTRL_FLASH_WRITE_EN
+    | CTRL_IE_DONE
+    | CTRL_IE_ERR
+    | CTRL_CLKDIV_MASK
+)
+
+
+# -----------------------------------------------------------------------------
+# CMD field masks
+# -----------------------------------------------------------------------------
+
+CMD_START = 1 << 0
+CMD_DIR = 1 << 1
+CMD_ADDR_EN = 1 << 2
+CMD_DATA_EN = 1 << 3
+CMD_TARGET = 1 << 4
+CMD_FAST_TXN_EN = 1 << 5
+
+CMD_DUMMY_SHIFT = 8
+CMD_DUMMY_MASK = 0xFF << CMD_DUMMY_SHIFT
+
+# START is an action and always reads as zero, so it is excluded from the
+# stored/readable mask.
+CMD_STORED_MASK = (
+    CMD_DIR
+    | CMD_ADDR_EN
+    | CMD_DATA_EN
+    | CMD_TARGET
+    | CMD_FAST_TXN_EN
+    | CMD_DUMMY_MASK
+)
+
+
+# -----------------------------------------------------------------------------
+# STATUS field masks
+# -----------------------------------------------------------------------------
+
+STATUS_BUSY = 1 << 0
+STATUS_INIT_DONE = 1 << 1
+STATUS_DONE = 1 << 2
+STATUS_RX_VALID = 1 << 3
+STATUS_CFG_ERR = 1 << 4
+STATUS_WRITE_BLOCKED = 1 << 5
+STATUS_ADDR_ERR = 1 << 6
+
+STATUS_LIVE_MASK = STATUS_BUSY | STATUS_INIT_DONE
+
+STATUS_W1C_MASK = (
+    STATUS_DONE
+    | STATUS_RX_VALID
+    | STATUS_CFG_ERR
+    | STATUS_WRITE_BLOCKED
+    | STATUS_ADDR_ERR
+)
+
+STATUS_IMPLEMENTED_MASK = STATUS_LIVE_MASK | STATUS_W1C_MASK
+
+
+# -----------------------------------------------------------------------------
+# ADDR and DATA masks
+# -----------------------------------------------------------------------------
+
+ADDR_IMPLEMENTED_MASK = 0x00FF_FFFF
+DATA_IMPLEMENTED_MASK = 0x0000_00FF
+
+
+def decode_reg(reg, value: int) -> str:
+    """
+    Decode a raw register value using the field metadata in the pyuvm model.
+    """
+
     parts = []
-    for f in reg.get_fields():
-        mask = (1 << f.get_n_bits()) - 1
-        parts.append(f"{f.get_name()}=0x{(value >> f.get_lsb_pos()) & mask:x}")
+
+    for field in reg.get_fields():
+        mask = (1 << field.get_n_bits()) - 1
+        field_value = (value >> field.get_lsb_pos()) & mask
+
+        parts.append(
+            f"{field.get_name()}=0x{field_value:x}"
+        )
+
     return " ".join(parts)
 
 
-class UartAhbBaseSequence(uvm_sequence):
-    def __init__(self, name="uart_ahb_base_sequence"):
+class QspiAhbBaseSequence(uvm_sequence):
+    """
+    Common AHB and register-model operations for QSPI register-shell tests.
+    """
+
+    def __init__(self, name="qspi_ahb_base_sequence"):
         super().__init__(name)
-        self.uart_cfg = None
+
         self.ahb_cfg = None
         self.reg_model = None
         self.dut = cocotb.top
 
     def get_config(self):
-        self.sequencer = ConfigDB().get(None, "", "UART_AHB_SEQR")
-        self.uart_cfg = ConfigDB().get(None, "", "UART_CFG")
-        self.ahb_cfg = ConfigDB().get(None, "", "AHB_CFG")
-        self.reg_model = ConfigDB().get(None, "", "UART_REG_MODEL")
+        """
+        Retrieve the environment objects required by the sequence.
 
-    async def reg_write(self, reg, value: int):
-        self.sequencer.logger.debug(f"REG WRITE {reg.get_name()} {_decode_reg(reg, value)}")
-        status = await reg.write(
-            value, map=self.reg_model.blk_get_def_map(), path=path_t.FRONTDOOR, check=check_t.NO_CHECK
+        Sequences are not uvm_components, so the values are retrieved from the
+        global ConfigDB scope populated by QspiAhbEnv.
+        """
+
+        self.sequencer = ConfigDB().get(
+            None,
+            "",
+            QSPI_AHB_SEQR_KEY,
         )
+
+        self.ahb_cfg = ConfigDB().get(
+            None,
+            "",
+            AHB_CFG_KEY,
+        )
+
+        self.reg_model = ConfigDB().get(
+            None,
+            "",
+            QSPI_REG_MODEL_KEY,
+        )
+
+    async def reg_write(self, reg, value: int) -> None:
+        """
+        Perform a full-word frontdoor write through the pyuvm register model.
+        """
+
+        self.sequencer.logger.debug(
+            f"REG WRITE {reg.get_name()} "
+            f"value=0x{value & 0xFFFF_FFFF:08x} "
+            f"{decode_reg(reg, value)}"
+        )
+
+        status = await reg.write(
+            value,
+            map=self.reg_model.blk_get_def_map(),
+            path=path_t.FRONTDOOR,
+            check=check_t.NO_CHECK,
+        )
+
         if status != uvm_resp_t.PASS_RESP:
-            msg = f"Register write to {reg.get_name()} failed (status={status})"
-            self.sequencer.logger.warning(msg)
-            # raise AssertionError(msg)
+            raise AssertionError(
+                f"Register write to {reg.get_name()} failed "
+                f"with status {status}"
+            )
 
     async def reg_read(self, reg) -> int:
+        """
+        Perform a full-word frontdoor read through the pyuvm register model.
+        """
+
         status, value = await reg.read(
-            map=self.reg_model.blk_get_def_map(), path=path_t.FRONTDOOR, check=check_t.NO_CHECK
+            map=self.reg_model.blk_get_def_map(),
+            path=path_t.FRONTDOOR,
+            check=check_t.NO_CHECK,
         )
-        self.sequencer.logger.debug(f"REG READ {reg.get_name()} {_decode_reg(reg, value)}")
+
+        self.sequencer.logger.debug(
+            f"REG READ {reg.get_name()} "
+            f"value=0x{value & 0xFFFF_FFFF:08x} "
+            f"{decode_reg(reg, value)}"
+        )
+
         if status != uvm_resp_t.PASS_RESP:
-            msg = f"Register read from {reg.get_name()} failed (status={status})"
-            self.sequencer.logger.warning(msg)
-            # raise AssertionError(msg)
-        return value
+            raise AssertionError(
+                f"Register read from {reg.get_name()} failed "
+                f"with status {status}"
+            )
 
-    async def ahb_write(self, addr: int, data: int):
-        item = AHB3LiteSeqItem(name=f"wr_{addr:02x}", addr=addr, is_write=True, wdata=data)
+        return value & 0xFFFF_FFFF
+
+    async def ahb_write(
+        self,
+        addr: int,
+        data: int,
+        *,
+        size: int = HSIZE_WORD,
+        trans: int = HTRANS_NONSEQ,
+        expect_error: bool = False,
+    ) -> AHB3LiteSeqItem:
+        """
+        Perform a raw AHB write.
+
+        Raw accesses are used for byte-lane, alignment, invalid-offset and
+        malformed-transfer tests that the pyuvm register model cannot express.
+        """
+
+        item = AHB3LiteSeqItem(
+            name=f"wr_{addr:03x}",
+            addr=addr,
+            is_write=True,
+            wdata=data,
+            size=size,
+            trans=trans,
+        )
+
         await self.start_item(item)
         await self.finish_item(item)
-        if item.hresp != 0:
-            msg = f"AHB write to 0x{addr:02x} failed with HRESP=1"
-            self.sequencer.logger.warning(msg)
-            # raise AssertionError(msg)
+
+        self._check_ahb_response(
+            item,
+            expect_error=expect_error,
+        )
+
         return item
 
-    async def ahb_read(self, addr: int):
-        item = AHB3LiteSeqItem(name=f"rd_{addr:02x}", addr=addr, is_write=False)
+    async def ahb_read(
+        self,
+        addr: int,
+        *,
+        size: int = HSIZE_WORD,
+        trans: int = HTRANS_NONSEQ,
+        expect_error: bool = False,
+    ) -> AHB3LiteSeqItem:
+        """
+        Perform a raw AHB read.
+        """
+
+        item = AHB3LiteSeqItem(
+            name=f"rd_{addr:03x}",
+            addr=addr,
+            is_write=False,
+            size=size,
+            trans=trans,
+        )
+
         await self.start_item(item)
         await self.finish_item(item)
+
+        self._check_ahb_response(
+            item,
+            expect_error=expect_error,
+        )
+
         return item
 
-    async def reset_dut(self, cycles_low: int = 2):
-        """The only DUT reset primitive in the suite - the test's initial
-        reset and any mid-test reset move both funnel through this, so they
-        can never drift apart."""
+    async def ahb_write_byte(
+        self,
+        register_offset: int,
+        byte_index: int,
+        value: int,
+        *,
+        expect_error: bool = False,
+    ) -> AHB3LiteSeqItem:
+        """
+        Write one byte to a selected register byte lane.
+
+        HWDATA is lane-aligned because the RTL consumes, for example,
+        HWDATA[15:8] when byte lane 1 is selected.
+        """
+
+        if byte_index not in range(4):
+            raise ValueError(
+                f"byte_index must be 0-3, got {byte_index}"
+            )
+
+        addr = register_offset + byte_index
+        data = (value & 0xFF) << (8 * byte_index)
+
+        return await self.ahb_write(
+            addr,
+            data,
+            size=HSIZE_BYTE,
+            expect_error=expect_error,
+        )
+
+    async def ahb_read_byte(
+        self,
+        register_offset: int,
+        byte_index: int,
+        *,
+        expect_error: bool = False,
+    ) -> int:
+        """
+        Read one byte lane from a register.
+
+        The current DUT returns the complete 32-bit register on HRDATA, so the
+        requested lane is extracted explicitly.
+        """
+
+        if byte_index not in range(4):
+            raise ValueError(
+                f"byte_index must be 0-3, got {byte_index}"
+            )
+
+        item = await self.ahb_read(
+            register_offset + byte_index,
+            size=HSIZE_BYTE,
+            expect_error=expect_error,
+        )
+
+        return (item.rdata >> (8 * byte_index)) & 0xFF
+
+    async def reset_dut(self, cycles_low: int = 2) -> None:
+        """
+        Apply the common active-low DUT reset sequence.
+        """
+
+        if cycles_low < 1:
+            raise ValueError(
+                f"cycles_low must be at least 1, got {cycles_low}"
+            )
+
+        # The serial input is not functionally used by the register shell, but
+        # driving it removes X values from traces and later assertions.
+        self.dut.qspi_sio_i.value = 0
+
         self.dut.HRESETn.value = 0
+
         for _ in range(cycles_low):
             await RisingEdge(self.dut.HCLK)
+
         self.dut.HRESETn.value = 1
         await RisingEdge(self.dut.HCLK)
 
-    async def configure_uart(self):
-        clk_div = clk_div_for_baud(self.uart_cfg.baud_rate, self.ahb_cfg.clk_period_ns)
-        self.sequencer.logger.info(
-            f"Configuring UART for baud_rate={self.uart_cfg.baud_rate} "
-            f"(clk_div={clk_div})"
-        )
+    async def wait_clock_cycles(self, cycle_count: int) -> None:
+        """
+        Wait for a specified number of HCLK rising edges.
+        """
 
-        # Configure the UART over AHB: enable, TX/RX, resync, and set the clock divider.
-        # The clock divider is a 10-bit value in bits [25:16] of the CTRL register.
-        ctrl = CTRL_ENABLE | CTRL_TX_EN | CTRL_RX_EN | CTRL_RX_RESYNC_EN
-        ctrl |= (clk_div & 0x3FF) << 16
-        await self.reg_write(self.reg_model.ctrl, ctrl)
-
-        rd = await self.reg_read(self.reg_model.ctrl)
-        if (rd & 0x03FF0000) != (ctrl & 0x03FF0000):
-            msg = (
-                f"CTRL clk_div readback mismatch: expected "
-                f"{_decode_reg(self.reg_model.ctrl, ctrl)} got {_decode_reg(self.reg_model.ctrl, rd)}"
+        if cycle_count < 0:
+            raise ValueError(
+                f"cycle_count cannot be negative, got {cycle_count}"
             )
-            self.sequencer.logger.warning(msg)
-            raise AssertionError(msg)
 
-        if (rd & 0x0F) != (ctrl & 0x0F):
-            msg = (
-                f"CTRL enable bits readback mismatch: expected "
-                f"{_decode_reg(self.reg_model.ctrl, ctrl)} got {_decode_reg(self.reg_model.ctrl, rd)}"
-            )
-            self.sequencer.logger.warning(msg)
-            raise AssertionError(msg)
+        for _ in range(cycle_count):
+            await RisingEdge(self.dut.HCLK)
 
-    async def wait_for_status(self, mask: int, value: int, max_reads: int = 200):
-        rd = None
+    async def wait_for_status(
+        self,
+        mask: int,
+        expected: int,
+        *,
+        max_reads: int = 100,
+    ) -> int:
+        """
+        Poll STATUS until the selected bits match the expected value.
+        """
+
+        last_value = 0
+
         for _ in range(max_reads):
-            rd = await self.reg_read(self.reg_model.status)
-            if (rd & mask) == value:
-                return rd
-        msg = (
-            f"STATUS mask 0x{mask:08x} did not reach value 0x{value:08x} "
-            f"(last read: {_decode_reg(self.reg_model.status, rd)})"
+            last_value = await self.reg_read(
+                self.reg_model.status
+            )
+
+            if (last_value & mask) == (expected & mask):
+                return last_value
+
+        raise AssertionError(
+            "STATUS did not reach expected value: "
+            f"mask=0x{mask:08x}, "
+            f"expected=0x{expected & mask:08x}, "
+            f"last=0x{last_value:08x}"
         )
-        self.sequencer.logger.warning(msg)
-        raise AssertionError(msg)
 
-    async def drive_uart_frame(self, byte_value: int, force_bad_stop: bool = False, break_low_bits: int = 0):
-        self.dut.uart_rx.value = 1
-        await self.wait_uart_bits(2)
+    @staticmethod
+    def assert_equal(
+        actual: int,
+        expected: int,
+        description: str,
+    ) -> None:
+        """
+        Raise a readable assertion for exact integer comparisons.
+        """
 
-        self.dut.uart_rx.value = 0
-        await self.wait_uart_bits(1)
+        if actual != expected:
+            raise AssertionError(
+                f"{description}: "
+                f"expected 0x{expected:08x}, "
+                f"got 0x{actual:08x}"
+            )
 
-        for bit_index in range(8):
-            self.dut.uart_rx.value = (byte_value >> bit_index) & 1
-            await self.wait_uart_bits(1)
+    @staticmethod
+    def assert_masked_equal(
+        actual: int,
+        expected: int,
+        mask: int,
+        description: str,
+    ) -> None:
+        """
+        Compare only the bits selected by mask.
+        """
 
-        if break_low_bits > 0:
-            self.dut.uart_rx.value = 0
-            await self.wait_uart_bits(break_low_bits)
-        elif force_bad_stop:
-            self.dut.uart_rx.value = 0
-            await self.wait_uart_bits(1)
-        else:
-            self.dut.uart_rx.value = 1
-            await self.wait_uart_bits(1)
+        actual_masked = actual & mask
+        expected_masked = expected & mask
 
-        self.dut.uart_rx.value = 1
-        await self.wait_uart_bits(2)
+        if actual_masked != expected_masked:
+            raise AssertionError(
+                f"{description}: "
+                f"mask=0x{mask:08x}, "
+                f"expected=0x{expected_masked:08x}, "
+                f"got=0x{actual_masked:08x}"
+            )
 
-    async def drive_break_condition(self, low_bit_periods: int = 12):
-        """Hold uart_rx continuously low for low_bit_periods (must exceed
-        1 start + 8 data + 1 stop = 10 bit periods for the RTL's
-        break_detect logic to actually latch ST_BREAK - see uart_rx.sv).
-        Unlike drive_uart_frame(byte_value=0, break_low_bits=N), this never
-        depends on byte_value semantics, so intent can't be silently wrong."""
-        self.dut.uart_rx.value = 0
-        await self.wait_uart_bits(low_bit_periods)
-        self.dut.uart_rx.value = 1
-        await self.wait_uart_bits(2)
+    @staticmethod
+    def _check_ahb_response(
+        item: AHB3LiteSeqItem,
+        *,
+        expect_error: bool,
+    ) -> None:
+        """
+        Confirm that HRESP matches the expected result.
+        """
 
-    async def wait_uart_bits(self, bit_count: int):
-        await Timer(bit_count * self.uart_cfg.bit_period_ns, unit="ns")
+        expected_hresp = 1 if expect_error else 0
+
+        if item.hresp != expected_hresp:
+            direction = "write" if item.is_write else "read"
+
+            raise AssertionError(
+                f"Unexpected AHB {direction} response at "
+                f"0x{item.addr:08x}: expected HRESP={expected_hresp}, "
+                f"got HRESP={item.hresp}"
+            )
