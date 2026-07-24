@@ -55,9 +55,11 @@ SYNTH_ABC_DFF: true
 # SYNTH_ABC_USE_MFS3: true
 SYNTH_STRATEGY: "DELAY 2"
 
-# Die area: 1.4mm x 1.4mm absolute
+# Baseline die: 1310x1150 (23.1% below the original 1400x1400 die).
+# The configuration below is the proven congestion-mitigation recipe from
+# `irdrop_check_d`: detailed routing completed and the IR-drop report passed.
 FP_SIZING: absolute
-DIE_AREA: [0.0, 0.0, 1400, 1400]
+DIE_AREA: [0.0, 0.0, 1310, 1150]
 
 # Slightly smaller file sizes
 PRIMARY_GDSII_STREAMOUT_TOOL: klayout
@@ -75,11 +77,15 @@ GND_NETS:
 
 # Clock -- direct port on this macro, no I/O pad in this flow
 CLOCK_PORT: clk
-CLOCK_PERIOD: 50 # 20MHz
+CLOCK_PERIOD: 62.5 # 16MHz
 
 # Routing / ESD
 DIODE_ON_PORTS: in
-RT_MAX_LAYER: Metal4
+# Moved to Metal5 to relieve Metal3 congestion at 1310x1150 (see TRIAL_NOTES.md).
+# Normally capped at Metal4 because Metal5 is reserved for the parent's core
+# ring in hierarchical integration (PDN_CORE_RING: false below) -- Metal5
+# ownership still needs to be cleared with the parent integration owner.
+RT_MAX_LAYER: Metal5
 
 CTS_OBSTRUCTION_AWARE: true
 CTS_DELAY_BUFFER_DERATE_PCT: 100
@@ -103,12 +109,29 @@ CTS_CLK_BUFFERS:
 PL_RESIZER_HOLD_SLACK_MARGIN: 0.6
 GRT_RESIZER_HOLD_SLACK_MARGIN: 0.5
 
+# Pre-routing setup repair (fixes timing before route guides exist, unlike
+# the RUN_POST_GRT_* flags which are gated off by default and hung on this
+# design's tighter density -- see TRIAL_NOTES.md). Modeled on the adjacent
+# trouper repo's RUN_POST_GPL_DESIGN_REPAIR / GRT_RESIZER_SETUP_MAX_BUFFER_PCT.
+RUN_POST_GPL_DESIGN_REPAIR: true
+RUN_POST_CTS_RESIZER_TIMING: true
+PL_RESIZER_SETUP_MAX_BUFFER_PCT: 40
+
 # Placement
-PL_TARGET_DENSITY_PCT: 45
-MAX_FANOUT_CONSTRAINT: 10
+# The 1310x1150 `irdrop_check_d` baseline used 68% target density and a
+# relaxed fanout limit to avoid excessive buffering.
+PL_TARGET_DENSITY_PCT: 68
+MAX_FANOUT_CONSTRAINT: 16
 GRT_ALLOW_CONGESTION: true
+GRT_ADJUSTMENT: 0.2
 GPL_CELL_PADDING: 2
 DPL_CELL_PADDING: 2
+
+# These delay buffers materially worsen routing congestion at this die size.
+DONT_USE_CELLS:
+  - gf180mcu_fd_sc_mcu7t5v0__dlyb_1
+  - gf180mcu_fd_sc_mcu7t5v0__dlyb_2
+  - gf180mcu_fd_sc_mcu7t5v0__dlyb_4
 
 # Fix antenna violations after DRT
 DRT_ANTENNA_REPAIR_ITERS: 10
@@ -128,19 +151,26 @@ PDN_MULTILAYER: true
 PDN_ENABLE_RAILS: true
 PDN_RAIL_LAYER:       Metal1    # gf180mcu std cells expose VDD/VSS on Metal1
 PDN_VERTICAL_LAYER:   Metal4    # carries over the SRAMs
-PDN_HORIZONTAL_LAYER: Metal3    # std-cell area only; trimmed at the macros
+# General mesh horizontal layer moved off Metal3 to relieve routing
+# congestion there (see pdn_cfg.tcl). SRAM taps stay on Metal3 regardless --
+# that's hardcoded in pdn_cfg.tcl, not driven by this variable. Metal5 is
+# normally reserved for a hierarchical parent's core ring; using it for our
+# own mesh here is a real ownership question, not yet cleared -- see
+# TRIAL_NOTES.md.
+PDN_HORIZONTAL_LAYER: Metal5
+
 
 # Straps
 PDN_VWIDTH:    5         
 PDN_HWIDTH:    5          
-PDN_VPITCH:    130       # was 75
-PDN_HPITCH:    130       # was 75
-PDN_VSPACING:  60        # was 1  -&gt;  (130 - 2*5) / 2 = 60
-PDN_HSPACING:  60        # was 1  -&gt;  (130 - 2*5) / 2 = 60
+PDN_VPITCH:    180
+PDN_HPITCH:    180
+PDN_VSPACING:  85        # (180 - 2*5) / 2
+PDN_HSPACING:  85        # (180 - 2*5) / 2
 PDN_EXTEND_TO: boundary   
 
 PDN_ENABLE_PINS:     true    # Metal3/Metal4 pins for the parent to grab
-PDN_CORE_RING:       false   # hierarchical integration; parent owns Metal5
+PDN_CORE_RING:       false   # hierarchical integration; coordinate Metal5 use with parent
 PDN_HORIZONTAL_HALO: 10
 PDN_VERTICAL_HALO:   10
 
@@ -243,16 +273,16 @@ MACROS:
       # 20um gap between macros == FP_MACRO_HORIZONTAL_HALO on each side, so
       # halos meet without overlapping.
       "u_ram_ss.gen_macro_ram.gen_sram[0].u_wrapper.u_sram_macro":
-        location: [134.8, 25]
+        location: [22.4, 25]
         orientation: S
       "u_ram_ss.gen_macro_ram.gen_sram[1].u_wrapper.u_sram_macro":
-        location: [456.1, 25]
+        location: [343.7, 25]
         orientation: S
       "u_ram_ss.gen_macro_ram.gen_sram[2].u_wrapper.u_sram_macro":
-        location: [777.4, 25]
+        location: [665.0, 25]
         orientation: S
       "u_ram_ss.gen_macro_ram.gen_sram[3].u_wrapper.u_sram_macro":
-        location: [1098.7, 25]
+        location: [986.3, 25]
         orientation: S
 
     lib:
