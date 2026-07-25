@@ -1,4 +1,4 @@
-module uart_clk_div #(
+module spi_clk_div #(
   parameter int CLK_DIV_BITS = 10
 ) (
   input  logic                    clk,
