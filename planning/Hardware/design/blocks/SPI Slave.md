@@ -44,6 +44,52 @@ Main blocks: Shift Register, Register Bank, AHB Bus Logic, Command FSM Control. 
 
 AHB-Lite bus interface plus the external SPI slave pins (`SS`, `SCK`, `MOSI`, `MISO`, per standard SPI slave convention — exact pin names not given in the source). External pin ownership depends on the still-undefined [GPIO Mux](GPIO%20Mux.md) pin-sharing scheme.
 
+## Register Map
+
+| Offset | Name | Access | Reset | Purpose |
+|--------|------|--------|-------|---------|
+| 0x00 | CTRL | R/W | 0x0000_0000 | Enable and reset SPI slave |
+| 0x04 | STATUS | RO | 0x0000_0000 | Current SPI status |
+| 0x08 | TXDATA | WO | - | Data sent to external SPI master |
+| 0x0C | RXDATA | RO | - | Data received from external SPI master |
+
+Unlisted bits are reserved: read 0, write 0.
+
+## CTRL — 0x00
+
+| Bits | Field | Access | Description |
+|------|-------|--------|-------------|
+| 0 | ENABLE | R/W | Enable SPI slave peripheral |
+| 1 | SOFT_RESET | WO | Software reset the SPI slave state machine to its default state |
+| 31:2 | Reserved | - | Read 0, write 0 |
+
+Writing 1 to SOFT_RESET resets the SPI slave state machine. The bit self-clears after the reset completes.
+
+## STATUS — 0x04
+
+| Bits | Field | Access | Description |
+|------|-------|--------|-------------|
+| 0 | BUSY | RO | SPI transaction in progress |
+| 1 | RX_VALID | RO | New received byte available |
+| 2 | TX_READY | RO | Ready to provide transmit byte |
+| 31:3 | Reserved | - | Read 0 |
+
+Reset value 0x04 reflects TX_READY = 1 and BUSY = RX_VALID = 0.
+
+## TXDATA — 0x08
+
+| Bits | Field | Access | Description |
+|------|-------|--------|-------------|
+| 7:0 | DATA | WO | Byte returned to the external SPI master |
+| 31:8 | Reserved | - | Read 0, write 0 |
+
+## RXDATA — 0x0C
+
+| Bits | Field | Access | Description |
+|------|-------|--------|-------------|
+| 7:0 | DATA | RO | Last byte received from the external SPI master |
+| 31:8 | Reserved | - | Read 0 |
+
 ## Clocking Strategy
 
 `GRPR-SPIS-009`: Single system clock (`clk`) for everything, per the source.
