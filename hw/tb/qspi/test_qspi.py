@@ -1,14 +1,16 @@
-"""Directed cocotb tests for the AHB-wrapped QSPI register shell.
+"""Tests for the arbitrary-command quad QSPI controller.
 
-These tests verify only the functionality currently implemented in
-hw/rtl/qspi/ahb_qspi.sv. The external QSPI transaction engine is not yet
-implemented, so serial command, clock and data-transfer behaviour is outside
-this testbench's present scope.
+The controller supports:
+
+- aligned 32-bit AHB accesses;
+- an arbitrary 8-bit opcode;
+- an arbitrary 24-bit address;
+- one-byte quad read or write;
 """
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge, Timer
+from cocotb.triggers import FallingEdge, RisingEdge, Timer, ValueChange
 
 from hw.tb.tb_utils.ahb_utils import (
     HSIZE_WORD,
@@ -18,117 +20,29 @@ from hw.tb.tb_utils.ahb_utils import (
 )
 
 
-# -----------------------------------------------------------------------------
 # Register offsets
-# -----------------------------------------------------------------------------
+REG_CTRL = 0x00
+REG_STATUS = 0x04
+REG_OPCODE = 0x08
+REG_ADDRESS = 0x0C
+REG_DATA = 0x10
 
-ADDR_CTRL = 0x00
-ADDR_CMD = 0x04
-ADDR_STATUS = 0x08
-ADDR_ADDR = 0x0C
-ADDR_DATA = 0x10
-
-
-# -----------------------------------------------------------------------------
-# AHB constants
-# -----------------------------------------------------------------------------
-
-HSIZE_BYTE = 0b000
-HSIZE_HALFWORD = 0b001
-
-HTRANS_BUSY = 0b01
-HTRANS_NONSEQ = 0b10
-
-
-# -----------------------------------------------------------------------------
 # CTRL fields
-# -----------------------------------------------------------------------------
-
-CTRL_CPHA = 1 << 0
-CTRL_CPOL = 1 << 1
-CTRL_QUAD_MODE = 1 << 2
-CTRL_FLASH_WRITE_EN = 1 << 3
-CTRL_IE_DONE = 1 << 4
-CTRL_IE_ERR = 1 << 5
-
+CTRL_START = 1 << 0
+CTRL_DIR = 1 << 1
+CTRL_TARGET = 1 << 2
 CTRL_CLKDIV_SHIFT = 8
-CTRL_CLKDIV_MASK = 0xFF << CTRL_CLKDIV_SHIFT
 
-CTRL_IMPLEMENTED_MASK = (
-    CTRL_CPHA
-    | CTRL_CPOL
-    | CTRL_QUAD_MODE
-    | CTRL_FLASH_WRITE_EN
-    | CTRL_IE_DONE
-    | CTRL_IE_ERR
-    | CTRL_CLKDIV_MASK
-)
-
-
-# -----------------------------------------------------------------------------
-# CMD fields
-# -----------------------------------------------------------------------------
-
-CMD_START = 1 << 0
-CMD_DIR = 1 << 1
-CMD_ADDR_EN = 1 << 2
-CMD_DATA_EN = 1 << 3
-CMD_TARGET = 1 << 4
-CMD_FAST_TXN_EN = 1 << 5
-
-CMD_DUMMY_SHIFT = 8
-CMD_DUMMY_MASK = 0xFF << CMD_DUMMY_SHIFT
-
-# START is an action and always reads as zero.
-CMD_STORED_MASK = (
-    CMD_DIR
-    | CMD_ADDR_EN
-    | CMD_DATA_EN
-    | CMD_TARGET
-    | CMD_FAST_TXN_EN
-    | CMD_DUMMY_MASK
-)
-
-
-# -----------------------------------------------------------------------------
 # STATUS fields
-# -----------------------------------------------------------------------------
-
 STATUS_BUSY = 1 << 0
-STATUS_INIT_DONE = 1 << 1
-STATUS_DONE = 1 << 2
-STATUS_RX_VALID = 1 << 3
-STATUS_CFG_ERR = 1 << 4
-STATUS_WRITE_BLOCKED = 1 << 5
-STATUS_ADDR_ERR = 1 << 6
+STATUS_DONE = 1 << 1
+STATUS_RX_VALID = 1 << 2
 
-STATUS_W1C_MASK = (
-    STATUS_DONE
-    | STATUS_RX_VALID
-    | STATUS_CFG_ERR
-    | STATUS_WRITE_BLOCKED
-    | STATUS_ADDR_ERR
-)
-
-STATUS_IMPLEMENTED_MASK = (
-    STATUS_BUSY
-    | STATUS_INIT_DONE
-    | STATUS_W1C_MASK
-)
-
-
-# -----------------------------------------------------------------------------
-# Other implemented widths
-# -----------------------------------------------------------------------------
-
-ADDR_IMPLEMENTED_MASK = 0x00FF_FFFF
-DATA_IMPLEMENTED_MASK = 0x0000_00FF
-
-CLK_PERIOD_NS = 10
+HCLK_PERIOD_NS = 10
 
 
 async def reset_dut(dut):
-    """Reset the DUT and place every input in a known idle state."""
+    """Reset the controller and initialise all external inputs."""
 
     dut.HRESETn.value = 0
 
@@ -140,8 +54,8 @@ async def reset_dut(dut):
     dut.HTRANS.value = HTRANS_IDLE
     dut.HWDATA.value = 0
     dut.HWRITE.value = 0
-    dut.HSEL.value = 0
     dut.HREADYIN.value = 1
+    dut.HSEL.value = 0
 
     dut.qspi_sio_i.value = 0
 
@@ -149,593 +63,394 @@ async def reset_dut(dut):
         await RisingEdge(dut.HCLK)
 
     dut.HRESETn.value = 1
+
     await RisingEdge(dut.HCLK)
     await Timer(1, unit="ps")
 
 
-async def write_word(dut, address, data, expected_hresp=0):
-    """Perform a normal aligned 32-bit AHB write."""
+async def write_register(
+    dut,
+    address,
+    value,
+    expected_hresp=0,
+):
+    """Perform one aligned 32-bit AHB write."""
 
     hresp = await ahb_write(
         dut,
         address,
-        data,
+        value,
     )
 
     assert hresp == expected_hresp, (
-        f"write to 0x{address:03x}: expected HRESP={expected_hresp}, "
-        f"got HRESP={hresp}"
+        f"write 0x{address:02x}: "
+        f"expected HRESP={expected_hresp}, got {hresp}"
     )
 
-    # ahb_qspi pipelines the address/control phase and consumes HWDATA on the
-    # following edge. Wait for that edge so this helper is self-contained.
     await RisingEdge(dut.HCLK)
     await Timer(1, unit="ps")
 
 
-async def read_word(dut, address, expected_hresp=0):
-    """Perform a normal aligned 32-bit AHB read."""
-
-    data, hresp = await ahb_read(
-        dut,
-        address,
-    )
-
-    assert hresp == expected_hresp, (
-        f"read from 0x{address:03x}: expected HRESP={expected_hresp}, "
-        f"got HRESP={hresp}"
-    )
-
-    # Clear the registered read phase before returning.
-    await RisingEdge(dut.HCLK)
-    await Timer(1, unit="ps")
-
-    return data
-
-
-async def raw_ahb_access(
+async def read_register(
     dut,
     address,
-    *,
-    is_write,
-    data=0,
-    size=HSIZE_WORD,
-    trans=HTRANS_NONSEQ,
+    expected_hresp=0,
 ):
-    """Drive an AHB access with explicit size and transfer type.
+    """Perform one aligned 32-bit AHB read."""
 
-    This is used for byte-lane, alignment, unsupported-size and HTRANS=BUSY
-    tests that the shared word-only helpers do not express.
-    """
+    value, hresp = await ahb_read(
+        dut,
+        address,
+    )
 
-    await RisingEdge(dut.HCLK)
-
-    dut.HADDR.value = address
-    dut.HSIZE.value = size
-    dut.HTRANS.value = trans
-    dut.HWRITE.value = int(is_write)
-    dut.HWDATA.value = data
-    dut.HSEL.value = 1
-    dut.HREADYIN.value = 1
+    assert hresp == expected_hresp, (
+        f"read 0x{address:02x}: "
+        f"expected HRESP={expected_hresp}, got {hresp}"
+    )
 
     await RisingEdge(dut.HCLK)
     await Timer(1, unit="ps")
 
-    hreadyout = int(dut.HREADYOUT.value)
-    hresp = int(dut.HRESP.value)
-    read_data = int(dut.HRDATA.value) & 0xFFFF_FFFF
+    return value
 
-    dut.HTRANS.value = HTRANS_IDLE
-    dut.HSEL.value = 0
-    dut.HWRITE.value = 0
 
-    # Allow a valid write's registered data phase to complete and clear the
-    # pipelined access controls before the next transfer.
-    await RisingEdge(dut.HCLK)
+async def wait_for_chip_select(
+    dut,
+    expected_value,
+):
+    """Wait until the two-bit chip-select vector reaches a value."""
+
+    while int(dut.qspi_ce_n_o.value) != expected_value:
+        await ValueChange(dut.qspi_ce_n_o)
+
     await Timer(1, unit="ps")
 
-    return read_data, hresp, hreadyout
+
+async def wait_for_done(dut):
+    """Poll STATUS until the transaction has completed."""
+
+    for _ in range(100):
+        status = await read_register(
+            dut,
+            REG_STATUS,
+        )
+
+        if status & STATUS_DONE:
+            return status
+
+    raise AssertionError("QSPI transaction did not complete")
 
 
-async def write_byte(dut, register_offset, byte_index, value):
-    """Write one byte into a selected 32-bit register lane."""
+def nibbles_to_integer(nibbles):
+    """Combine an MS-nibble-first sequence into one integer."""
 
-    assert 0 <= byte_index <= 3
+    value = 0
 
-    address = register_offset + byte_index
-    lane_data = (value & 0xFF) << (8 * byte_index)
+    for nibble in nibbles:
+        value = (value << 4) | nibble
 
-    _, hresp, hreadyout = await raw_ahb_access(
+    return value
+
+
+async def capture_quad_write(
+    dut,
+    expected_chip_select,
+):
+    """Capture the ten nibbles of one quad write transaction."""
+
+    await wait_for_chip_select(
         dut,
-        address,
-        is_write=True,
-        data=lane_data,
-        size=HSIZE_BYTE,
+        expected_chip_select,
     )
 
-    assert hreadyout == 1
-    assert hresp == 0, (
-        f"byte write to 0x{address:03x} returned HRESP=ERROR"
-    )
+    assert int(dut.qspi_sck_o.value) == 0
 
+    nibbles = []
 
-async def read_byte(dut, register_offset, byte_index):
-    """Read one byte lane from a register."""
+    for _ in range(10):
+        await RisingEdge(dut.qspi_sck_o)
+        await Timer(1, unit="ps")
 
-    assert 0 <= byte_index <= 3
+        assert int(dut.qspi_ce_n_o.value) == expected_chip_select
+        assert int(dut.qspi_sio_oe.value) == 0b1111
 
-    address = register_offset + byte_index
+        nibbles.append(
+            int(dut.qspi_sio_o.value) & 0xF
+        )
 
-    data, hresp, hreadyout = await raw_ahb_access(
+        await FallingEdge(dut.qspi_sck_o)
+
+    await wait_for_chip_select(
         dut,
-        address,
-        is_write=False,
-        size=HSIZE_BYTE,
+        0b11,
     )
 
-    assert hreadyout == 1
-    assert hresp == 0, (
-        f"byte read from 0x{address:03x} returned HRESP=ERROR"
+    return nibbles
+
+
+async def respond_to_quad_read(
+    dut,
+    response_byte,
+    expected_chip_select,
+):
+    """Capture command/address and provide one quad read byte."""
+
+    await wait_for_chip_select(
+        dut,
+        expected_chip_select,
     )
 
-    return (data >> (8 * byte_index)) & 0xFF
+    transmitted_nibbles = []
+
+    # Capture two opcode nibbles and six address nibbles.
+    for _ in range(8):
+        await RisingEdge(dut.qspi_sck_o)
+        await Timer(1, unit="ps")
+
+        assert int(dut.qspi_sio_oe.value) == 0b1111
+
+        transmitted_nibbles.append(
+            int(dut.qspi_sio_o.value) & 0xF
+        )
+
+        await FallingEdge(dut.qspi_sck_o)
+
+    await Timer(1, unit="ps")
+
+    # The controller must release all four lines for read data.
+    assert int(dut.qspi_sio_oe.value) == 0
+
+    high_nibble = (response_byte >> 4) & 0xF
+    low_nibble = response_byte & 0xF
+
+    dut.qspi_sio_i.value = high_nibble
+
+    await RisingEdge(dut.qspi_sck_o)
+    await FallingEdge(dut.qspi_sck_o)
+
+    dut.qspi_sio_i.value = low_nibble
+
+    await RisingEdge(dut.qspi_sck_o)
+    await FallingEdge(dut.qspi_sck_o)
+
+    await wait_for_chip_select(
+        dut,
+        0b11,
+    )
+
+    return transmitted_nibbles
 
 
 @cocotb.test()
-async def test_qspi_reset_and_full_word_registers(dut):
-    """Check reset values, full-word storage and reserved-bit behaviour."""
+async def test_registers(dut):
+    """Verify the small AHB register block."""
 
     cocotb.start_soon(
         Clock(
             dut.HCLK,
-            CLK_PERIOD_NS,
+            HCLK_PERIOD_NS,
             unit="ns",
         ).start()
     )
 
     await reset_dut(dut)
 
-    assert await read_word(dut, ADDR_CTRL) == 0
-    assert await read_word(dut, ADDR_CMD) == 0
-    assert await read_word(dut, ADDR_STATUS) == 0
-    assert await read_word(dut, ADDR_ADDR) == 0
-    assert await read_word(dut, ADDR_DATA) == 0
-
-    assert int(dut.qspi_sck_o.value) == 0
-    assert int(dut.qspi_ce_n_o.value) == 0b11
-    assert int(dut.qspi_sio_o.value) == 0
-    assert int(dut.qspi_sio_oe.value) == 0
-    assert int(dut.irq.value) == 0
+    assert await read_register(dut, REG_CTRL) == 0
+    assert await read_register(dut, REG_STATUS) == 0
+    assert await read_register(dut, REG_OPCODE) == 0
+    assert await read_register(dut, REG_ADDRESS) == 0
+    assert await read_register(dut, REG_DATA) == 0
 
     ctrl_value = (
-        CTRL_CPHA
-        | CTRL_QUAD_MODE
-        | (0x3C << CTRL_CLKDIV_SHIFT)
+        CTRL_DIR
+        | CTRL_TARGET
+        | (3 << CTRL_CLKDIV_SHIFT)
     )
 
-    await write_word(
+    await write_register(
         dut,
-        ADDR_CTRL,
+        REG_CTRL,
         ctrl_value,
     )
 
-    assert await read_word(dut, ADDR_CTRL) == ctrl_value
-
-    # Only implemented CTRL fields may persist.
-    await write_word(
+    await write_register(
         dut,
-        ADDR_CTRL,
-        0xFFFF_FFFF,
+        REG_OPCODE,
+        0xA5,
     )
 
-    assert await read_word(
+    await write_register(
         dut,
-        ADDR_CTRL,
-    ) == CTRL_IMPLEMENTED_MASK
-
-    # CPOL was written high, so inactive SCK must idle high.
-    assert int(dut.qspi_sck_o.value) == 1
-    assert int(dut.qspi_ce_n_o.value) == 0b11
-    assert int(dut.qspi_sio_oe.value) == 0
-
-    # Keep START clear while writing all stored CMD and reserved bits high.
-    await write_word(
-        dut,
-        ADDR_CMD,
-        0xFFFF_FF3E,
+        REG_ADDRESS,
+        0x12_3456,
     )
 
-    assert await read_word(
+    await write_register(
         dut,
-        ADDR_CMD,
-    ) == CMD_STORED_MASK
-
-    await write_word(
-        dut,
-        ADDR_ADDR,
-        0xFFFF_FFFF,
+        REG_DATA,
+        0xC3,
     )
 
-    assert await read_word(
-        dut,
-        ADDR_ADDR,
-    ) == ADDR_IMPLEMENTED_MASK
+    # START is not stored.
+    assert await read_register(dut, REG_CTRL) == ctrl_value
+    assert await read_register(dut, REG_OPCODE) == 0xA5
+    assert await read_register(dut, REG_ADDRESS) == 0x12_3456
+    assert await read_register(dut, REG_DATA) == 0xC3
 
-    await write_word(
-        dut,
-        ADDR_DATA,
-        0xFFFF_FFA5,
-    )
-
-    assert await read_word(
-        dut,
-        ADDR_DATA,
-    ) == 0xA5
-
-    status = await read_word(
-        dut,
-        ADDR_STATUS,
-    )
-
-    assert status & ~STATUS_IMPLEMENTED_MASK == 0
-
-
-@cocotb.test()
-async def test_qspi_byte_lane_registers(dut):
-    """Check byte-aligned fields and reserved byte lanes."""
-
-    cocotb.start_soon(
-        Clock(
-            dut.HCLK,
-            CLK_PERIOD_NS,
-            unit="ns",
-        ).start()
-    )
-
-    await reset_dut(dut)
-
-    # CTRL byte 0 contains control fields; byte 1 contains CLKDIV.
-    await write_byte(dut, ADDR_CTRL, 0, 0x2D)
-    await write_byte(dut, ADDR_CTRL, 1, 0xA6)
-    await write_byte(dut, ADDR_CTRL, 2, 0xFF)
-    await write_byte(dut, ADDR_CTRL, 3, 0xFF)
-
-    assert await read_word(
-        dut,
-        ADDR_CTRL,
-    ) == 0x0000_A62D
-
-    assert await read_byte(dut, ADDR_CTRL, 0) == 0x2D
-    assert await read_byte(dut, ADDR_CTRL, 1) == 0xA6
-    assert await read_byte(dut, ADDR_CTRL, 2) == 0
-    assert await read_byte(dut, ADDR_CTRL, 3) == 0
-
-    # CMD byte 0 contains the descriptor. DUMMY occupies byte 1.
-    await write_byte(dut, ADDR_CMD, 0, 0x3E)
-    await write_byte(dut, ADDR_CMD, 1, 0x5A)
-    await write_byte(dut, ADDR_CMD, 2, 0xFF)
-    await write_byte(dut, ADDR_CMD, 3, 0xFF)
-
-    assert await read_word(
-        dut,
-        ADDR_CMD,
-    ) == 0x0000_5A3E
-
-    # ADDR contains exactly three implemented bytes.
-    await write_byte(dut, ADDR_ADDR, 0, 0x11)
-    await write_byte(dut, ADDR_ADDR, 1, 0x22)
-    await write_byte(dut, ADDR_ADDR, 2, 0x33)
-    await write_byte(dut, ADDR_ADDR, 3, 0xFF)
-
-    assert await read_word(
-        dut,
-        ADDR_ADDR,
-    ) == 0x0033_2211
-
-    # DATA implements only byte lane zero.
-    await write_byte(dut, ADDR_DATA, 0, 0xC7)
-    await write_byte(dut, ADDR_DATA, 1, 0xFF)
-
-    assert await read_word(
-        dut,
-        ADDR_DATA,
-    ) == (0xC7 & DATA_IMPLEMENTED_MASK)
-
-
-@cocotb.test()
-async def test_qspi_start_errors_w1c_and_irq(dut):
-    """Check START semantics, protection, address errors, W1C and IRQ."""
-
-    cocotb.start_soon(
-        Clock(
-            dut.HCLK,
-            CLK_PERIOD_NS,
-            unit="ns",
-        ).start()
-    )
-
-    await reset_dut(dut)
-
-    # Valid PSRAM read request.
-    await write_word(
-        dut,
-        ADDR_ADDR,
-        0x0012_3456,
-    )
-
-    valid_psram_read = (
-        CMD_START
-        | CMD_DIR
-        | CMD_ADDR_EN
-        | CMD_DATA_EN
-        | CMD_FAST_TXN_EN
-        | (0x04 << CMD_DUMMY_SHIFT)
-    )
-
-    await write_word(
-        dut,
-        ADDR_CMD,
-        valid_psram_read,
-    )
-
-    assert await read_word(
-        dut,
-        ADDR_CMD,
-    ) == (valid_psram_read & CMD_STORED_MASK)
-
-    assert await read_word(
-        dut,
-        ADDR_STATUS,
-    ) == 0
-
-    # Enable error IRQs but leave flash writes disabled.
-    await reset_dut(dut)
-
-    await write_word(
-        dut,
-        ADDR_CTRL,
-        CTRL_IE_ERR,
-    )
-
-    # One byte beyond the 4 MB NOR range.
-    await write_word(
-        dut,
-        ADDR_ADDR,
-        0x0040_0000,
-    )
-
-    invalid_nor_write = (
-        CMD_START
-        | CMD_ADDR_EN
-        | CMD_DATA_EN
-        | CMD_TARGET
-    )
-
-    await write_word(
-        dut,
-        ADDR_CMD,
-        invalid_nor_write,
-    )
-
-    expected_errors = (
-        STATUS_WRITE_BLOCKED
-        | STATUS_ADDR_ERR
-    )
-
-    status = await read_word(
-        dut,
-        ADDR_STATUS,
-    )
-
-    assert status & STATUS_W1C_MASK == expected_errors
-    assert int(dut.irq.value) == 1
-
-    # Clear only WRITE_BLOCKED. ADDR_ERR must remain.
-    await write_word(
-        dut,
-        ADDR_STATUS,
-        STATUS_WRITE_BLOCKED,
-    )
-
-    status = await read_word(
-        dut,
-        ADDR_STATUS,
-    )
-
-    assert status & STATUS_W1C_MASK == STATUS_ADDR_ERR
-    assert int(dut.irq.value) == 1
-
-    await write_word(
-        dut,
-        ADDR_STATUS,
-        STATUS_ADDR_ERR,
-    )
-
-    status = await read_word(
-        dut,
-        ADDR_STATUS,
-    )
-
-    assert status & STATUS_W1C_MASK == 0
-    assert int(dut.irq.value) == 0
-
-    # Enabled write at the highest valid NOR address.
-    await write_word(
-        dut,
-        ADDR_CTRL,
-        CTRL_IE_ERR | CTRL_FLASH_WRITE_EN,
-    )
-
-    await write_word(
-        dut,
-        ADDR_ADDR,
-        0x003F_FFFF,
-    )
-
-    await write_word(
-        dut,
-        ADDR_CMD,
-        invalid_nor_write,
-    )
-
-    status = await read_word(
-        dut,
-        ADDR_STATUS,
-    )
-
-    assert status & STATUS_W1C_MASK == 0
-    assert int(dut.irq.value) == 0
-
-    # PSRAM address bit 23 is outside its 8 MB range.
-    await write_word(
-        dut,
-        ADDR_CTRL,
-        CTRL_IE_ERR,
-    )
-
-    await write_word(
-        dut,
-        ADDR_ADDR,
-        0x0080_0000,
-    )
-
-    psram_read = (
-        CMD_START
-        | CMD_DIR
-        | CMD_ADDR_EN
-    )
-
-    await write_word(
-        dut,
-        ADDR_CMD,
-        psram_read,
-    )
-
-    status = await read_word(
-        dut,
-        ADDR_STATUS,
-    )
-
-    assert status & STATUS_ADDR_ERR
-    assert int(dut.irq.value) == 1
-
-    await write_word(
-        dut,
-        ADDR_STATUS,
-        STATUS_ADDR_ERR,
-    )
-
-    # Highest valid PSRAM address.
-    await write_word(
-        dut,
-        ADDR_ADDR,
-        0x007F_FFFF,
-    )
-
-    await write_word(
-        dut,
-        ADDR_CMD,
-        psram_read,
-    )
-
-    status = await read_word(
-        dut,
-        ADDR_STATUS,
-    )
-
-    assert not (status & STATUS_ADDR_ERR)
-    assert int(dut.irq.value) == 0
-
-
-@cocotb.test()
-async def test_qspi_invalid_ahb_accesses(dut):
-    """Check invalid offsets, alignment, sizes and HTRANS=BUSY."""
-
-    cocotb.start_soon(
-        Clock(
-            dut.HCLK,
-            CLK_PERIOD_NS,
-            unit="ns",
-        ).start()
-    )
-
-    await reset_dut(dut)
-
-    await write_word(
-        dut,
-        ADDR_CTRL,
-        CTRL_CPHA,
-    )
-
-    # First unimplemented word after DATA.
-    await write_word(
+    # First unimplemented register.
+    await write_register(
         dut,
         0x14,
         0xFFFF_FFFF,
         expected_hresp=1,
     )
 
-    assert await read_word(
+    invalid_read = await read_register(
         dut,
-        ADDR_CTRL,
-    ) == CTRL_CPHA
-
-    # Higher offset with identical low register-index bits must not alias.
-    invalid_data = await read_word(
-        dut,
-        0x20,
+        0x14,
         expected_hresp=1,
     )
 
-    assert invalid_data == 0
+    assert invalid_read == 0
 
-    # Misaligned halfword.
-    _, hresp, hreadyout = await raw_ahb_access(
-        dut,
-        ADDR_CTRL + 1,
-        is_write=False,
-        size=HSIZE_HALFWORD,
+    assert int(dut.qspi_sck_o.value) == 0
+    assert int(dut.qspi_ce_n_o.value) == 0b11
+    assert int(dut.qspi_sio_oe.value) == 0
+    assert int(dut.irq.value) == 0
+
+
+@cocotb.test()
+async def test_quad_write(dut):
+    """Verify one arbitrary opcode, address and write byte."""
+
+    cocotb.start_soon(
+        Clock(
+            dut.HCLK,
+            HCLK_PERIOD_NS,
+            unit="ns",
+        ).start()
     )
 
-    assert hreadyout == 1
-    assert hresp == 1
+    await reset_dut(dut)
 
-    # Misaligned word.
-    _, hresp, hreadyout = await raw_ahb_access(
-        dut,
-        ADDR_CTRL + 2,
-        is_write=True,
-        data=0,
-        size=HSIZE_WORD,
+    opcode = 0xA5
+    address = 0x12_3456
+    write_data = 0xC3
+
+    # TARGET=1 selects qspi_ce_n_o[1].
+    ctrl = (
+        CTRL_TARGET
+        | (1 << CTRL_CLKDIV_SHIFT)
     )
 
-    assert hreadyout == 1
-    assert hresp == 1
+    await write_register(dut, REG_OPCODE, opcode)
+    await write_register(dut, REG_ADDRESS, address)
+    await write_register(dut, REG_DATA, write_data)
+    await write_register(dut, REG_CTRL, ctrl)
 
-    # Unsupported 64-bit transfer size on a 32-bit register bus.
-    _, hresp, hreadyout = await raw_ahb_access(
-        dut,
-        ADDR_CTRL,
-        is_write=False,
-        size=0b011,
+    monitor = cocotb.start_soon(
+        capture_quad_write(
+            dut,
+            expected_chip_select=0b01,
+        )
     )
 
-    assert hreadyout == 1
-    assert hresp == 1
-
-    # BUSY is not a valid transfer and must neither error nor write.
-    _, hresp, hreadyout = await raw_ahb_access(
+    await write_register(
         dut,
-        ADDR_CTRL,
-        is_write=True,
-        data=0,
-        trans=HTRANS_BUSY,
+        REG_CTRL,
+        ctrl | CTRL_START,
     )
 
-    assert hreadyout == 1
-    assert hresp == 0
+    nibbles = await monitor
 
-    assert await read_word(
+    assert nibbles_to_integer(
+        nibbles[0:2]
+    ) == opcode
+
+    assert nibbles_to_integer(
+        nibbles[2:8]
+    ) == address
+
+    assert nibbles_to_integer(
+        nibbles[8:10]
+    ) == write_data
+
+    status = await wait_for_done(dut)
+
+    assert not (status & STATUS_BUSY)
+    assert status & STATUS_DONE
+    assert not (status & STATUS_RX_VALID)
+
+    assert await read_register(
         dut,
-        ADDR_CTRL,
-    ) == CTRL_CPHA
+        REG_DATA,
+    ) == write_data
+
+
+@cocotb.test()
+async def test_quad_read(dut):
+    """Verify one arbitrary opcode, address and received byte."""
+
+    cocotb.start_soon(
+        Clock(
+            dut.HCLK,
+            HCLK_PERIOD_NS,
+            unit="ns",
+        ).start()
+    )
+
+    await reset_dut(dut)
+
+    opcode = 0xD2
+    address = 0x65_4321
+    response = 0x5A
+
+    # DIR=1 selects read. TARGET=0 selects qspi_ce_n_o[0].
+    ctrl = (
+        CTRL_DIR
+        | (1 << CTRL_CLKDIV_SHIFT)
+    )
+
+    await write_register(dut, REG_OPCODE, opcode)
+    await write_register(dut, REG_ADDRESS, address)
+    await write_register(dut, REG_DATA, 0xEE)
+    await write_register(dut, REG_CTRL, ctrl)
+
+    responder = cocotb.start_soon(
+        respond_to_quad_read(
+            dut,
+            response_byte=response,
+            expected_chip_select=0b10,
+        )
+    )
+
+    await write_register(
+        dut,
+        REG_CTRL,
+        ctrl | CTRL_START,
+    )
+
+    transmitted_nibbles = await responder
+
+    assert nibbles_to_integer(
+        transmitted_nibbles[0:2]
+    ) == opcode
+
+    assert nibbles_to_integer(
+        transmitted_nibbles[2:8]
+    ) == address
+
+    status = await wait_for_done(dut)
+
+    assert not (status & STATUS_BUSY)
+    assert status & STATUS_DONE
+    assert status & STATUS_RX_VALID
+
+    assert await read_register(
+        dut,
+        REG_DATA,
+    ) == response
+
+    assert int(dut.qspi_sck_o.value) == 0
+    assert int(dut.qspi_ce_n_o.value) == 0b11
+    assert int(dut.qspi_sio_oe.value) == 0
