@@ -1,5 +1,4 @@
 """Simple directed cocotb testbench for ahb_spi_s
-
 """
 
 import cocotb
@@ -14,19 +13,15 @@ ADDR_TXDATA = 0x8
 ADDR_RXDATA = 0xC
 
 CTRL_ENABLE = 1 << 0
-CTRL_TX_EN = 1 << 1
-CTRL_RX_EN = 1 << 2
-CTRL_RX_RESYNC_EN = 1 << 3
-CTRL_CLK_DIV_SHIFT = 16
+CTRL_SOFT_RESET = 1 << 1
 
-STATUS_TX_EMPTY = 1 << 0
-STATUS_RX_EMPTY = 1 << 2
-STATUS_TX_ACTIVE = 1 << 4
+STATUS_BUSY = 1 << 0
+STATUS_RX_VALID = 1 << 1
+STATUS_TX_READY = 1 << 2
 
 CLK_PERIOD_NS = 10
-BAUD_RATE = 1_250_000
-UART_OVERSAMPLE = 8
 
+#keep this from UART
 async def reset_dut(dut):
     dut.HRESETn.value = 0
     dut.HADDR.value = 0
@@ -50,47 +45,35 @@ async def reset_dut(dut):
     await RisingEdge(dut.HCLK)
 
 @cocotb.test()
-async def test_spi_txdata_write(dut):
-    """Write a byte to TXDATA and check the serial frame driven onto uart_tx."""
+async def test_ctrl_rw(dut):
+    """Test read/write access to the CTRL register."""
+
+    #start clock
     cocotb.start_soon(Clock(dut.HCLK, CLK_PERIOD_NS, "ns").start())
+
+    #reset peripheral 
     await reset_dut(dut)
-    bit_period_ns = await configure_uart(dut)
 
-    tx_byte = 0xA5
-    capture_task = cocotb.start_soon(capture_tx_byte(dut, bit_period_ns))
-    hresp = await ahb_write(dut, ADDR_TXDATA, tx_byte)
-    assert hresp == 0, "TXDATA write reported HRESP error"
+    #Test ENABLE bit
+    ctrl_value = CTRL_ENABLE #write to CTRL register
 
-    captured = await capture_task
-    assert captured == tx_byte, f"expected 0x{tx_byte:02x}, captured 0x{captured:02x}"
+    hresp = await ahb_write(dut, ADDR_CTRL, ctrl_value)
+    assert hresp == 0, "CTRL write reported HRESP error"
 
-    # capture_tx_byte returns mid-stop-bit; give the DUT a full extra bit
-    # period so the stop bit finishes and the TX state machine returns to idle.
-    await Timer(bit_period_ns, "ns")
-    status, hresp = await ahb_read(dut, ADDR_STATUS)
-    assert hresp == 0, "STATUS read reported HRESP error"
-    assert status & STATUS_TX_EMPTY, "expected tx_empty=1 after transmission"
-    assert not (status & STATUS_TX_ACTIVE), "expected tx_active=0 after transmission"
+    value, hresp = await ahb_read(dut, ADDR_CTRL)
+    assert hresp == 0, "CTRL read reported HRESP error"
 
-@cocotb.test()
-async def test_spi_rxdata_read(dut):
-    """Bit-bang a byte onto uart_rx and read it back through RXDATA."""
-    cocotb.start_soon(Clock(dut.HCLK, CLK_PERIOD_NS, "ns").start())
-    await reset_dut(dut)
-    bit_period_ns = await configure_uart(dut)
+    assert value == ctrl_value, \
+        f"Expected 0x{ctrl_value:08X}, got 0x{value:08X}"
 
-    rx_byte = 0x3C
-    await drive_rx_byte(dut, rx_byte, bit_period_ns)
+    #Test ENABLE + SOFT_RESET bits
+    ctrl_value = CTRL_ENABLE | CTRL_SOFT_RESET
 
-    for _ in range(20):
-        status, hresp = await ahb_read(dut, ADDR_STATUS)
-        assert hresp == 0, "STATUS read reported HRESP error"
-        if not (status & STATUS_RX_EMPTY):
-            break
-        await ClockCycles(dut.HCLK, 4)
-    else:
-        assert False, "timed out waiting for rx_empty to clear"
+    hresp = await ahb_write(dut, ADDR_CTRL, ctrl_value)
+    assert hresp == 0, "CTRL write reported HRESP error"
 
-    data, hresp = await ahb_read(dut, ADDR_RXDATA)
-    assert hresp == 0, "RXDATA read reported HRESP error"
-    assert data == rx_byte, f"expected 0x{rx_byte:02x}, read 0x{data:02x}"
+    value, hresp = await ahb_read(dut, ADDR_CTRL)
+    assert hresp == 0, "CTRL read reported HRESP error"
+
+    assert value == ctrl_value, \
+        f"Expected 0x{ctrl_value:08X}, got 0x{value:08X}"

@@ -55,8 +55,9 @@ module ahb_spi_s #(
   // Status registers
   logic                     status_busy;
   logic                     status_rx_valid;
+  logic                     status_tx_ready;
   
-  // Fifo signals
+  // SPI data registers
   logic [SPI_S_DATA_W-1:0]   tx_data;
   logic [SPI_S_DATA_W-1:0]   rx_data;
 
@@ -107,6 +108,12 @@ module ahb_spi_s #(
   //Generate the control signals in the address phase
   assign access       = HREADYIN && HSEL && (HTRANS != No_Transfer);
   assign read_enable  = access && ~HWRITE;
+
+  // Temporary values until the SPI core is implemented.
+  assign status_busy     = 1'b0;
+  assign status_rx_valid = 1'b0;
+  assign status_tx_ready = 1'b1;
+  //assign rx_data         = 8'h00;
 
   assign word_address = access ? HADDR[3:2] : '0;
   assign byte_select  = access ? generate_byte_select_32(HSIZE, HADDR[1:0]) : '0;
@@ -172,7 +179,8 @@ module ahb_spi_s #(
         // STATUS register (0x04)
         ADDR_STATUS: 
         HRDATA = {
-          30'b0,
+          29'b0,
+          status_tx_ready,
           status_rx_valid,
           status_busy
         };
