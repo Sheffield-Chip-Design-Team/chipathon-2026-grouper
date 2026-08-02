@@ -61,7 +61,15 @@ module ahb_spi_s #(
   logic [SPI_S_DATA_W-1:0]   tx_data;
   logic [SPI_S_DATA_W-1:0]   rx_data;
 
-  //control signals are stored in registers
+  // SPI shift register and bit counter
+  logic [SPI_S_DATA_W-1:0]   rx_shift;
+  logic [2:0]                bit_count;
+
+  // Synchronize and detect SPI clock edges
+  logic spi_sck_d;
+  logic spi_sck_rise;
+
+  // Control signals are stored in registers
   logic                       access;
   logic                       read_enable;
   logic                       read_enable_r;
@@ -105,15 +113,18 @@ module ahb_spi_s #(
 */
 
 
-  //Generate the control signals in the address phase
+  // Generate the control signals in the address phase
   assign access       = HREADYIN && HSEL && (HTRANS != No_Transfer);
   assign read_enable  = access && ~HWRITE;
 
   // Temporary values until the SPI core is implemented.
   assign status_busy     = 1'b0;
-  assign status_rx_valid = 1'b0;
+  //assign status_rx_valid = 1'b0;
   assign status_tx_ready = 1'b1;
   //assign rx_data         = 8'h00;
+
+  // Detect rising edge
+  assign spi_sck_rise = spi_sck && !spi_sck_d;
 
   assign word_address = access ? HADDR[3:2] : '0;
   assign byte_select  = access ? generate_byte_select_32(HSIZE, HADDR[1:0]) : '0;
@@ -134,32 +145,64 @@ module ahb_spi_s #(
 
   //Act on control signals in the data phase
 
-  // write
+  // Write
   always_ff @(posedge HCLK, negedge HRESETn)
     if (~HRESETn) begin
-      ctrl_enable         <= '0;
-      ctrl_soft_reset         <= '0;
-      tx_data        <= '0;
-    end else begin
+      ctrl_enable     <= '0;
+      ctrl_soft_reset <= '0;
+      tx_data         <= '0;
+      rx_data         <= '0;
 
-      if (write_enable)
-        unique case (word_address_r)
-          ADDR_CTRL: begin
-            if (byte_select_r[0]) begin
-              ctrl_enable         <= HWDATA[0];
-              ctrl_soft_reset     <= HWDATA[1];
-            end
-          end
+      rx_shift        <= '0;
+      bit_count       <= '0;
 
-          ADDR_TXDATA: begin
-            tx_data <= HWDATA[7:0];
-          end
+      spi_sck_d <= 1'b0;
 
-          default: begin end
-        endcase
+      status_rx_valid <= 1'b0;
+  end 
+  else begin
+
+    //remember what spi_sck was on the previous HCLK
+    spi_sck_d <= spi_sck;
+
+/* 
+    if (!spi_ss && spi_sck_rise) begin
+      rx_shift  <= {rx_shift[6:0], spi_mosi};
+      bit_count <= bit_count + 1'b1; //will change this 
+    end
+*/
+    if (!spi_ss && spi_sck_rise) begin
+      rx_shift <= {rx_shift[6:0], spi_mosi};
+
+      if (bit_count == 3'd7) begin
+          rx_data         <= {rx_shift[6:0], spi_mosi};
+          status_rx_valid <= 1'b1;
+          bit_count       <= 3'd0;
+      end
+
+      else begin
+        bit_count <= bit_count + 1'b1;
+      end
     end
 
-  // read registers
+    if (write_enable)
+      unique case (word_address_r)
+        ADDR_CTRL: begin
+          if (byte_select_r[0]) begin
+            ctrl_enable         <= HWDATA[0];
+            ctrl_soft_reset     <= HWDATA[1];
+          end
+        end
+
+        ADDR_TXDATA: begin
+          tx_data <= HWDATA[7:0];
+        end
+
+        default: begin end
+      endcase
+    end
+
+  // Read registers
   always_comb
     if (!read_enable_r)
       // (output of zero when not enabled for read is not necessary
@@ -195,7 +238,7 @@ module ahb_spi_s #(
         default: HRDATA = '0;
       endcase
 
-  //Transfer Response
+  // Transfer Response
   always_comb begin
     invalid_access = '0;
 

@@ -44,6 +44,24 @@ async def reset_dut(dut):
     dut.HRESETn.value = 1
     await RisingEdge(dut.HCLK)
 
+async def spi_send_byte(dut, data):
+    """Send one byte over the SPI interface (MSB first)."""
+
+    dut.spi_ss.value = 0
+
+    for i in range(7, -1, -1):
+        dut.spi_mosi.value = (data >> i) & 1
+
+        await RisingEdge(dut.HCLK)
+
+        dut.spi_sck.value = 1
+        await RisingEdge(dut.HCLK)
+
+        dut.spi_sck.value = 0
+        await RisingEdge(dut.HCLK)
+
+    dut.spi_ss.value = 1
+
 #test 1
 @cocotb.test() 
 async def test_ctrl_rw(dut):
@@ -155,3 +173,38 @@ async def test_rxdata_ro(dut):
     # Read RXDATA again (should still be allowed)
     value, hresp = await ahb_read(dut, ADDR_RXDATA)
     assert hresp == 0, "RXDATA read reported HRESP error"
+
+
+#test 5
+@cocotb.test()
+async def test_spi_receive_byte(dut):
+    """Receive one byte over SPI."""
+
+    # Start clock
+    cocotb.start_soon(Clock(dut.HCLK, CLK_PERIOD_NS, "ns").start())
+
+    # Reset DUT
+    await reset_dut(dut)
+
+    # Enable the SPI peripheral
+    hresp = await ahb_write(dut, ADDR_CTRL, CTRL_ENABLE)
+    assert hresp == 0, "CTRL write reported HRESP error"
+
+    TEST_BYTE = 0xA5
+
+    # Send one byte over SPI
+    await spi_send_byte(dut, TEST_BYTE)
+
+    # Read STATUS register
+    status, hresp = await ahb_read(dut, ADDR_STATUS)
+    assert hresp == 0, "STATUS read reported HRESP error"
+
+    assert (status & STATUS_RX_VALID), \
+        "STATUS_RX_VALID was not set"
+
+    # Read RXDATA register
+    value, hresp = await ahb_read(dut, ADDR_RXDATA)
+    assert hresp == 0, "RXDATA read reported HRESP error"
+
+    assert value == TEST_BYTE, \
+        f"Expected 0x{TEST_BYTE:02X}, got 0x{value:02X}"
