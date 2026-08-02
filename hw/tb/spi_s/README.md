@@ -13,8 +13,7 @@ DUT, see [`hw/dv/ahb_uart/`](../../hw/dv/ahb_uart/).
 - `../tb_utils/ahb_utils.py` — shared AHB read/write helper functions.
 - `spi_s_directed.core` — FuseSoC core describing the SPI slave simulation.
 
-- `test_spi_registers` — verifies AHB access to the SPI slave registers.
-- Future tests will verify SPI read/write transactions and firmware loading. 
+- `test_ctrl_rw` — verifies AHB read/write access to the CTRL register.
 - Additional SPI transaction tests will be added as the RTL is implemented.
 
 ## Run
@@ -39,7 +38,7 @@ Both `test_spi_tx_byte` and `test_spi_rx_byte` run by default (cocotb
 discovers every `@cocotb.test()` in the module). To run just one:
 
 ```bash
-PYTHONPATH="$PWD:$PYTHONPATH" TESTCASE=test_spi_registers fusesoc run --target=default sharc:comms_ip:ahb_spi_s_directed
+PYTHONPATH="$PWD:$PYTHONPATH" TESTCASE=test_ctrl_rw fusesoc run --target=default sharc:comms_ip:ahb_spi_s_directed
 ```
 
 Waveforms (`--trace-fst`) are written into the FuseSoC work root

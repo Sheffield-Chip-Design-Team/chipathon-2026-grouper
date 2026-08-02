@@ -44,7 +44,8 @@ async def reset_dut(dut):
     dut.HRESETn.value = 1
     await RisingEdge(dut.HCLK)
 
-@cocotb.test()
+#test 1
+@cocotb.test() 
 async def test_ctrl_rw(dut):
     """Test read/write access to the CTRL register."""
 
@@ -77,3 +78,80 @@ async def test_ctrl_rw(dut):
 
     assert value == ctrl_value, \
         f"Expected 0x{ctrl_value:08X}, got 0x{value:08X}"
+
+#test 2
+@cocotb.test()
+async def test_status_ro(dut):
+    """Test that STATUS is read-only."""
+
+    # Start clock
+    cocotb.start_soon(Clock(dut.HCLK, CLK_PERIOD_NS, "ns").start())
+
+    # Reset peripheral
+    await reset_dut(dut)
+
+    # Read STATUS register after reset
+    value, hresp = await ahb_read(dut, ADDR_STATUS)
+    assert hresp == 0, "STATUS read reported HRESP error"
+
+    # STATUS should report TX_READY = 1 after reset
+    assert value == STATUS_TX_READY, \
+        f"Expected STATUS = 0x{STATUS_TX_READY:08X}, got 0x{value:08X}"
+
+    # Attempt to write STATUS (should return an AHB error)
+    hresp = await ahb_write(dut, ADDR_STATUS, 0xFFFFFFFF)
+    assert hresp == 1, "Expected HRESP error when writing STATUS"
+
+    # Read STATUS again
+    value, hresp = await ahb_read(dut, ADDR_STATUS)
+    assert hresp == 0, "STATUS read reported HRESP error"
+
+    # STATUS should be unchanged after the failed write
+    assert value == STATUS_TX_READY, \
+        f"STATUS register changed after write: 0x{value:08X}"
+
+#test 3
+@cocotb.test()
+async def test_txdata_wo(dut):
+    """Test that TXDATA is write-only."""
+
+    # Start clock
+    cocotb.start_soon(Clock(dut.HCLK, CLK_PERIOD_NS, "ns").start())
+
+    # Reset peripheral
+    await reset_dut(dut)
+
+    # Write a byte to TXDATA
+    hresp = await ahb_write(dut, ADDR_TXDATA, 0xA5)
+    assert hresp == 0, "TXDATA write reported HRESP error"
+
+    # Read TXDATA back
+    value, hresp = await ahb_read(dut, ADDR_TXDATA)
+    assert hresp == 0, "TXDATA read reported HRESP error"
+
+    # TXDATA is write-only, so reads currently return 0
+    assert value == 0, \
+        f"Expected TXDATA read to return 0x00000000, got 0x{value:08X}"
+
+#test 4
+@cocotb.test()
+async def test_rxdata_ro(dut):
+    """Test that RXDATA is read-only."""
+
+    # Start clock
+    cocotb.start_soon(Clock(dut.HCLK, CLK_PERIOD_NS, "ns").start())
+
+    # Reset peripheral
+    await reset_dut(dut)
+
+    # Read RXDATA (should be allowed)
+    value, hresp = await ahb_read(dut, ADDR_RXDATA)
+    assert hresp == 0, "RXDATA read reported HRESP error"
+
+    # Attempt to write RXDATA (should return an AHB error)
+    hresp = await ahb_write(dut, ADDR_RXDATA, 0x55)
+    assert hresp == 1, "Expected HRESP error when writing RXDATA"
+
+    # Read RXDATA again (should still be allowed)
+    value, hresp = await ahb_read(dut, ADDR_RXDATA)
+    assert hresp == 0, "RXDATA read reported HRESP error"
