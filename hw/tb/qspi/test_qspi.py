@@ -19,7 +19,6 @@ from hw.tb.tb_utils.ahb_utils import (
     ahb_write,
 )
 
-
 # Register offsets
 REG_CTRL = 0x00
 REG_STATUS = 0x04
@@ -39,7 +38,6 @@ STATUS_DONE = 1 << 1
 STATUS_RX_VALID = 1 << 2
 
 HCLK_PERIOD_NS = 10
-
 
 async def reset_dut(dut):
     """Reset the controller and initialise all external inputs."""
@@ -68,6 +66,7 @@ async def reset_dut(dut):
     await Timer(1, unit="ps")
 
 
+ # TODO these should be moved to ahb_utils.py
 async def write_register(
     dut,
     address,
@@ -333,14 +332,12 @@ async def test_quad_write(dut):
 
     await reset_dut(dut)
 
-    opcode = 0xA5
-    address = 0x12_3456
+    opcode     = 0xA5
+    address    = 0x12_3456
     write_data = 0xC3
 
     # TARGET=1 selects qspi_ce_n_o[1].
-    ctrl = (
-        CTRL_TARGET
-        | (1 << CTRL_CLKDIV_SHIFT)
+    ctrl = (CTRL_TARGET | (1 << CTRL_CLKDIV_SHIFT)
     )
 
     await write_register(dut, REG_OPCODE, opcode)
