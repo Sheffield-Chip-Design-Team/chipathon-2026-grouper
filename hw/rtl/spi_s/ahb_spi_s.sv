@@ -1,6 +1,5 @@
 // AHB spi_s
 
-
 module ahb_spi_s #(
   parameter int ADDR_WIDTH = 32,
   parameter int DATA_WIDTH = 32
@@ -35,13 +34,9 @@ module ahb_spi_s #(
   input logic                   spi_mosi,
   output logic                  spi_miso
 );
+  import ahb3lite_pkg::*; // AHBlite packages
 
-  import ahb3lite_pkg::*;
-  localparam int SPI_S_DATA_W = 8;
-
-  // AHB transfer codes needed in this module
-  localparam bit [1:0] No_Transfer  = 2'b00;
-  
+  localparam int       SPI_S_DATA_W = 8;
 
   localparam bit [1:0] ADDR_CTRL    = 2'b00;
   localparam bit [1:0] ADDR_STATUS  = 2'b01;
@@ -80,41 +75,8 @@ module ahb_spi_s #(
   logic [(DATA_WIDTH/8)-1:0]  byte_select_r;
   logic invalid_access;
 
-  // Instance the uart core
-  /*uart #(
-    .CLK_DIV_BITS (CLK_DIV_BITS),
-    .DATA_WIDTH   (SPI_S_DATA_W)
-  ) u_uart (
-      .clk            (HCLK),
-      .rst_n          (HRESETn),
-      .enable         (ctrl_enable),
-      .clk_div        (ctrl_clk_div),
-      .tx_en          (ctrl_tx_en),
-      .rx_en          (ctrl_rx_en),
-      .rx_resync_en   (ctrl_rx_resync_en),
-      .tx_break       (ctrl_tx_break),
-      .tx_active      (status_tx_active),
-      .received       (rx_irq),
-      .rx_frame_error (rx_frame_error),
-      .rx_break       (rx_break),
-      .flush_tx_fifo  (ctrl_flush_tx_fifo),
-      .tx_data        (tx_data),
-      .tx_write       (tx_write),
-      .tx_full        (status_tx_full),
-      .tx_empty       (status_tx_empty),
-      .flush_rx_fifo  (ctrl_flush_rx_fifo),
-      .rx_read        (rx_read),
-      .rx_full        (status_rx_full),
-      .rx_empty       (status_rx_empty),
-      .rx_data        (rx_data),
-      .uart_tx        (uart_tx),
-      .uart_rx        (uart_rx)
-  );
-*/
-
-
   // Generate the control signals in the address phase
-  assign access       = HREADYIN && HSEL && (HTRANS != No_Transfer);
+  assign access       = HREADYIN && HSEL && (HTRANS != HTRANS_IDLE);
   assign read_enable  = access && ~HWRITE;
 
   // Temporary values until the SPI core is implemented.
