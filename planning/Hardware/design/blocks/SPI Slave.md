@@ -61,7 +61,9 @@ Unlisted bits are reserved: read 0, write 0.
 |------|-------|--------|-------------|
 | 0 | ENABLE | R/W | Enable SPI slave peripheral |
 | 1 | SOFT_RESET | WO | Software reset the SPI slave state machine to its default state |
-| 31:2 | Reserved | - | Read 0, write 0 |
+| 2 | CPHA  | R/W |  |
+| 3 | CPOL  | R/W |  |
+| 31:4 | Reserved | - | Read 0, write 0 |
 
 Writing 1 to SOFT_RESET resets the SPI slave state machine. The bit self-clears after the reset completes.
 
