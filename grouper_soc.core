@@ -2,6 +2,22 @@ CAPI=2:
 name: sharc:soc_ip:grouper_soc:0.0.1
 description: RISC-V 32IM SoC with UART, SPI and GPIO
 
+parameters:
+  DEBUG_PERIPH:
+    datatype: bool
+    paramtype: vlogdefine
+    description: >
+      Instantiate the ahb_debug peripheral in periph_ss.sv. Must be paired
+      with firmware built with -DDEBUG (build_fw_debug script) - otherwise
+      debug()/debug_str() compile to no-ops and never reach it.
+    default: false
+
+scripts:
+  build_fw:
+    cmd: [bash, -c, '"exec $${FUSESOC_REPO_ROOT:-../../..}/sw/scripts/build_fw.sh"']
+  build_fw_debug:
+    cmd: [bash, -c, '"exec $${FUSESOC_REPO_ROOT:-../../..}/sw/scripts/build_fw.sh --debug"']
+
 filesets:
   rtl:
     depend:
@@ -9,10 +25,13 @@ filesets:
       - sharc:amba_ip:ahb3lite_pkg:0.0.1
       - yosys:cpu_ip:picorv32:1.0.0
       - sharc:comms_ip:ahb_uart:0.0.1
+      - sharc:comms_ip:ahb_spi_s:0.0.1
 
     files:
       - hw/rtl/interconnect/ahb_debug.sv:                 {file_type: systemVerilogSource}
       - hw/rtl/interconnect/ahb_conn.sv:                  {file_type: systemVerilogSource}
+      - hw/rtl/interconnect/ahb_conn_buff.sv:              {file_type: systemVerilogSource}
+      - hw/rtl/interconnect/ahb_stub_slave.sv:             {file_type: systemVerilogSource}
       - hw/rtl/interconnect/ahb_interconnect.sv:          {file_type: systemVerilogSource}
 
       - hw/rtl/rom/ahb_rom.sv:                            {file_type: systemVerilogSource}
@@ -56,3 +75,27 @@ targets:
     filesets_append:
       - tb
     toplevel: picorv32_hello_tb
+    hooks:
+      pre_build: [build_fw]
+
+  tb_top_debug:
+    <<: *sim
+    description: Grouper SoC top-level simulation (debug firmware + ahb_debug instantiated).
+    flow: sim
+    flow_options:
+      tool: verilator
+      verilator_options:
+        - -Wno-TIMESCALEMOD
+        - -Wno-fatal
+        - --sv
+        - --trace
+        - --trace-fst
+        - --binary
+        - --coverage
+    filesets_append:
+      - tb
+    toplevel: picorv32_hello_tb
+    parameters:
+      - DEBUG_PERIPH=true
+    hooks:
+      pre_build: [build_fw_debug]
