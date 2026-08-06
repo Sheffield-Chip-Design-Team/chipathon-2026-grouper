@@ -1,0 +1,83 @@
+CAPI=2:
+name: sharc:soc_ip:grouper_soc_directed:0.0.1
+description: Directed cocotb top-level testbench for the Grouper SoC (hw/tb/top/test_soc.py)
+
+# Drives grouper_soc_top, so the top-level input synchronisers are in the
+# path - the SystemVerilog testbench drives digital_ss, which sits below them.
+#
+#   FW_TEST=gpio fusesoc run --no-export sharc:soc_ip:grouper_soc_directed
+#   FW_TEST=gpio fusesoc run --no-export --target=trace sharc:soc_ip:grouper_soc_directed
+
+# FW_TEST picks the firmware top level from sw/tests; FW_DEBUG=1 builds it
+# with -DDEBUG. The debug and trace targets set FW_DEBUG for you, because
+# debug()/debug_str() are no-ops without it and would never reach ahb_debug.
+# The debug variant passes --debug on the command line rather than setting
+
+scripts:
+  build_fw:
+    cmd: [bash, -c, '"exec $${FUSESOC_REPO_ROOT:-../../..}/sw/scripts/build_fw.sh"']
+  build_fw_debug:
+    cmd: [bash, -c, '"exec $${FUSESOC_REPO_ROOT:-../../..}/sw/scripts/build_fw.sh --debug"']
+
+parameters:
+  DEBUG_PERIPH:
+    datatype: bool
+    paramtype: vlogdefine
+    description: Instantiate the ahb_debug peripheral. Pair with FW_DEBUG=1.
+    default: false
+  CPU_TRACE:
+    datatype: bool
+    paramtype: vlogdefine
+    description: Enable picorv32's instruction trace. Needs DEBUG_PERIPH too.
+    default: false
+
+filesets:
+  rtl:
+    depend:
+      - sharc:soc_ip:grouper_soc:0.0.1
+
+# Deliberately no YAML merge key - prevents firmware build re-running 
+targets:
+  default:
+    description: Grouper SoC cocotb simulation.
+    filesets: [rtl]
+    flow: sim
+    flow_options: &flow_opts
+      tool: verilator
+      cocotb_module: hw.tb.top.test_soc
+      verilator_options:
+        - -Wno-TIMESCALEMOD
+        - -Wno-fatal
+        - --sv
+        - --trace
+      run_options:
+        - --trace
+    toplevel: grouper_soc_top
+    hooks:
+      pre_build: [build_fw]
+
+  debug:
+    description: As default, plus debug firmware and the ahb_debug peripheral.
+    filesets: [rtl]
+    flow: sim
+    flow_options: *flow_opts
+    toplevel: grouper_soc_top
+    parameters:
+      - DEBUG_PERIPH=true
+    hooks:
+      pre_build: [build_fw_debug]
+
+  # CPU_TRACE turns on picorv32's trace port via cpu_ss's ENABLE_TRACE, but
+  # ahb_debug is what actually writes cpu.trace - hence DEBUG_PERIPH as well.
+  # hw/tb/top/trace_decode.py turns the result into cpu_trace.dis.
+  trace:
+    description: As debug, plus the CPU instruction trace decoded to cpu_trace.dis.
+    filesets: [rtl]
+    flow: sim
+    flow_options: *flow_opts
+    toplevel: grouper_soc_top
+    parameters:
+      - DEBUG_PERIPH=true
+      - CPU_TRACE=true
+    hooks:
+      pre_build: [build_fw_debug]

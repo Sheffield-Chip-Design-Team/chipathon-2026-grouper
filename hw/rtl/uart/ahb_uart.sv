@@ -43,10 +43,6 @@ module ahb_uart #(
   localparam int CLK_DIV_BITS = 10;
   localparam int UART_DATA_W = 8;
 
-  // AHB transfer codes needed in this module
-  localparam bit [1:0] No_Transfer  = 2'b00;
-  
-
   localparam bit [1:0] ADDR_CTRL    = 2'b00;
   localparam bit [1:0] ADDR_STATUS  = 2'b01;
   localparam bit [1:0] ADDR_TXDATA  = 2'b10;
@@ -59,8 +55,8 @@ module ahb_uart #(
   logic                     ctrl_rx_en;
   logic                     ctrl_rx_resync_en;
   logic                     ctrl_tx_break;
-  logic                     ctrl_flush_tx_fifo; // WOSC
-  logic                     ctrl_flush_rx_fifo; // WOSC
+  logic                     ctrl_flush_tx_fifo;    // WOSC
+  logic                     ctrl_flush_rx_fifo;    // WOSC
 
   
   // Status registers
@@ -69,8 +65,8 @@ module ahb_uart #(
   logic                     status_rx_empty;
   logic                     status_rx_full;
   logic                     status_tx_active;
-  logic                     status_rx_frame_error; // RC
-  logic                     status_rx_break; // RC
+  logic                     status_rx_frame_error;  // RC
+  logic                     status_rx_break;        // RC
   
   // Control signals
   logic                     rx_frame_error; // 1-cycle pulse on frame error
@@ -91,7 +87,11 @@ module ahb_uart #(
   logic [1:0]                 word_address_r;
   logic [(DATA_WIDTH/8)-1:0]  byte_select;
   logic [(DATA_WIDTH/8)-1:0]  byte_select_r;
-  logic invalid_access;
+
+  logic                       invalid_access;
+  logic                       read_invalid;     // decided in the address phase
+  logic                       read_invalid_r;   // ...consumed in the data phase
+  logic                       hresp_err_req_r;  // second cycle of an ERROR response
 
   // Instance the uart core
   uart #(
@@ -135,22 +135,25 @@ module ahb_uart #(
 
   assign rx_read = read_enable && !status_rx_empty && word_address == ADDR_RXDATA;
 
-  // Delay write control signals to data phase
+  assign read_invalid = read_enable && (word_address == ADDR_RXDATA) && status_rx_empty;
+
+  // Delay write control signals to data phase.
   always_ff @(posedge HCLK, negedge HRESETn)
     if (~HRESETn) begin
       write_enable    <= '0;
       read_enable_r   <= '0;
       word_address_r  <= '0;
       byte_select_r   <= '0;
-    end else begin
+      read_invalid_r  <= '0;
+    end else if (HREADYOUT) begin
       write_enable    <= access && HWRITE;
       read_enable_r   <= read_enable;
       word_address_r  <= word_address;
       byte_select_r   <= byte_select;
+      read_invalid_r  <= read_invalid;
     end
 
   //Act on control signals in the data phase
-
   // write
   always_ff @(posedge HCLK, negedge HRESETn)
     if (~HRESETn) begin
@@ -190,39 +193,40 @@ module ahb_uart #(
   assign tx_data  = HWDATA[0 +: UART_DATA_W];
 
   // read
-  always_comb
-    if (!read_enable_r)
-      // (output of zero when not enabled for read is not necessary
-      //  but may help with debugging)
-      HRDATA = '0;
-    else
-      unique case (word_address_r)
-        ADDR_CTRL: HRDATA = {
-          {(16-CLK_DIV_BITS){1'b0}},
-          ctrl_clk_div,
-          11'b0,
-          ctrl_tx_break,
-          ctrl_rx_resync_en,
-          ctrl_rx_en,
-          ctrl_tx_en,
-          ctrl_enable
-        };
-        ADDR_STATUS: HRDATA = {
-          25'b0,
-          status_rx_break,
-          status_rx_frame_error,
-          status_tx_active,
-          status_rx_full,
-          status_rx_empty,
-          status_tx_full,
-          status_tx_empty
-        };
-        ADDR_RXDATA: HRDATA = {
-          {(32-UART_DATA_W){1'b0}},
-          rx_data
-        };
-        default: HRDATA = '0;
-      endcase
+always_comb begin
+  if (!read_enable_r)
+    // (output of zero when not enabled for read is not necessary
+    //  but may help with debugging)
+    HRDATA = '0;
+  else
+    unique case (word_address_r)
+      ADDR_CTRL: HRDATA = {
+        {(16-CLK_DIV_BITS){1'b0}},
+        ctrl_clk_div,
+        11'b0,
+        ctrl_tx_break,
+        ctrl_rx_resync_en,
+        ctrl_rx_en,
+        ctrl_tx_en,
+        ctrl_enable
+      };
+      ADDR_STATUS: HRDATA = {
+        25'b0,
+        status_rx_break,
+        status_rx_frame_error,
+        status_tx_active,
+        status_rx_full,
+        status_rx_empty,
+        status_tx_full,
+        status_tx_empty
+      };
+      ADDR_RXDATA: HRDATA = {
+        {(32-UART_DATA_W){1'b0}},
+        rx_data
+      };
+      default: HRDATA = '0;
+    endcase
+  end
 
   always_ff @(posedge HCLK, negedge HRESETn)
     if (~HRESETn) begin
@@ -231,7 +235,7 @@ module ahb_uart #(
     end else begin
       if (read_enable_r && word_address_r == ADDR_STATUS && byte_select_r[0]) begin
         status_rx_frame_error <= '0;
-        status_rx_frame_error <= '0;
+        status_rx_break <= '0;
       end
 
       if (rx_frame_error)
@@ -241,8 +245,12 @@ module ahb_uart #(
     end
 
   //Transfer Response
+
+  // Everything here is data phase. The write terms are naturally so
+  // (write_enable, word_address_r and status_tx_full all are); the read term
+  // arrives pre-decided from the address phase
   always_comb begin
-    invalid_access = '0;
+    invalid_access = read_invalid_r;
 
     if (write_enable)
       unique case (word_address_r)
@@ -251,18 +259,15 @@ module ahb_uart #(
         ADDR_RXDATA: invalid_access |= '1;
         default: begin end
       endcase
-
-    if (read_enable)
-      unique case (word_address_r)
-        ADDR_RXDATA: invalid_access |= status_rx_empty;
-        default: begin end
-      endcase
   end
 
-  assign HREADYOUT = '1; // Single cycle Write & Read. Zero Wait state operations
+  always_ff @(posedge HCLK or negedge HRESETn)
+    if (!HRESETn) hresp_err_req_r <= 1'b0;
+    else          hresp_err_req_r <= invalid_access && !hresp_err_req_r;
 
-  // FIXME - add 2-cycle error response for invalid access.
-  assign HRESP = invalid_access ? 1'b1 : 1'b0;
+  // Low for the first cycle and high for the second, HRESP high for both.
+  assign HREADYOUT = !(invalid_access && !hresp_err_req_r);
+  assign HRESP     =   invalid_access || hresp_err_req_r;
 
 endmodule
 

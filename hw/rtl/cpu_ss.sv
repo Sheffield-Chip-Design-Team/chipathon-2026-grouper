@@ -1,7 +1,8 @@
 module cpu_ss #(
   parameter int ADDR_WIDTH = 32,
   parameter int DATA_WIDTH = 32,
-  parameter int NUM_IRQ = 1
+  parameter int NUM_IRQ = 1,
+  parameter bit ENABLE_TRACE = 1'b0    // sim-only instruction trace, consumed by ahb_debug
 ) (
   input logic HCLK,
   input logic HRESETn,
@@ -25,7 +26,11 @@ module cpu_ss #(
   input logic                   HRESP,
 
   // Interrupts
-  input logic [NUM_IRQ-1:0]     irq
+  input logic [NUM_IRQ-1:0]     irq,
+
+  // Instruction trace (all zeroes unless ENABLE_TRACE)
+  output logic                  trace_valid,
+  output logic [35:0]           trace_data
 );
 
   import ahb3lite_pkg::*;
@@ -60,6 +65,10 @@ module cpu_ss #(
   // IRQ 2 - BUS Error (Unalign Memory Access) + Used for invalid memory address
   assign irq_int = {{(29-NUM_IRQ){1'b0}}, irq, bus_error, 2'b0};
 
+  // Trace Interface
+  logic         cpu_trace_valid;
+  logic [35:0]  cpu_trace_data;
+
   picorv32 #(
 	  .ENABLE_COUNTERS      (1),
 	  .ENABLE_COUNTERS64    (1),
@@ -80,7 +89,7 @@ module cpu_ss #(
 	  .ENABLE_IRQ           (1),
 	  .ENABLE_IRQ_QREGS     (1),
 	  .ENABLE_IRQ_TIMER     (1),
-	  .ENABLE_TRACE         (0),
+	  .ENABLE_TRACE         (ENABLE_TRACE),
 	  .REGS_INIT_ZERO       (0),
 	  .MASKED_IRQ           (32'h 0000_0000),
 	  .LATCHED_IRQ          (32'h ffff_ffff),
@@ -123,9 +132,14 @@ module cpu_ss #(
     .eoi          (eoi),
 
 	  // Trace Interface
-    .trace_valid  (),
-    .trace_data   ()
+    .trace_valid  (cpu_trace_valid),
+    .trace_data   (cpu_trace_data)
   );
+
+  // picorv32 leaves trace_data at 'x when ENABLE_TRACE is 0 - don't let that
+  // leak out of the subsystem
+  assign trace_valid = ENABLE_TRACE && cpu_trace_valid;
+  assign trace_data  = ENABLE_TRACE ? cpu_trace_data : '0;
 
   // convert native memory signals to AHB-Lite equivalents:
 
@@ -171,7 +185,7 @@ module cpu_ss #(
   assign HBURST     = '0;  // no burst transactions
   assign HMASTLOCK  = '0;  // no locked transactions
   assign HPROT      = 4'b0001; // this will default to data fetch (user access, non-bufferable, non-cacheable)
-  assign HTRANS     = (mem_la_read || mem_la_write) ? HTRANS_BUSY : HTRANS_IDLE;  // Non-Sequential or Idle only
+  assign HTRANS     = (mem_la_read || mem_la_write) ? HTRANS_NONSEQ : HTRANS_IDLE;  // Non-Sequential or Idle only
   assign HWDATA     = mem_wdata;
   assign HWRITE     = mem_la_write;
 

@@ -1,0 +1,30 @@
+CAPI=2:
+
+name: sharc:comms_ip:ahb_gpio_ctrl:0.0.1
+description: AHB-Lite GPIO mux control registers (RTL only, no testbench)
+
+filesets:
+  rtl:
+    files:
+      - gpio_ctrl_pkg.sv:     {file_type: systemVerilogSource}
+      - ahb_gpio_ctrl.sv:     {file_type: systemVerilogSource}
+    depend:
+      - sharc:common_ip:common:0.0.1
+      - sharc:amba_ip:ahb3lite_pkg:0.0.1
+
+targets:
+  default: &rtl
+    filesets: [rtl]
+    toplevel: ahb_gpio_ctrl
+
+  lint:
+    <<: *rtl
+    description: Verilator lint-only check (no simulation)
+    flow: sim
+    flow_options:
+      tool: verilator
+      mode: lint-only
+      verilator_options:
+        - --sv
+        - -Wall
+        - -Wno-fatal
