@@ -123,8 +123,8 @@ module grouper_soc_hello_tb;
   grouper_soc_top #(
     .NUM_GPIO                    (NUM_GPIO)
   ) DUT (
-    .sysclk                    (clk),
-    .reset_btn_n               (rst_n),
+    .clk                       (clk),
+    .async_rst_n               (rst_n),
 
     .uart_tx                   (uart_tx),
     .uart_rx                   (uart_rx),
