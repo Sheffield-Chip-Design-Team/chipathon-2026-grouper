@@ -1,4 +1,4 @@
-module spi_rx #(
+module spi_m_rx #(
   parameter int DATA_WIDTH = 8,
   parameter int FIFO_DEPTH = 4
 ) (

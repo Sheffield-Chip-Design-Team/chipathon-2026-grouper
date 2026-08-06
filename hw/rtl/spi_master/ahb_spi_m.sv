@@ -1,7 +1,6 @@
 // AHB spi master
 
-
-module ahb_spi_master #(
+module ahb_spi_m #(
   parameter int ADDR_WIDTH = 32,
   parameter int DATA_WIDTH = 32
 ) (
@@ -72,20 +71,19 @@ logic        ctrl_ie_err;
 
 
 //CMD register 
-
 logic        cmd_start;
-logic [7:0] cmd_opcode;
+logic [7:0]  cmd_opcode;
 logic        cmd_en;
 logic        cmd_addr_en;
-logic [1:0] cmd_addr_bytes;
+logic [1:0]  cmd_addr_bytes;
 logic        cmd_data_en;
 logic        cmd_dir;
-logic [4:0] cmd_dummy;
-logic [7:0] cmd_len;
+logic [4:0]  cmd_dummy;
+logic [7:0]  cmd_len;
 
   
-  // Status registers
- logic status_busy;
+// Status registers
+logic status_busy;
 
 logic status_tx_empty;
 logic status_tx_full;

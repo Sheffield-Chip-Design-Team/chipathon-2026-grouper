@@ -1,5 +1,5 @@
 
-module spi_tx #(
+module spi_m_tx #(
   parameter int DATA_WIDTH = 8,
   parameter int FIFO_DEPTH = 4
 

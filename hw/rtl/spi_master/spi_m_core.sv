@@ -30,7 +30,7 @@ module spi_master #(
   output logic                    done,
   
   // FIFO interfaces
-   input  logic                    flush_tx_fifo,
+  input  logic                   flush_tx_fifo,
   input  logic [DATA_WIDTH-1:0]   tx_data,
   input  logic                    tx_write,
   output logic                    tx_full,
@@ -48,7 +48,6 @@ module spi_master #(
   output logic                    spi_cs_n
 );
  
-  
   logic spi_clk_en;
 
   spi_clk_div #(
@@ -61,7 +60,7 @@ module spi_master #(
     .zero     (spi_clk_en)
   );
 
-  spi_tx #(
+  spi_m_tx #(
     .DATA_WIDTH (DATA_WIDTH),
     .FIFO_DEPTH (FIFO_DEPTH)
     
@@ -102,7 +101,7 @@ module spi_master #(
     .spi_cs_n       (spi_cs_n)
 );
 
- spi_rx #(
+ spi_m_rx #(
     .DATA_WIDTH (DATA_WIDTH),
     .FIFO_DEPTH (FIFO_DEPTH)
     
