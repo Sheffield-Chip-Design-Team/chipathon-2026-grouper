@@ -6,10 +6,9 @@ python3.12 -m venv .env
 source .env/bin/activate
 ```
 
-## 2) Install FuseSoC and dependencies
+## 2) Install python simulation dependencies
 ```bash
-pip install --upgrade pip
-pip install fusesoc
+pip install -e .
 ```
 
 ## 3) Add FuseSoC libraries (local + picorv32)
@@ -19,8 +18,9 @@ fusesoc library add https://github.com/Sheffield-Chip-Design-Team/picorv32
 fusesoc library update picorv32
 ```
 
-## 4) Run simulation (no export)
+## 4) Run simulation 
 ```bash
+fusesoc list-cores # list all 'cores'
 fusesoc run --no-export --target=tb_top grouper_soc
 ```
 
