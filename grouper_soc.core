@@ -21,6 +21,18 @@ parameters:
       Consumed with `ifdef, so only list it in targets that want it on -
       DEBUG_PERIPH is handled the same way.
     default: false
+  ROM_INIT_CONST:
+    datatype: bool
+    paramtype: vlogdefine
+    description: >
+      Build ahb_rom's contents from sw/code.vmem (a list of continuous
+      assigns) instead of loading sw/code.hex with $readmemh. This is the
+      synthesisable form - standard cells have no initial-value mechanism, so
+      $readmemh cannot produce a mask ROM - and is what a synthesis target
+      should set. Simulation wants the default ($readmemh), which picks up a
+      rebuilt firmware without re-elaborating.
+      Consumed with `ifdef, so only list it in targets that want it on.
+    default: false
 
 # These build sw/src/main.c as the firmware top level. To run one of the
 # tests in sw/tests instead, set FW_TEST 
@@ -60,7 +72,6 @@ filesets:
     files:
       - sw/code.vmem:                                     {file_type: systemVerilogSource, is_include_file: true}
       - sw/code.hex:                                      {file_type: systemVerilogSource, is_include_file: true}
-      - sw/fw_id.svh:                                     {file_type: systemVerilogSource, is_include_file: true}
   tb:
     files:
       - hw/tb/top/grouper_soc_hello_tb.sv:                       {file_type: systemVerilogSource}
