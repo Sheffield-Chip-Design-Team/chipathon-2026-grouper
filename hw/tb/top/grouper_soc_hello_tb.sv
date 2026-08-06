@@ -15,6 +15,8 @@ module grouper_soc_hello_tb;
   // The firmware computes its baud divisor from a hardcoded core clock
   localparam int CLK_FREQ = 10_000_000;  // Frequency of the clock in Hz
 
+  localparam int NUM_GPIO = 16;          // Must match grouper_soc_top
+
   // Clock and reset
   logic clk;
   logic rst_n;
@@ -86,39 +88,59 @@ module grouper_soc_hello_tb;
     if (~uart_tx) ->uart_tx_invalid_stop_bit;
   endtask
 
+  // GPIO pad model ---------------------------------------------------------------------------
+
+  logic [NUM_GPIO-1:0] gpio_in;
+  logic [NUM_GPIO-1:0] gpio_out;
+  logic [NUM_GPIO-1:0] gpio_oe;
+  logic [NUM_GPIO-1:0] gpio_cs;
+  logic [NUM_GPIO-1:0] gpio_sl;
+  logic [NUM_GPIO-1:0] gpio_ie;
+  logic [NUM_GPIO-1:0] gpio_pu;
+  logic [NUM_GPIO-1:0] gpio_pd;
+
+  // What the testbench drives onto a pad the DUT is not driving.
+  logic [NUM_GPIO-1:0] gpio_drive = '0;
+
+  // A minimal pad cell, enough to make the firmware self-checking: an output
+  // loops back to its own input, so firmware can verify what it drove by
+  // reading GPIO_IN, and a pad with its input buffer disabled reads 0 - the
+  // behaviour ahb_gpio_ctrl relies on when it declines to mask GPIO_IN with
+  // GPIO_IE. Pull-ups and pull-downs are not modelled.
+  for (genvar i = 0; i < NUM_GPIO; i++) begin : gen_pad
+    assign gpio_in[i] = !gpio_ie[i] ? 1'b0
+                      :  gpio_oe[i] ? gpio_out[i]
+                                    : gpio_drive[i];
+  end
+
+  // Drive one pad from the testbench side.
+  task automatic gpio_drive_pin(input int pin, input bit value);
+    gpio_drive[pin] = value;
+  endtask
+
   // DUT instantiation ------------------------------------------------------------------------
 
-  // FIXME - instantiate grouper_soc_top
-  
-  digital_ss  DUT (
-      .clk                       (clk),
-      .rst_n                     (rst_n),
+  grouper_soc_top #(
+    .NUM_GPIO                    (NUM_GPIO)
+  ) DUT (
+    .sysclk                    (clk),
+    .reset_btn_n               (rst_n),
 
-      .uart_tx                   (uart_tx),
-      .uart_rx                   (uart_rx),
+    .uart_tx                   (uart_tx),
+    .uart_rx                   (uart_rx),
 
-      .gpio_in                   ('0),
-      .gpio_out                  (),
-      .gpio_oe                   (),
-      .gpio_cs                   (),
-      .gpio_sl                   (),
-      .gpio_ie                   (),
-      .gpio_pu                   (),
-      .gpio_pd                   (),
-      .gpio_sync_en_n            (),
-
-      .ext_ahb_m_if_HADDR        (),
-      .ext_ahb_m_if_HBURST       (),
-      .ext_ahb_m_if_HMASTLOCK    (),
-      .ext_ahb_m_if_HPROT        (),
-      .ext_ahb_m_if_HSIZE        (),
-      .ext_ahb_m_if_HTRANS       (),
-      .ext_ahb_m_if_HWDATA       (),
-      .ext_ahb_m_if_HWRITE       (),
-      .ext_ahb_m_if_HRDATA       ('0),
-      .ext_ahb_m_if_HREADY       (1'b1),
-      .ext_ahb_m_if_HRESP        (1'b0)
+    .gpio_in                   (gpio_in),
+    .gpio_out                  (gpio_out),
+    .gpio_oe                   (gpio_oe),
+    .gpio_cs                   (gpio_cs),
+    .gpio_sl                   (gpio_sl),
+    .gpio_ie                   (gpio_ie),
+    .gpio_pu                   (gpio_pu),
+    .gpio_pd                   (gpio_pd)
   );
+
+  // grouper_soc_top does not expose the external AHB master - it ties those
+  // signals off internally, and this testbench never drove them.
 
   // Clock and Reset ------------------------------------------------------------------------
 
