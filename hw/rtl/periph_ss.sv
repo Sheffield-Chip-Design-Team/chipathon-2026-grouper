@@ -1,63 +1,68 @@
 // Peripheral subsystem
 
 module periph_ss #(
-  parameter int ADDR_WIDTH = 32,
-  parameter int DATA_WIDTH = 32,
-  parameter int NUM_GPIO   = 16
+  parameter int                      ADDR_WIDTH     = 32,
+  parameter int                      DATA_WIDTH     = 32,
+  parameter int                      EXT_ADDR_WIDTH = 8,
+  parameter int                      EXT_DATA_WIDTH = 8,
+  parameter int                      NUM_GPIO       = 16
 ) (
-  input logic                    HCLK,
-  input logic                    HRESETn,
+  input logic                        HCLK,
+  input logic                        HRESETn,
 
   // AHB Slave Interface (From CPU)
-  input logic [ADDR_WIDTH-1:0]   HADDR,
-  input logic [2:0]              HBURST,
-  input logic                    HMASTLOCK,
-  input logic [3:0]              HPROT,
-  input logic [2:0]              HSIZE,
-  input logic [1:0]              HTRANS,
-  input logic [DATA_WIDTH-1:0]   HWDATA,
-  input logic                    HWRITE,
+  input logic [ADDR_WIDTH-1:0]       HADDR,
+  input logic [2:0]                  HBURST,
+  input logic                        HMASTLOCK,
+  input logic [3:0]                  HPROT,
+  input logic [2:0]                  HSIZE,
+  input logic [1:0]                  HTRANS,
+  input logic [DATA_WIDTH-1:0]       HWDATA,
+  input logic                        HWRITE,
 
-  output logic [DATA_WIDTH-1:0]  HRDATA,
-  output logic                   HREADY,
-  output logic                   HRESP,
+  output logic [DATA_WIDTH-1:0]      HRDATA,
+  output logic                       HREADY,
+  output logic                       HRESP,
 
   // Interrupts
-  output logic                   uart_rx_irq,
-  output logic                   uart_rx_error_irq,
+  output logic                       uart_rx_irq,
+  output logic                       uart_rx_error_irq,
 
   // UART interface
-  output logic                   uart_tx,
-  input  logic                   uart_rx,
+  output logic                       uart_tx,
+  input  logic                       uart_rx,
 
   // GPIO pin control interface
-  input  wire [NUM_GPIO-1:0]     gpio_in,                 
-  output wire [NUM_GPIO-1:0]     gpio_out,                 
-  output wire [NUM_GPIO-1:0]     gpio_oe,                  
-  output wire [NUM_GPIO-1:0]     gpio_cs,               
-  output wire [NUM_GPIO-1:0]     gpio_sl,                 
-  output wire [NUM_GPIO-1:0]     gpio_ie,               
-  output wire [NUM_GPIO-1:0]     gpio_pu,
-  output wire [NUM_GPIO-1:0]     gpio_pd,
-  output wire [NUM_GPIO-1:0]     gpio_sync_en_n,
+  input  wire [NUM_GPIO-1:0]         gpio_in,                 
+  output wire [NUM_GPIO-1:0]         gpio_out,                 
+  output wire [NUM_GPIO-1:0]         gpio_oe,                  
+  output wire [NUM_GPIO-1:0]         gpio_cs,               
+  output wire [NUM_GPIO-1:0]         gpio_sl,                 
+  output wire [NUM_GPIO-1:0]         gpio_ie,               
+  output wire [NUM_GPIO-1:0]         gpio_pu,
+  output wire [NUM_GPIO-1:0]         gpio_pd,
+  output wire [NUM_GPIO-1:0]         gpio_sync_en_n,
 
   // CPU instruction trace (only consumed by ahb_debug under DEBUG_PERIPH)
-  input  logic                   trace_valid,
-  input  logic [35:0]            trace_data,
+
+  /* verilator lint_off UNUSED */
+  input  logic                       trace_valid,
+  input  logic [35:0]                trace_data,
+  /* verilator lint_on UNUSED */
 
   // External AHB master interface
-  output logic [ADDR_WIDTH-1:0]  ext_HADDR,
-  output logic [2:0]             ext_HBURST,
-  output logic                   ext_HMASTLOCK,
-  output logic [3:0]             ext_HPROT,
-  output logic [2:0]             ext_HSIZE,
-  output logic [1:0]             ext_HTRANS,
-  output logic [DATA_WIDTH-1:0]  ext_HWDATA,
-  output logic                   ext_HWRITE,
+  output logic [EXT_ADDR_WIDTH-1:0]  ext_HADDR,
+  output logic [2:0]                 ext_HBURST,
+  output logic                       ext_HMASTLOCK,
+  output logic [3:0]                 ext_HPROT,
+  output logic [2:0]                 ext_HSIZE,
+  output logic [1:0]                 ext_HTRANS,
+  output logic [EXT_DATA_WIDTH-1:0]  ext_HWDATA,
+  output logic                       ext_HWRITE,
 
-  input  logic [DATA_WIDTH-1:0]  ext_HRDATA,
-  input  logic                   ext_HREADY,
-  input  logic                   ext_HRESP
+  input  logic [EXT_DATA_WIDTH-1:0]  ext_HRDATA,
+  input  logic                       ext_HREADY,
+  input  logic                       ext_HRESP
 );
 
   // ---- AHBlite interfaces ------------------------------------------------------------
@@ -309,7 +314,7 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
     .spi_s_mosi_i    (mux_spi_s_mosi_i),
     .spi_s_miso_o    (mux_spi_s_miso_o),
 
-    // FIXME - tied off until the SPI master and QSPI peripherals land
+    // FIXME - tied off until the SPI master and QSPI peripherals are implemented
     .spi_m_sck_o     (1'b0),
     .spi_m_mosi_o    (1'b0),
     .spi_m_miso_i    (),
@@ -348,6 +353,7 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
   assign ahb_ext_periph.HRESP     = ext_HRESP;
 
   //--- Debug Peripheral -------------------------------------------------------------------------
+  // Only instantiated if DEBUG_PERIPH is defined, otherwise the trace signals are unused.
 
 `ifdef DEBUG_PERIPH
   ahb_debug #(

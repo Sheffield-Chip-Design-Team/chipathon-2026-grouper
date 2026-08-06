@@ -1,40 +1,42 @@
 module digital_ss #(
-  parameter int                   ADDR_WIDTH = 32,
-  parameter int                   DATA_WIDTH = 32,
-  parameter int                   NUM_GPIO   = 16
+  parameter int                      ADDR_WIDTH = 32,
+  parameter int                      DATA_WIDTH = 32,
+  parameter int                      EXT_ADDR_WIDTH = 8,
+  parameter int                      EXT_DATA_WIDTH = 8,
+  parameter int                      NUM_GPIO   = 16
 )(
   // Clock and Reset
-  input logic                     clk,                      // System clock
-  input logic                     rst_n,                    // System reset (active low)
+  input logic                        clk,                     // System clock
+  input logic                        rst_n,                   // System reset (active low)
 
   // UART Interface
-  output logic                    uart_tx,                  // UART TX
-  input  logic                    uart_rx,                  // UART RX
+  output logic                       uart_tx,                 // UART Transmit
+  input  logic                       uart_rx,                 // UART Receive
 
   // GPIO PAD Interface
-  input  logic [NUM_GPIO-1:0]     gpio_in,                  // GPIO Input value
-  output logic [NUM_GPIO-1:0]     gpio_out,                 // GPIO Output value
-  output logic [NUM_GPIO-1:0]     gpio_oe,                  // GPIO Output enable
-  output logic [NUM_GPIO-1:0]     gpio_cs,                  // GPIO Input type           (0=CMOS, 1=Schmitt)
-  output logic [NUM_GPIO-1:0]     gpio_sl,                  // GPIO Slew rate            (0=fast, 1=slow)
-  output logic [NUM_GPIO-1:0]     gpio_ie,                  // GPIO Input enable
-  output logic [NUM_GPIO-1:0]     gpio_pu,                  // GPIO Pull-up
-  output logic [NUM_GPIO-1:0]     gpio_pd,                  // GPIO Pull-down 
+  input  logic [NUM_GPIO-1:0]        gpio_in,                 // GPIO Input value
+  output logic [NUM_GPIO-1:0]        gpio_out,                // GPIO Output value
+  output logic [NUM_GPIO-1:0]        gpio_oe,                 // GPIO Output enable
+  output logic [NUM_GPIO-1:0]        gpio_cs,                 // GPIO Input type           (0=CMOS, 1=Schmitt)
+  output logic [NUM_GPIO-1:0]        gpio_sl,                 // GPIO Slew rate            (0=fast, 1=slow)
+  output logic [NUM_GPIO-1:0]        gpio_ie,                 // GPIO Input enable
+  output logic [NUM_GPIO-1:0]        gpio_pu,                 // GPIO Pull-up
+  output logic [NUM_GPIO-1:0]        gpio_pd,                 // GPIO Pull-down 
 
-  output logic [NUM_GPIO-1:0]     gpio_sync_en_n,          // GPIO Synchronizer enable (0=sync, 1=async)
+  output logic [NUM_GPIO-1:0]        gpio_sync_en_n,          // GPIO Synchronizer enable (0=sync, 1=async)
 
   // External AHB Master Interface
-  output logic [ADDR_WIDTH-1:0]   ext_ahb_m_if_HADDR,       // External AHB3 lite Address bus
-  output logic [2:0]              ext_ahb_m_if_HBURST,      // External AHB3 lite Burst type
-  output logic                    ext_ahb_m_if_HMASTLOCK,   // External AHB3 lite Master lock
-  output logic [3:0]              ext_ahb_m_if_HPROT,       // External AHB3 lite Protection type
-  output logic [2:0]              ext_ahb_m_if_HSIZE,       // External AHB3 lite Size type
-  output logic [1:0]              ext_ahb_m_if_HTRANS,      // External AHB3 lite Transfer type
-  output logic [DATA_WIDTH-1:0]   ext_ahb_m_if_HWDATA,      // External AHB3 lite Write data
-  output logic                    ext_ahb_m_if_HWRITE,      // External AHB3 lite Write signal
-  input  logic [DATA_WIDTH-1:0]   ext_ahb_m_if_HRDATA,      // External AHB3 lite Read data
-  input  logic                    ext_ahb_m_if_HREADY,      // External AHB3 lite Ready signal
-  input  logic                    ext_ahb_m_if_HRESP        // External AHB3 lite Response signal
+  output logic [EXT_ADDR_WIDTH-1:0]  ext_ahb_m_if_HADDR,      // External AHB3 lite Address bus
+  output logic [2:0]                 ext_ahb_m_if_HBURST,     // External AHB3 lite Burst type
+  output logic                       ext_ahb_m_if_HMASTLOCK,  // External AHB3 lite Master lock
+  output logic [3:0]                 ext_ahb_m_if_HPROT,      // External AHB3 lite Protection type
+  output logic [2:0]                 ext_ahb_m_if_HSIZE,      // External AHB3 lite Size type
+  output logic [1:0]                 ext_ahb_m_if_HTRANS,     // External AHB3 lite Transfer type
+  output logic [EXT_DATA_WIDTH-1:0]  ext_ahb_m_if_HWDATA,     // External AHB3 lite Write data
+  output logic                       ext_ahb_m_if_HWRITE,     // External AHB3 lite Write signal
+  input  logic [EXT_DATA_WIDTH-1:0]  ext_ahb_m_if_HRDATA,     // External AHB3 lite Read data
+  input  logic                       ext_ahb_m_if_HREADY,     // External AHB3 lite Ready signal
+  input  logic                       ext_ahb_m_if_HRESP       // External AHB3 lite Response signal
 );
 
   // --- Internal Signals ------------------------------------------------------------
