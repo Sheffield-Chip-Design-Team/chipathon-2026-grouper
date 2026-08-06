@@ -2,12 +2,17 @@
 `define DUMP_FILE "dump.fst"
 `endif
 
-module picorv32_hello_tb;
+module grouper_soc_hello_tb;
   timeunit 1ns/1ps;
 
-  localparam real CLK_FREQ = 10e6;
-  localparam int TX_BAUD_RATE = 19200; // Baud rate of uart_tx
-  localparam int RX_BAUD_RATE = 19200; // Baud rate of uart_rx (useful for testing resync)
+  localparam int TX_BAUD_RATE = 19200;   // Baud rate of uart_tx
+  localparam int RX_BAUD_RATE = 19200;   // Baud rate of uart_rx (useful for testing resync)
+
+  // The firmware computes its baud divisor from a hardcoded core clock
+  // (SYS_CLK_HZ in sw/src/uart/uart.h) - if this doesn't match it, the DUT
+  // transmits at the wrong baud rate and this testbench decodes nothing but
+  // framing errors. Keep the two in step.
+  localparam int CLK_FREQ = 10_000_000;  // Frequency of the clock in Hz
 
   logic clk;
   logic rst_n;
@@ -17,13 +22,36 @@ module picorv32_hello_tb;
 
   mailbox #(byte) uart_tx_mb = new();
 
-  picorv32_hello_core #(
-    .CLK_FREQ (CLK_FREQ)
-  ) DUT (
-    .clk      (clk),
-    .rst_n    (rst_n),
-    .uart_tx  (uart_tx),
-    .uart_rx  (uart_rx)
+  // FIXME - instantiate grouper_soc_top
+  
+  digital_ss  u_grouper_soc_core (
+      .clk                       (clk),
+      .rst_n                     (rst_n),
+
+      .uart_tx                   (uart_tx),
+      .uart_rx                   (uart_rx),
+
+      .gpio_in                   ('0),
+      .gpio_out                  (),
+      .gpio_oe                   (),
+      .gpio_cs                   (),
+      .gpio_sl                   (),
+      .gpio_ie                   (),
+      .gpio_pu                   (),
+      .gpio_pd                   (),
+      .gpio_sync_en_n            (),
+
+      .ext_ahb_m_if_HADDR        (),
+      .ext_ahb_m_if_HBURST       (),
+      .ext_ahb_m_if_HMASTLOCK    (),
+      .ext_ahb_m_if_HPROT        (),
+      .ext_ahb_m_if_HSIZE        (),
+      .ext_ahb_m_if_HTRANS       (),
+      .ext_ahb_m_if_HWDATA       (),
+      .ext_ahb_m_if_HWRITE       (),
+      .ext_ahb_m_if_HRDATA       ('0),
+      .ext_ahb_m_if_HREADY       (1'b1),
+      .ext_ahb_m_if_HRESP        (1'b0)
   );
 
   initial begin
@@ -89,6 +117,17 @@ module picorv32_hello_tb;
         if (value == 8'h0a) ->uart_tx_newline;
       end
     end
+  end
+
+  // A baud rate mismatch between the DUT and TX_BAUD_RATE shows up as nothing
+  // but framing errors, and without this the run just goes quiet until
+  // TB_TIMEOUT. Say so the first time it happens.
+  initial begin
+    fork
+      @(uart_tx_invalid_start_bit);
+      @(uart_tx_invalid_stop_bit);
+    join_any
+    $display("TB_ERROR: uart_tx framing error - DUT baud rate does not match TX_BAUD_RATE (%0d). Check CLK_FREQ here against SYS_CLK_HZ in sw/src/uart/uart.h", TX_BAUD_RATE);
   end
 
   task uart_rx_send(input byte c);
