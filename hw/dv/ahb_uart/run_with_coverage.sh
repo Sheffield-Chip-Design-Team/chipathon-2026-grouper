@@ -7,10 +7,10 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-work_root="$repo_root/build/sharc_dv_ahb_uart_cocotb_0.0.1/default"
+work_root="$repo_root/build/sharc_comms_ip_ahb_uart_pyuvm_0.0.1/default"
 
 cd "$repo_root"
-PYTHONPATH="$repo_root:$PYTHONPATH" fusesoc run --target=default sharc:dv:ahb_uart_cocotb "$@"
+fusesoc run --target=default sharc:comms_ip:ahb_uart_pyuvm "$@"
 
 cd "$work_root"
 bash "$repo_root/hw/dv/ahb_uart/scripts/report_coverage.sh"

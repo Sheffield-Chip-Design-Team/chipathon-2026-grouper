@@ -1,0 +1,11 @@
+`verilator_config
+
+// Lint waivers for the Grouper SoC. The `verilator_config directive above is
+// mandatory and must be the first line - without it every command below is a
+// bare "syntax error, unexpected IDENTIFIER".
+//
+// NOTE: Do not start a comment here with the word "verilator": that is parsed as a
+// metacomment pragma rather than a comment, and fails the same way.
+
+// Ignore any warnings from inside the PICORV32
+lint_off -file "*picorv32.v"

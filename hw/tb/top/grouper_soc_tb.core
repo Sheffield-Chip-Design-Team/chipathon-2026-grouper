@@ -1,0 +1,90 @@
+CAPI=2:
+name: sharc:soc_ip:grouper_soc_tb:0.0.1
+description: SystemVerilog top-level testbench for the Grouper SoC
+
+# The firmware top level defaults to sw/src/main.c. To run one of the tests in
+# sw/tests instead, set FW_TEST; to build it with -DDEBUG, set FW_DEBUG=1.
+#
+#   FW_TEST=fibonnaci fusesoc run --target=tb_top_debug sharc:soc_ip:grouper_soc_tb
+#
+# `sw/scripts/build_fw.sh --list` shows what is available.
+#
+
+scripts:
+  build_fw:
+    cmd: [bash, -c, '"exec $${FUSESOC_REPO_ROOT:-../../..}/sw/scripts/build_fw.sh"']
+
+  build_fw_debug:
+    cmd: [bash, -c, '"exec $${FUSESOC_REPO_ROOT:-../../..}/sw/scripts/build_fw.sh --debug"']
+
+parameters:
+  DEBUG_PERIPH:
+    datatype: bool
+    paramtype: vlogdefine
+    description: Instantiate the ahb_debug peripheral. Pair with FW_DEBUG=1.
+    default: false
+  CPU_TRACE:
+    datatype: bool
+    paramtype: vlogdefine
+    description: Enable picorv32's instruction trace. Needs DEBUG_PERIPH too.
+    default: false
+
+filesets:
+  rtl:
+    depend:
+      - sharc:soc_ip:grouper_soc:0.0.1
+  tb:
+    files:
+      - grouper_soc_hello_tb.sv:                          {file_type: systemVerilogSource}
+
+# No YAML merge key between targets - prevents build scripts running multiple times
+targets:
+  default:
+    description: Grouper SoC top-level simulation.
+    filesets: [rtl, tb]
+    flow: sim
+    flow_options: &flow_opts
+      tool: verilator
+      verilator_options:
+        - -Wno-TIMESCALEMOD
+        - -Wno-fatal
+        - --sv
+        - --trace
+        - --trace-fst
+        - --binary
+        - --coverage
+    toplevel: grouper_soc_hello_tb
+    hooks:
+      pre_build: [build_fw]
+
+  tb_top:
+    description: Grouper SoC top-level simulation.
+    filesets: [rtl, tb]
+    flow: sim
+    flow_options: *flow_opts
+    toplevel: grouper_soc_hello_tb
+    hooks:
+      pre_build: [build_fw]
+
+  tb_top_debug:
+    description: As tb_top, plus debug firmware and the ahb_debug peripheral.
+    filesets: [rtl, tb]
+    flow: sim
+    flow_options: *flow_opts
+    toplevel: grouper_soc_hello_tb
+    parameters:
+      - DEBUG_PERIPH=true
+    hooks:
+      pre_build: [build_fw_debug]
+
+  tb_top_trace:
+    description: As tb_top_debug, plus the CPU instruction trace.
+    filesets: [rtl, tb]
+    flow: sim
+    flow_options: *flow_opts
+    toplevel: grouper_soc_hello_tb
+    parameters:
+      - DEBUG_PERIPH=true
+      - CPU_TRACE=true
+    hooks:
+      pre_build: [build_fw_debug]
