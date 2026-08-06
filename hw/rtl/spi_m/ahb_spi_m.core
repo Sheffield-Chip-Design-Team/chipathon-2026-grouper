@@ -1,6 +1,6 @@
 CAPI=2:
 
-name: sharc:comms_ip:ahb_spi_master:0.0.1
+name: sharc:comms_ip:ahb_spi_m:0.0.1
 description: AHB-Lite wrapped SPI master (RTL only, no testbench)
 
 filesets:
