@@ -1,0 +1,24 @@
+CAPI=2:
+
+name: sharc:comms_ip:ahb_gpio_ctrl_directed:0.0.1
+description: Directed cocotb testbench for ahb_gpio_ctrl (cocotb + Verilator)
+
+filesets:
+  rtl:
+    depend:
+      - sharc:comms_ip:ahb_gpio_ctrl:0.0.1
+
+targets:
+  default:
+    flow: sim
+    flow_options:
+      tool: verilator
+      cocotb_module: hw.tb.gpio.test_gpio
+      verilator_options:
+        - -Wno-TIMESCALEMOD
+        - --sv
+        - --trace
+      run_options:
+        - --trace
+    filesets: [rtl]
+    toplevel: ahb_gpio_ctrl

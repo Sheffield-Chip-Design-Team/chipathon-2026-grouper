@@ -1,14 +1,4 @@
-# gf180mcu Project Template
-
-Project template for wafer.space MPW runs using the gf180mcu PDK.
-
-## Prerequisites
-
-We use a custom fork of the [gf180mcuD PDK variant](https://github.com/wafer-space/gf180mcu) until all changes have been upstreamed.
-
-To clone the latest PDK version, simply run `make clone-pdk`.
-
-In the next step, install LibreLane by following the Nix-based installation instructions: https://librelane.readthedocs.io/en/latest/installation/nix_installation/index.html
+# GrouperSoC gf180mcu Chipathon 2026 Template
 
 ## Implement the Design
 
@@ -116,3 +106,35 @@ SLOT=0p5x0p5 make librelane-padring
 ## Precheck
 
 To check whether your design is suitable for manufacturing, run the [gf180mcu-precheck](https://github.com/wafer-space/gf180mcu-precheck) with your layout.
+
+
+# Grouper SoC — Simulation Quick Start
+
+## 1) Create + activate a virtual environment
+```bash
+python3.12 -m venv .env
+source .env/bin/activate
+```
+
+## 2) Install FuseSoC and dependencies
+```bash
+pip install --upgrade pip
+pip install fusesoc
+```
+
+## 3) Add FuseSoC libraries (local + picorv32)
+```bash
+fusesoc library add grouper_soc .
+fusesoc library add https://github.com/Sheffield-Chip-Design-Team/picorv32
+fusesoc library update picorv32
+```
+
+## 4) Run simulation (no export)
+```bash
+fusesoc run --no-export --target=tb_top grouper_soc
+```
+
+## Notes
+- This flow requires at least python 3.12 (3.13 is the maximum version for fusesoc + cocotb)
+- Verilator 5+ is required in PATH.
+- risc-v-64-unkown-elf needed here
