@@ -12,8 +12,7 @@
 // "test\n" then "exit\n" over UART RX, each keyed off seeing a newline from
 // the DUT (hw/tb/top/grouper_soc_hello_tb.sv), so the expected transcript is:
 //
-//     What is your name?
-//     Hello test!
+//     Hello World!
 //     Bye!
 
 static char rx_buffer[32] = {0};
@@ -23,23 +22,23 @@ static void process_cmd(void) {
 
   if (strcmp(rx_buffer, "exit") == 0) {
     puts("Bye!");
-    g_sim_exit();
+    g_test_end();
   }
 
   printf("Hello %s!\n", rx_buffer);
 }
 
 int main(void) {
+
   set_irq_mask(0xfffffff8); // Enable system IRQs (not UART or other IRQs)
+
   debug_str("CPU Ready\n");
+  
   init_uart();
 
-  puts("What is your name?");
-
+  g_test_begin("uart_echo");
+  
   while (1) {
-    // No echo - see the note in sw/src/main.c: the testbench sends its next
-    // line as soon as it sees a newline from us, and the 4-deep RX FIFO
-    // cannot absorb one while we are transmitting a reply.
     g_getline(rx_buffer, sizeof(rx_buffer), false);
     process_cmd();
     rx_buffer[0] = 0;

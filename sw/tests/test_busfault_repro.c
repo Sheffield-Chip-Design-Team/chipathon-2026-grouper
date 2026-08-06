@@ -14,7 +14,7 @@ int main(void) {
   set_irq_mask(0xfffffff8);   // bus error / ebreak / timer enabled
   init_uart();
 
-  puts("repro: start");
+  g_test_begin("busfault_repro");
 
   memcpy(b, "abcdefg", 8);
   puts("repro: memcpy ok");

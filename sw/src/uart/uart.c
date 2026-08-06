@@ -12,6 +12,7 @@ static volatile uint32_t *const UART_REGS = (volatile uint32_t*) AHB_UART_BASE;
 // *8 as we have 8x oversampling
 static const int clk_div = (double)SYS_CLK_HZ/(UART_BAUD_RATE*8) + 0.5;
 
+// Initialise the UART to a known state, and set the baud rate divisor. 
 void init_uart(void) {
     uart_ctrl_t x      = {0};
     x.s.ctrl_enable    = 1;
