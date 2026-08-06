@@ -49,6 +49,8 @@ filesets:
       - sharc:comms_ip:ahb_gpio_ctrl:0.0.1
 
     files:
+      - hw/rtl/verilator_waivers.vlt:                     {file_type: vlt}
+
       - hw/rtl/interconnect/ahb_debug.sv:                 {file_type: systemVerilogSource}
       - hw/rtl/interconnect/ahb_conn.sv:                  {file_type: systemVerilogSource}
       - hw/rtl/interconnect/ahb_conn_buff.sv:             {file_type: systemVerilogSource}
