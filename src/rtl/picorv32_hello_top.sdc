@@ -1,6 +1,6 @@
 # Timing Constraints (SDC)
 # Chip: picorv32_hello_top
-# Clock: 20 MHz 50 ns period
+# Clock: 16 MHz 62.5 ns period
 
 current_design picorv32_hello_top
 set_units -time ns

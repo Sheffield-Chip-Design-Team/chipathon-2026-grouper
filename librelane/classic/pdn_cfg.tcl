@@ -27,30 +27,48 @@ set_global_connections
 # across its entire interior (3.0 .. 298.3 x 3.0 .. 512.81) and exposes VDD /
 # VSS only on a ~3um Metal3 perimeter frame. Metal4 is unobstructed, so it is
 # the only layer that can carry power over the macro, and Metal3 is the only
-# layer that can receive it.
+# layer that can receive it -- that part is fixed by the SRAM's own LEF and
+# does not depend on PDN_HORIZONTAL_LAYER below.
 #
 # Structure:
 #
-#   Metal5   (reserved -- parent's straps; RT_MAX_LAYER is Metal4)
+#   Metal5   general mesh horizontal straps (PDN_HORIZONTAL_LAYER) -- was
+#            reserved for the parent's core ring; now carries our own mesh.
+#            See the "Metal5 ownership" note above this file's call site.
 #   Metal4   vertical straps, full die height, cross the SRAMs
-#   Metal3   horizontal straps, trimmed at the SRAMs; SRAM power pins
+#   Metal3   SPARSE rung stripes only (pdn_rung_pitch below, much coarser than
+#            the old full-density mesh), plus the SRAM's own exposed pin tabs
+#            (sram_grid connect, hardcoded to Metal3 regardless of
+#            PDN_HORIZONTAL_LAYER -- see below). Existing only to give
+#            Metal2-Metal4 a reliable connection, not to carry current
+#            itself -- see the note on why below.
 #   Metal2   vertical straps, coincident with Metal4, trimmed at the SRAMs
 #   Metal1   followpin rails on the std cell VDD/VSS pins
 #
-# Every add_pdn_connect below joins ADJACENT layers. The upstream template
-# connects the Metal1 rails straight to the vertical strap layer, which is a
-# single via when that layer is Metal2 but a three-cut Via1+Via2+Via3 stack
-# when it is Metal4. Rather than rely on that stack, Metal2 stripes are added
-# to give the rails a layer-by-layer path up to the grid.
+# Why the Metal3 rungs exist at all (learned the hard way): an earlier
+# version of this file dropped the Metal3 mesh entirely and connected
+# Metal2 straight to Metal4 with a single add_pdn_connect. Metal2 and
+# Metal4 are BOTH vertical (parallel, not crossing), so pdngen has no
+# well-defined intersection point to drop a real via at -- it tried to
+# via-stack through Metal3 anyway and produced degenerate, functionally
+# disconnected slivers (0.01um wide) instead of real vias. This was masked
+# at some die sizes (the two paths were redundant with a full Metal3 mesh)
+# and surfaced as 1524 real PSM-0069 connectivity violations at others
+# (1310x1150) the moment the full mesh was removed -- see TRIAL_NOTES.md.
+# Metal3 (horizontal) crossing Metal2/Metal4 (vertical) is a real
+# perpendicular intersection, which pdngen handles reliably. Keeping a few
+# sparse Metal3 rungs restores that reliability without reinstating the
+# full-density mesh that caused the original routing congestion.
+#
+# Every add_pdn_connect below joins layers that pdngen can via-stack at
+# overlapping stripe locations (adjacent layers get a single via; Metal3
+# rungs crossing Metal2/Metal4 are true perpendicular intersections).
 #
 # If the strap layers change, sram_grid stops connecting and the SRAM power
 # floats silently. Fail loudly instead.
 # ---------------------------------------------------------------------------
 if { $::env(PDN_VERTICAL_LAYER) != "Metal4" } {
     throw APPLICATION "sram_grid requires Metal4 vertical straps (SRAM obstructs Metal1-Metal3), got $::env(PDN_VERTICAL_LAYER)."
-}
-if { $::env(PDN_HORIZONTAL_LAYER) != "Metal3" } {
-    throw APPLICATION "sram_grid requires Metal3 horizontal straps to reach the SRAM power pins, got $::env(PDN_HORIZONTAL_LAYER)."
 }
 if { $::env(PDN_RAIL_LAYER) != "Metal1" } {
     throw APPLICATION "gf180mcu_fd_sc_mcu7t5v0 exposes VDD/VSS on Metal1, got $::env(PDN_RAIL_LAYER)."
@@ -145,17 +163,45 @@ if { $::env(PDN_MULTILAYER) == 1 } {
         -starts_with POWER \
         {*}$arg_list
 
+    # Sparse Metal3 rungs. Real perpendicular crossings with the Metal2 and
+    # Metal4 vertical stripes -- see the "why the Metal3 rungs exist" note
+    # above. pdn_rung_pitch is hardcoded here rather than a config variable:
+    # LibreLane validates config.yaml keys against a fixed schema and
+    # rejects unrecognized ones outright, and this is an internal
+    # implementation detail, not something a run needs to tune per-die-size.
+    # Intentionally much coarser than PDN_HPITCH/PDN_VPITCH (130): this
+    # layer exists to make Metal2-Metal4 vias reliable, not to carry
+    # general current, so it should stay a small fraction of Metal3's
+    # routing resource. Trimmed where the SRAMs obstruct Metal3, same as
+    # the old full mesh.
+    set pdn_rung_layer "Metal3"
+    set pdn_rung_pitch 300
+    set pdn_rung_spacing [expr {($pdn_rung_pitch - 2 * $::env(PDN_HWIDTH)) / 2}]
+    add_pdn_stripe \
+        -grid stdcell_grid \
+        -layer $pdn_rung_layer \
+        -width $::env(PDN_HWIDTH) \
+        -pitch $pdn_rung_pitch \
+        -offset $::env(PDN_HOFFSET) \
+        -spacing $pdn_rung_spacing \
+        -starts_with POWER \
+        {*}$arg_list
+
+    # Metal4-Metal5: adjacent, single Via4. The top of the general mesh.
     add_pdn_connect \
         -grid stdcell_grid \
         -layers "$::env(PDN_VERTICAL_LAYER) $::env(PDN_HORIZONTAL_LAYER)"
 
+    # Metal2-Metal3(rung) and Metal3(rung)-Metal4: the real rail-to-grid
+    # bridge, via true perpendicular crossings rather than the fragile
+    # same-direction Metal2-Metal4 direct connect this file used to have.
     add_pdn_connect \
         -grid stdcell_grid \
-        -layers "$pdn_intermediate_layer $::env(PDN_HORIZONTAL_LAYER)"
+        -layers "$pdn_intermediate_layer $pdn_rung_layer"
 
     add_pdn_connect \
         -grid stdcell_grid \
-        -layers "$pdn_intermediate_layer $::env(PDN_VERTICAL_LAYER)"
+        -layers "$pdn_rung_layer $::env(PDN_VERTICAL_LAYER)"
 } else {
 
     throw APPLICATION "picorv32_hello_top requires PDN_MULTILAYER: the SRAM needs a Metal3/Metal4 bridge."
@@ -182,8 +228,11 @@ if { $::env(PDN_ENABLE_RAILS) == 1 } {
 # Core ring.
 #
 # NOTE: picorv32_hello_top sets PDN_CORE_RING: false. This macro integrates
-# hierarchically -- it reserves Metal5 (RT_MAX_LAYER: Metal4) so the parent's
-# Metal5 straps pass straight over and via down onto the Metal4 straps here.
+# hierarchically rather than standing alone with its own ring. Historically
+# that also meant leaving Metal5 untouched for the parent's straps; as of
+# the general mesh moving to Metal5 (PDN_HORIZONTAL_LAYER), that reservation
+# is no longer automatic -- Metal5 ownership between this macro and its
+# parent needs to be coordinated explicitly, not assumed from this setting.
 # A core ring would only be needed for the "ring" integration method, or at
 # chip top where it bonds to the padframe. Block retained for upstream diffs.
 if { $::env(PDN_CORE_RING) == 1 } {
@@ -253,12 +302,17 @@ if { $::env(PDN_CORE_RING) == 1 } {
 # pin of the same net N. A Metal4 VDD stripe crossing a Metal3 VSS tab is
 # harmless -- different layers, no via, no short.
 #
+# The Metal3 here is hardcoded, NOT $::env(PDN_HORIZONTAL_LAYER): the SRAM's
+# power pins are physically drawn on Metal3 in its own LEF, regardless of
+# which layer the general stdcell_grid mesh uses for its horizontal straps.
+# Decoupled so PDN_HORIZONTAL_LAYER can be Metal5 without breaking this tap.
+#
 # WARNING: vias only form where a Metal4 stripe physically crosses a Metal3
 # pin tab. The native bottom edge of the LEF (= the placed *top* edge, given
 # orientation S) has a ~36.6um gap in its VSS tabs between x=187 and x=224
 # (macro-relative). Verify PDN_VOFFSET does not park a VSS stripe in that
-# band for any of the four macro origins (67.4, 388.7, 710.0, 1031.3).
-# Confirm with: check_power_grid -net VSS
+# band for any of the four macro origins. Confirm with:
+# check_power_grid -net VSS
 # ---------------------------------------------------------------------------
 define_pdn_grid \
     -macro \
@@ -269,4 +323,4 @@ define_pdn_grid \
 
 add_pdn_connect \
     -grid sram_grid \
-    -layers "$::env(PDN_HORIZONTAL_LAYER) $::env(PDN_VERTICAL_LAYER)"
+    -layers "Metal3 $::env(PDN_VERTICAL_LAYER)"
