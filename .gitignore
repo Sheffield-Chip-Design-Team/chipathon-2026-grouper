@@ -4,6 +4,8 @@ build/*
 fusesoc.conf
 hw/rtl/.DS_Store
 *.pyc
+*__pycache__/
+
 *.egg-info/
 sw/build/
 sw/fw_id.svh
