@@ -2,6 +2,9 @@
 #include "irq.h"
 #undef IRQ_IMPL
 
+#include <stdbool.h>
+
+#include "grouper_std_lib.h"
 #include "uart.h"
 #include "debug.h"
 
@@ -52,6 +55,13 @@ uint32_t *irq(uint32_t *regs, uint32_t irqs) {
 		uint32_t pc = (regs[0] & 1) ? regs[0] - 3 : regs[0] - 4;
 		uint32_t instr = *(uint16_t*)pc;
 
+		// Re-entry guard. The report below runs with interrupts still live,
+		// so a fault inside it would land back here; without this the handler
+		// recurses until the stack runs into the saved register block.
+		static bool faulting = false;
+		if (faulting) g_sim_exit();
+		faulting = true;
+
 		if ((instr & 3) == 3)
 			instr = instr | (*(uint16_t*)(pc + 2)) << 16;
 
@@ -59,7 +69,21 @@ uint32_t *irq(uint32_t *regs, uint32_t irqs) {
 		if ((irqs & 4) != 0) debug_str("Error: Bus Error IRQ Fired\n");
 		debug(0xff, pc); // Debug the instruction that caused the bus error
 
-		__asm__ volatile ("ebreak");
+		// Report on the UART as well, so the fault is visible on targets
+		// without DEBUG_PERIPH, where every debug() above is a no-op.
+		//
+		// Then stop, rather than the ebreak this used to do: ebreak re-enters
+		// this handler, which ebreaks again, and the run burns the full
+		// TB_TIMEOUT (200M cycles) with nothing more on the console. The PC
+		// is where the CPU was when the latched IRQ was taken - for a bus
+		// error that is the instruction after the offending access, not
+		// necessarily the access itself.
+		printf("\nFATAL: %s at pc 0x%08x (instr 0x%08x, irqs 0x%x)\n",
+		       ((irqs & IRQ_BUS_ERR) != 0) ? "bus error"
+		                                   : "ebreak/ecall/illegal instruction",
+		       (unsigned) pc, (unsigned) instr, (unsigned) irqs);
+
+		g_sim_exit();
 	}
 
 	return regs;

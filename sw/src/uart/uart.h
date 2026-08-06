@@ -4,15 +4,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Base address of the AHB UART register block.
-// Must match the UART window in hw/rtl/ahb_interconnect_ss.sv.
-#define AHB_UART_BASE  0x00003000
-
-// Core clock the baud divisor is computed against. This must match the clock
-// the SoC is actually run at, or every byte goes out at the wrong baud rate -
-// the top-level testbench asserts this against its own CLK_FREQ localparam
-// (hw/tb/top/grouper_soc_hello_tb.sv).
-#define SYS_CLK_HZ     10000000
+// AHB_UART_BASE and SYS_CLK_HZ live in soc.h - they describe the SoC, not
+// this driver, and gtime.h needs the clock too.
+#include "soc.h"
 
 // Baud rate init_uart() configures.
 #define UART_BAUD_RATE 19200

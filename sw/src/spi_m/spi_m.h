@@ -11,7 +11,9 @@
 // below are NOT derived from real RTL (none exists) and must be revisited
 // once real SPI Master RTL lands. Do not call these functions from
 // firmware yet: doing so will raise IRQ_BUS_ERR.
-#define AHB_SPI_M_BASE  0x00006000
+//
+// AHB_SPI_M_BASE lives in soc.h with the rest of the address map.
+#include "soc.h"
 
 #define SPI_M_CTRL_ADDR   0
 #define SPI_M_STATUS_ADDR 1
