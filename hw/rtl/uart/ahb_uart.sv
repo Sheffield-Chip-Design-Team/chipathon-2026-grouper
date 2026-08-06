@@ -23,7 +23,7 @@
 //   Bit 4       TX Assert Break - Asserts a break condition on TX if 1
 //   Bit 5       Flush TX FIFO (Self Clearing)
 //   Bit 6       Flush RX FIFO (Self Clearing)
-//   Bits 25-16  Clock Divider Ratio, (Calculated using HCLK Frequency / (8*Baud Rate))
+//   Bits 25-16  Clock Divider Ratio, (Calculated using (HCLK Frequency / (8*Baud Rate))-1)
 //
 // Bits within UART Status Register:
 //   Bit 0       TX FIFO Empty
@@ -42,8 +42,8 @@
 //
 //
 // Clock Divider Ratio Example Calculation (HCLK = 10MHz, Target Baud = 19200):
-//   int clk_div = 10e+6/(19200*8) + 0.5; // Equals 65
-//   The +0.5 is used to round it to the nearest integer
+//   int clk_div = 10e+6/(19200*8) - 0.5; // Equals 64
+//   The -0.5 is used to round it to the nearest integer and correct for the offset clock divider value
 //
 
 module ahb_uart #(
