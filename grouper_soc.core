@@ -11,6 +11,16 @@ parameters:
       with firmware built with -DDEBUG (build_fw_debug script) - otherwise
       debug()/debug_str() compile to no-ops and never reach it.
     default: false
+  CPU_TRACE:
+    datatype: bool
+    paramtype: vlogdefine
+    description: >
+      Build cpu_ss with picorv32's instruction trace and enable the trace
+      capture in ahb_debug (needs DEBUG_PERIPH too). Records are written to
+      CPU_TRACE_FILE (default cpu.trace) for picorv32's showtrace.py.
+      Consumed with `ifdef, so only list it in targets that want it on -
+      DEBUG_PERIPH is handled the same way.
+    default: false
 
 scripts:
   build_fw:
@@ -30,25 +40,25 @@ filesets:
     files:
       - hw/rtl/interconnect/ahb_debug.sv:                 {file_type: systemVerilogSource}
       - hw/rtl/interconnect/ahb_conn.sv:                  {file_type: systemVerilogSource}
-      - hw/rtl/interconnect/ahb_conn_buff.sv:              {file_type: systemVerilogSource}
-      - hw/rtl/interconnect/ahb_stub_slave.sv:             {file_type: systemVerilogSource}
-      - hw/rtl/interconnect/ahb_interconnect.sv:          {file_type: systemVerilogSource}
+      - hw/rtl/interconnect/ahb_conn_buff.sv:             {file_type: systemVerilogSource}
+      - hw/rtl/interconnect/ahb_stub_slave.sv:            {file_type: systemVerilogSource}
+      - hw/rtl/ahb_interconnect_ss.sv:                    {file_type: systemVerilogSource}
 
-      - hw/rtl/rom/ahb_rom.sv:                            {file_type: systemVerilogSource}
-      - hw/rtl/sram/ahb_ram.sv:                           {file_type: systemVerilogSource}
-
-      - hw/rtl/cpu/cpu_ss.sv:                             {file_type: systemVerilogSource}
-      - hw/rtl/periph/periph_ss.sv:                       {file_type: systemVerilogSource}
-
-      - hw/rtl/picorv32_hello_core.sv:                    {file_type: systemVerilogSource}
-      - hw/rtl/picorv32_hello_top.sv:                     {file_type: systemVerilogSource}
+      - hw/rtl/memory/ahb_rom.sv:                         {file_type: systemVerilogSource}
+      - hw/rtl/memory/ahb_ram.sv:                         {file_type: systemVerilogSource}
+      
+      - hw/rtl/io_ss.sv:                                  {file_type: systemVerilogSource}
+      - hw/rtl/cpu_ss.sv:                                 {file_type: systemVerilogSource}
+      - hw/rtl/periph_ss.sv:                              {file_type: systemVerilogSource}
+      - hw/rtl/digital_ss.sv:                             {file_type: systemVerilogSource}
+      - hw/rtl/grouper_soc_top.sv:                        {file_type: systemVerilogSource}
   sw:
     files:
       - sw/code.vmem:                                     {file_type: systemVerilogSource, is_include_file: true}
       - sw/code.hex:                                      {file_type: systemVerilogSource, is_include_file: true}
   tb:
     files:
-      - hw/tb/picorv32_hello_tb.sv:                       {file_type: systemVerilogSource}
+      - hw/tb/top/grouper_soc_hello_tb.sv:                       {file_type: systemVerilogSource}
 
 targets:
   default: &sim
@@ -56,7 +66,7 @@ targets:
     filesets:
       - rtl
       - sw
-    toplevel: picorv32_hello_top
+    toplevel: grouper_soc_hello_top
 
   tb_top:
     <<: *sim
@@ -74,7 +84,7 @@ targets:
         - --coverage
     filesets_append:
       - tb
-    toplevel: picorv32_hello_tb
+    toplevel: grouper_soc_hello_tb
     hooks:
       pre_build: [build_fw]
 
@@ -94,8 +104,31 @@ targets:
         - --coverage
     filesets_append:
       - tb
-    toplevel: picorv32_hello_tb
+    toplevel: grouper_soc_hello_tb
     parameters:
       - DEBUG_PERIPH=true
+    hooks:
+      pre_build: [build_fw_debug]
+
+  tb_top_trace:
+    <<: *sim
+    description: Grouper SoC top-level simulation (as tb_top_debug, plus the CPU instruction trace).
+    flow: sim
+    flow_options:
+      tool: verilator
+      verilator_options:
+        - -Wno-TIMESCALEMOD
+        - -Wno-fatal
+        - --sv
+        - --trace
+        - --trace-fst
+        - --binary
+        - --coverage
+    filesets_append:
+      - tb
+    toplevel: grouper_soc_hello_tb
+    parameters:
+      - DEBUG_PERIPH=true
+      - CPU_TRACE=true
     hooks:
       pre_build: [build_fw_debug]

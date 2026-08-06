@@ -14,9 +14,9 @@
 `endif
 
 module ahb_rom #(
-  parameter int ADDR_WIDTH = 32,
-  parameter int DATA_WIDTH = 32,
-  parameter int MEM_WIDTH = 14,
+  parameter int  ADDR_WIDTH = 32,
+  parameter int  DATA_WIDTH = 32,
+  parameter int  MEM_WIDTH = 14,
   localparam int BYTE_ADDR_WIDTH = $clog2(DATA_WIDTH/8),
   localparam int WORD_ADDR_WIDTH = MEM_WIDTH - BYTE_ADDR_WIDTH,
   localparam int MEM_WORDS = 2**WORD_ADDR_WIDTH
