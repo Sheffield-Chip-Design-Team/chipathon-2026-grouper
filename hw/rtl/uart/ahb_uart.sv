@@ -288,7 +288,6 @@ module ahb_uart #(
   always_comb begin : invalid_access_check
     // invalid_read is registered so it is valid in the data phase
     invalid_access = invalid_read_r;
-    invalid_read = '0;
 
     if (write_enable)
       unique case (word_address_r)
@@ -297,9 +296,13 @@ module ahb_uart #(
         ADDR_RXDATA: invalid_access |= '1;
         default: begin end
       endcase
+  end
+
+  always_comb begin : invalid_read_check
+    invalid_read = '0;
 
     if (read_enable)
-      unique case (word_address_r)
+      unique case (word_address)
         ADDR_RXDATA: invalid_read |= status_rx_empty;
         default: begin end
       endcase
