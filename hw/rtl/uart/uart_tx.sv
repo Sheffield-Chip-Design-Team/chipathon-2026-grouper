@@ -126,7 +126,7 @@ module uart_tx #(
     shift_load = '0;
 
     // Use enable_r instead of enable as otherwise there is a race condition
-    // if it is enabled the same cycle as enable goes high
+    // if it is enabled the same cycle as enable goes high with TX data in the FIFO
     if (enable_r && shift_bit) begin
       unique case (state)
         ST_IDLE: begin
@@ -161,7 +161,7 @@ module uart_tx #(
     next_tx = uart_tx;
 
     // Use enable_r instead of enable as otherwise there is a race condition
-    // if it is enabled the same cycle as enable goes high
+    // if it is enabled the same cycle as enable goes high with TX data in the FIFO
     if (enable_r && shift_bit) begin
       unique case (state)
         ST_IDLE: begin
