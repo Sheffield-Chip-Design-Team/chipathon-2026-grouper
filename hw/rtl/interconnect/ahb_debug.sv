@@ -171,6 +171,9 @@ module ahb_debug #(
   always_ff @(posedge HCLK)
     if (TRACE_EN && trace_on && trace_valid) begin
       $fwrite(trace_fd, "%x\n", trace_data);
+      // Flush every record so a testbench can read the tail of the trace
+      // while the simulation is still running. 
+      $fflush(trace_fd);
       trace_records <= trace_records + 1;
       if (TRACE_CONSOLE)
         // Same record decode as picorv32's showtrace.py: branch target ('>'),
@@ -194,7 +197,7 @@ module ahb_debug #(
 
   //Transfer Response
   assign HREADYOUT = '1; //Single cycle Write & Read. Zero Wait state operations
-  assign HRESP     = '0; // Success
+  assign HRESP     = '0; // Never Fail. Always OKAY response
 
 endmodule
 
