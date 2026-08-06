@@ -10,7 +10,7 @@ static volatile uint32_t *const UART_REGS = (volatile uint32_t*) AHB_UART_BASE;
 
 // +0.5 to round to nearest integer
 // *8 as we have 8x oversampling
-static const int clk_div = 10e+6/(19200*8) + 0.5;
+static const int clk_div = (double)SYS_CLK_HZ/(UART_BAUD_RATE*8) + 0.5;
 
 void init_uart(void) {
     uart_ctrl_t x = {0};
