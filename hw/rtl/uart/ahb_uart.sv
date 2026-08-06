@@ -298,12 +298,11 @@ module ahb_uart #(
         default: begin end
       endcase
 
-    if (read_enable) begin
-        unique case (word_address_r)
-          ADDR_RXDATA: invalid_read |= status_rx_empty;
-          default: begin end
-        endcase
-      end
+    if (read_enable)
+      unique case (word_address_r)
+        ADDR_RXDATA: invalid_read |= status_rx_empty;
+        default: begin end
+      endcase
   end
 
   always_ff @(posedge HCLK, negedge HRESETn)
