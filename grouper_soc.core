@@ -22,6 +22,10 @@ parameters:
       DEBUG_PERIPH is handled the same way.
     default: false
 
+# These build sw/src/main.c as the firmware top level. To run one of the
+# tests in sw/tests instead, set FW_TEST 
+# e.g. FW_TEST=hello_world fusesoc run --target=tb_top_debug grouper_soc
+# `sw/scripts/build_fw.sh --list` shows what is available.
 scripts:
   build_fw:
     cmd: [bash, -c, '"exec $${FUSESOC_REPO_ROOT:-../../..}/sw/scripts/build_fw.sh"']
@@ -56,6 +60,7 @@ filesets:
     files:
       - sw/code.vmem:                                     {file_type: systemVerilogSource, is_include_file: true}
       - sw/code.hex:                                      {file_type: systemVerilogSource, is_include_file: true}
+      - sw/fw_id.svh:                                     {file_type: systemVerilogSource, is_include_file: true}
   tb:
     files:
       - hw/tb/top/grouper_soc_hello_tb.sv:                       {file_type: systemVerilogSource}
