@@ -2,6 +2,10 @@
 `define DUMP_FILE "dump.fst"
 `endif
 
+`ifndef TB_TIMEOUT_CYCLES
+`define TB_TIMEOUT_CYCLES 20_000_000
+`endif
+
 module grouper_soc_hello_tb;
   timeunit 1ns/1ps;
 
@@ -9,22 +13,84 @@ module grouper_soc_hello_tb;
   localparam int RX_BAUD_RATE = 19200;   // Baud rate of uart_rx (useful for testing resync)
 
   // The firmware computes its baud divisor from a hardcoded core clock
-  // (SYS_CLK_HZ in sw/src/uart/uart.h) - if this doesn't match it, the DUT
-  // transmits at the wrong baud rate and this testbench decodes nothing but
-  // framing errors. Keep the two in step.
   localparam int CLK_FREQ = 10_000_000;  // Frequency of the clock in Hz
 
+  // Clock and reset
   logic clk;
   logic rst_n;
 
+  // UART signals
   logic uart_tx;
   logic uart_rx;
 
+  // UART events for monitoring the DUT's uart_tx output
+  event uart_tx_sample;
+  event uart_tx_invalid_start_bit;
+  event uart_tx_invalid_stop_bit;
+  event uart_tx_newline;
+  byte  last_tx_byte;
+
   mailbox #(byte) uart_tx_mb = new();
+
+  // Test Tasks ---------------------------------------------------------------------------------
+
+  // Report which firmware is in the ROM.
+  task report_firmware();
+    int    fd;
+    string id;
+
+    fd = $fopen("fw_id.txt", "r");
+    if (fd == 0) begin
+      $display("TB_FIRMWARE: unknown (fw_id.txt not found - was build_fw.sh run?)");
+      return;
+    end
+    void'($fgets(id, fd));
+    $fclose(fd);
+    if (id.len() > 1 && id[id.len()-1] == "\n") id = id.substr(0, id.len()-2);
+    $display("TB_FIRMWARE: %s", id);
+  endtask
+
+  // UART Tasks ------------------------------------------------------------------------------
+
+  // UART Driver (DUT.uart_rx)
+  task uart_rx_send(input byte c);
+    uart_rx = 0;
+    #(1000ms/RX_BAUD_RATE);
+    repeat (8) begin
+      {c, uart_rx} = {1'b0, c};
+      #(1000ms/RX_BAUD_RATE);
+    end
+    uart_rx = 1;
+    #(1000ms/RX_BAUD_RATE);
+  endtask
+
+  // UART Monitor (DUT.uart_tx)
+  task automatic uart_tx_recv(output byte value, output bit ok);
+    value = 0;
+
+    // Wait for start bit
+    @(negedge uart_tx);
+    #(500ms/TX_BAUD_RATE); // Wait half a bit period
+    ->uart_tx_sample;
+    if (uart_tx) ->uart_tx_invalid_start_bit;
+
+    repeat (8) begin
+      #(1000ms/TX_BAUD_RATE);
+      ->uart_tx_sample;
+      value = { uart_tx, value[7:1] };
+    end
+
+    #(1000ms/TX_BAUD_RATE);
+    ->uart_tx_sample;
+    ok = uart_tx;
+    if (~uart_tx) ->uart_tx_invalid_stop_bit;
+  endtask
+
+  // DUT instantiation ------------------------------------------------------------------------
 
   // FIXME - instantiate grouper_soc_top
   
-  digital_ss  u_grouper_soc_core (
+  digital_ss  DUT (
       .clk                       (clk),
       .rst_n                     (rst_n),
 
@@ -54,6 +120,8 @@ module grouper_soc_hello_tb;
       .ext_ahb_m_if_HRESP        (1'b0)
   );
 
+  // Clock and Reset ------------------------------------------------------------------------
+
   initial begin
     clk = 1'b0;
     forever begin
@@ -71,46 +139,20 @@ module grouper_soc_hello_tb;
     @(posedge clk);
   endtask
 
+  // Test ------------------------------------------------------------------------
+  
   initial begin
     rst_n   = 1'b1; // Generate an initial falling edge
     #1ns;
     reset();
-    
-    repeat(400_000) @(posedge clk);
-    $display("TB_TIMEOUT: gave up waiting for firmware to reach the exit sequence");
-    $finish;
   end
-
-  // Dump waves
-  initial begin
-    $dumpfile(`DUMP_FILE);
-    $dumpvars();
-  end
-
-  event uart_tx_sample;
-  event uart_tx_invalid_start_bit;
-  event uart_tx_invalid_stop_bit;
-  event uart_tx_newline;
-  byte last_tx_byte;
 
   initial begin
     byte value;
+    bit  ok;
     forever begin
-      value = 0;
-      // Wait for start bit
-      @(negedge uart_tx);
-      #(500ms/TX_BAUD_RATE); // Wait half a bit period
-      ->uart_tx_sample;
-      if (uart_tx) ->uart_tx_invalid_start_bit;
-      repeat (8) begin
-        #(1000ms/TX_BAUD_RATE);
-        ->uart_tx_sample;
-        value = { uart_tx, value[7:1] };
-      end
-      #(1000ms/TX_BAUD_RATE);
-      ->uart_tx_sample;
-      if (~uart_tx) ->uart_tx_invalid_stop_bit;
-      else begin
+      uart_tx_recv(value, ok);
+      if (ok) begin
         last_tx_byte = value;
         $write("%c", value);
         uart_tx_mb.put(value);
@@ -119,41 +161,21 @@ module grouper_soc_hello_tb;
     end
   end
 
-  // A baud rate mismatch between the DUT and TX_BAUD_RATE shows up as nothing
-  // but framing errors, and without this the run just goes quiet until
-  // TB_TIMEOUT. Say so the first time it happens.
-  initial begin
-    fork
-      @(uart_tx_invalid_start_bit);
-      @(uart_tx_invalid_stop_bit);
-    join_any
-    $display("TB_ERROR: uart_tx framing error - DUT baud rate does not match TX_BAUD_RATE (%0d). Check CLK_FREQ here against SYS_CLK_HZ in sw/src/uart/uart.h", TX_BAUD_RATE);
-  end
-
-  task uart_rx_send(input byte c);
-    uart_rx = 0;
-    #(1000ms/RX_BAUD_RATE);
-    repeat (8) begin
-      {c, uart_rx} = {1'b0, c};
-      #(1000ms/RX_BAUD_RATE);
-    end
-    uart_rx = 1;
-    #(1000ms/RX_BAUD_RATE);
-  endtask
-
   initial begin
     uart_rx = 1'b1;
 
     @(uart_tx_newline);
     
-    uart_rx_send("t");
-    uart_rx_send("e");
-    uart_rx_send("s");
-    uart_rx_send("t");
+    uart_rx_send("W");
+    uart_rx_send("o");
+    uart_rx_send("r");
+    uart_rx_send("l");
+    uart_rx_send("d");
     uart_rx_send("\n");
     
     @(uart_tx_newline);
 
+    // send exit code.
     uart_rx_send("e");
     uart_rx_send("x");
     uart_rx_send("i");
@@ -162,6 +184,31 @@ module grouper_soc_hello_tb;
 
     // Send a break
     uart_rx = 0;
+  end
+
+  // Checks -----------------------------------------------------------------------
+  
+  // Report Framing errors to detect BAUD RATE mismatch between the DUT and the testbench.
+  initial begin
+    fork
+      @(uart_tx_invalid_start_bit);
+      @(uart_tx_invalid_stop_bit);
+    join_any
+    $display("TB_ERROR: uart_tx framing error - DUT baud rate does not match TX_BAUD_RATE (%0d). Check CLK_FREQ here against SYS_CLK_HZ in sw/src/uart/uart.h", TX_BAUD_RATE);
+  end
+
+  // Timeout and Dump ------------------------------------------------------------------------
+
+  initial begin
+    $dumpfile(`DUMP_FILE);
+    $dumpvars();
+    report_firmware();
+    
+    // Do the test ...
+
+    repeat(`TB_TIMEOUT_CYCLES) @(posedge clk);
+    $display("TB_TIMEOUT: gave up waiting for firmware to reach the exit sequence after %0d cycles", `TB_TIMEOUT_CYCLES);
+    $finish;
   end
 
 endmodule
