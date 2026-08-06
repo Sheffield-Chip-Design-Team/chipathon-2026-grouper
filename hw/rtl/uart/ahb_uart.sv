@@ -171,7 +171,7 @@ module ahb_uart #(
   assign rx_error_irq = rx_frame_error;
 
   //Generate the control signals in the address phase
-  assign access       = HREADYIN && HSEL && (HTRANS != HTRANS_IDLE);
+  assign access       = HREADYIN && HSEL && (HTRANS == HTRANS_NONSEQ || HTRANS == HTRANS_SEQ);
   assign read_enable  = access && ~HWRITE;
 
   assign word_address = access ? HADDR[3:2] : '0;

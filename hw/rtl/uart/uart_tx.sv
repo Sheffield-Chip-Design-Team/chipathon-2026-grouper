@@ -125,8 +125,9 @@ module uart_tx #(
     fifo_read = '0;
     shift_load = '0;
 
-    // Use enable_r instead of enable as otherwise there is a race condition
-    // if it is enabled the same cycle as enable goes high with TX data in the FIFO
+    // Prevent bug when enabled with TX data in the fifo
+    // Causing an attempted transition to ST_START_BIT,
+    // but getting reset to IDLE by the above always_ff
     if (enable_r && shift_bit) begin
       unique case (state)
         ST_IDLE: begin
@@ -160,8 +161,9 @@ module uart_tx #(
   always_comb begin
     next_tx = uart_tx;
 
-    // Use enable_r instead of enable as otherwise there is a race condition
-    // if it is enabled the same cycle as enable goes high with TX data in the FIFO
+    // Prevent bug when enabled with TX data in the fifo
+    // Causing an attempted transition to ST_START_BIT,
+    // but getting reset to IDLE by the above always_ff
     if (enable_r && shift_bit) begin
       unique case (state)
         ST_IDLE: begin
