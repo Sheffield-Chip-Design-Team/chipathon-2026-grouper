@@ -121,7 +121,7 @@ logic int_cfg_err;
   logic invalid_access;
 
   // TODO (GRPR-SPIM-005):
-// Instantiate SPI M core here
+  // Instantiate SPI M core here
 
   
 
