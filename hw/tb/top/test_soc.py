@@ -102,7 +102,7 @@ class PadModel:
 
     async def _run(self):
         while True:
-            await RisingEdge(self.dut.sysclk)
+            await RisingEdge(self.dut.clk)
             oe = int(self.dut.gpio_oe.value)
             ie = int(self.dut.gpio_ie.value)
             out = int(self.dut.gpio_out.value)
@@ -349,18 +349,18 @@ async def bring_up(dut):
     """Clock, reset, pad model and UART monitor. Returns (pads, uart)."""
     report_firmware()
 
-    cocotb.start_soon(Clock(dut.sysclk, CLK_PERIOD_NS, unit="ns").start())
+    cocotb.start_soon(Clock(dut.clk, CLK_PERIOD_NS, unit="ns").start())
 
     dut.uart_rx.value = 1
     dut.gpio_in.value = 0
 
-    dut.reset_btn_n.value = 1
+    dut.async_rst_n.value = 1
     await Timer(1, unit="ns")
-    dut.reset_btn_n.value = 0
+    dut.async_rst_n.value = 0
     await Timer(123, unit="ns")
-    await RisingEdge(dut.sysclk)
-    dut.reset_btn_n.value = 1
-    await RisingEdge(dut.sysclk)
+    await RisingEdge(dut.clk)
+    dut.async_rst_n.value = 1
+    await RisingEdge(dut.clk)
     log.debug("reset released")
 
     pads = PadModel(dut)
@@ -497,7 +497,7 @@ async def test_gpio_patterns(dut):
 
         async def echoed():
             while (int(dut.gpio_out.value) & OUT_PADS) != expected:
-                await ClockCycles(dut.sysclk, 1)
+                await ClockCycles(dut.clk, 1)
 
         try:
             await with_timeout(echoed(), 200, "us")
