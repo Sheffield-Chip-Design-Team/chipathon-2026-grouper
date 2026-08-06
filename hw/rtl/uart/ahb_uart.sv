@@ -32,7 +32,7 @@
 //   Bit 3       RX FIFO Full
 //   Bit 4       TX Active (1 if currently transmitting data)
 //   Bit 5       RX Frame Error (Self clears after being read)
-//   Bit 6       RX Bread Condition (Self clears after being read)
+//   Bit 6       RX Break Condition (Self clears after being read)
 //
 // Bits within UART TX Data FIFO:
 //   Bits 7-0    TX Data (Write Only, causes a bus error if written to when the FIFO is full)
