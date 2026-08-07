@@ -1,0 +1,19 @@
+# ----- ------ ----- ----- ------ ----- ----- ------ -----
+# Chipathon 2026: Project configuration
+# LICENSE: Apache License Version 2.0
+# http://www.apache.org/licenses/
+# ----- ------ ----- ----- ------ ----- ----- ------ -----
+
+# data will be pulled from main branch of the repo.
+# please be sure that the main branch contains the data you want to submit.
+# This file will be updated with more information later
+
+# ======================================================
+# Project metadata (used for documentation / review)
+# ======================================================
+project:
+  title:       "Grouper SoC"        
+  team:        "A12 Grouper - (SHaRC)"  
+  discord:     "James AK"                   
+  description: "RV32EMC CPU SoC with SPI, QPSI UART and 4KiB SRAM." 
+  lvs_config:  "librelane/classic/lvs_config.json"
