@@ -253,7 +253,39 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
   );
 
   //--- SPI Slave -------------------------------------------------------------------------
- 
+
+`ifdef DRY_RUN
+
+  // The SPI slave is out of scope for the dry run - occupy its fabric slot
+  // with the same placeholder the not-yet-implemented peripherals use, so the
+  // interconnect still sees eight slaves.
+  ahb_stub_slave #(
+    .ADDR_WIDTH (ADDR_WIDTH),
+    .DATA_WIDTH (DATA_WIDTH)
+  ) u_spi_s_stub (
+    .HCLK         (HCLK),
+    .HRESETn      (HRESETn),
+    .HADDR        (ahb_spi_s.HADDR),
+    .HBURST       (ahb_spi_s.HBURST),
+    .HMASTLOCK    (ahb_spi_s.HMASTLOCK),
+    .HPROT        (ahb_spi_s.HPROT),
+    .HSIZE        (ahb_spi_s.HSIZE),
+    .HTRANS       (ahb_spi_s.HTRANS),
+    .HWDATA       (ahb_spi_s.HWDATA),
+    .HWRITE       (ahb_spi_s.HWRITE),
+    .HRDATA       (ahb_spi_s.HRDATA),
+    .HREADYOUT    (ahb_spi_s.HREADYOUT),
+    .HRESP        (ahb_spi_s.HRESP),
+    .HREADYIN     (ahb_spi_s.HREADYIN),
+    .HSEL         (ahb_spi_s.HSEL)
+  );
+
+  // io_ss still drives mux_spi_s_{ss,sck,mosi}_i towards the (absent) slave;
+  // with no consumer those three pad-input paths fall out in synthesis.
+  assign mux_spi_s_miso_o = 1'b0;
+
+`else
+
   ahb_spi_s #(
     .ADDR_WIDTH (ADDR_WIDTH),
     .DATA_WIDTH (DATA_WIDTH)
@@ -282,6 +314,8 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
     .spi_mosi     (mux_spi_s_mosi_i),
     .spi_miso     (mux_spi_s_miso_o)
   );
+
+`endif
 
   //--- Input/Output Subsystem (GPIO MUX) -----------------------------------------------------------------
 

@@ -6,14 +6,14 @@
 module chip_core #(
     // Defaults are the slot 1x1 pad counts; chip_top always overrides these
     // from slot_defines.svh.
-    parameter int unsigned NUM_INPUT_PADS = 12,
+    parameter int unsigned NUM_INPUT_PADS = 1,
     parameter int unsigned NUM_BIDIR_PADS = 40,
     // GrouperSoC GPIO count. Must be <= NUM_BIDIR_PADS - 1 
     // (one bidir pad is spent on uart_tx).
     parameter int unsigned NUM_GPIO       = 16
 )(
-    input  wire clk,                            // clock
-    input  wire rst_n,                          // reset (active low)
+    input  wire                      clk,       // clock
+    input  wire                      rst_n,     // reset (active low)
 
     input  wire [NUM_INPUT_PADS-1:0] input_in,  // Input value
     output wire [NUM_INPUT_PADS-1:0] input_pu,  // Pull-up
@@ -22,8 +22,8 @@ module chip_core #(
     input  wire [NUM_BIDIR_PADS-1:0] bidir_in,  // Input value
     output wire [NUM_BIDIR_PADS-1:0] bidir_out, // Output value
     output wire [NUM_BIDIR_PADS-1:0] bidir_oe,  // Output enable
-    output wire [NUM_BIDIR_PADS-1:0] bidir_cs,  // Input type (0=CMOS Buffer, 1=Schmitt Trigger)
-    output wire [NUM_BIDIR_PADS-1:0] bidir_sl,  // Slew rate (0=fast, 1=slow)
+    output wire [NUM_BIDIR_PADS-1:0] bidir_cs,  // Input type    (0=CMOS Buffer, 1=Schmitt Trigger)
+    output wire [NUM_BIDIR_PADS-1:0] bidir_sl,  // Slew rate     (0=fast, 1=slow)
     output wire [NUM_BIDIR_PADS-1:0] bidir_ie,  // Input enable
     output wire [NUM_BIDIR_PADS-1:0] bidir_pu,  // Pull-up
     output wire [NUM_BIDIR_PADS-1:0] bidir_pd   // Pull-down
@@ -31,10 +31,9 @@ module chip_core #(
 
     // See here for usage: https://gf180mcu-pdk.readthedocs.io/en/latest/IPs/IO/gf180mcu_fd_io/digital.html
     //
-    // Pad map (slot 1x1: 12 input pads, 40 bidir pads)
+    // Pad map (slot A + slot C: 12 input pads, 40 bidir pads)
     //
     //   input_PAD[0]              uart_rx
-    //   input_PAD[NUM_INPUT-1:1]  unused
     //   bidir_PAD[NUM_GPIO-1:0]   gpio[NUM_GPIO-1:0]  (SoC drives out/oe/cs/sl/ie/pu/pd)
     //   bidir_PAD[NUM_GPIO]       uart_tx             (output only)
     //   bidir_PAD[..:NUM_GPIO+1]  unused, driven low
@@ -97,11 +96,18 @@ module chip_core #(
         assign bidir_pd [NUM_BIDIR_PADS-1:NUM_USED_BID] = '0;
     end
 
-    // Tie off the pad inputs nothing reads.
+    // Tie off the pad inputs nothing reads. input_in[0] is uart_rx; the slice
+    // above it is empty when the slot has a single input pad, and an empty
+    // part-select is an out-of-range error rather than a zero-width value.
     logic _unused;
-    assign _unused = &{1'b0,
-                       input_in[NUM_INPUT_PADS-1:1],
-                       bidir_in[NUM_BIDIR_PADS-1:NUM_GPIO]};
+    if (NUM_INPUT_PADS > 1) begin : gen_unused_multi_input
+        assign _unused = &{1'b0,
+                           input_in[NUM_INPUT_PADS-1:1],
+                           bidir_in[NUM_BIDIR_PADS-1:NUM_GPIO]};
+    end else begin : gen_unused_single_input
+        assign _unused = &{1'b0,
+                           bidir_in[NUM_BIDIR_PADS-1:NUM_GPIO]};
+    end
 
     // --- GrouperSoC ---------------------------------------------------------
 
