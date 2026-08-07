@@ -173,7 +173,10 @@ else
     TOP_KIND="$TOP_SRC (default)"
 fi
 
-MARCH="-march=rv32im -mabi=ilp32"
+# Matches the picorv32 configuration in hw/rtl/cpu_ss.sv: RV32E (16 registers,
+# ENABLE_REGS_16_31=0) plus M and C. Building rv32i* here would emit x16-x31,
+# which the CPU does not have.
+MARCH="-march=rv32emc -mabi=ilp32e"
 INCS="-I$SRC_DIR -I$SRC_DIR/lib -I$SRC_DIR/uart -I$SRC_DIR/debug -I$SRC_DIR/spi_m -I$SRC_DIR/gpio -I$TESTS_DIR"
 
 # -fno-builtin is load-bearing, not decorative: sw/src/lib defines printf,
