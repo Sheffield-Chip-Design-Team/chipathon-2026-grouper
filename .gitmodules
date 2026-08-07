@@ -1,3 +1,6 @@
 [submodule "ip/gf180mcu_ocd_ip_sram"]
 	path = ip/gf180mcu_ocd_ip_sram
 	url = https://github.com/RTimothyEdwards/gf180mcu_ocd_ip_sram.git
+[submodule "ip/picorv32"]
+	path = ip/picorv32
+	url = https://github.com/Sheffield-Chip-Design-Team/picorv32

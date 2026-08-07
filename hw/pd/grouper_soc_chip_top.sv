@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: © 2025 Project Template Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Example chip_top : This module instantiates the core design and connects it to the I/O pads.
+
+
 `default_nettype none
 
 `include "slot_defines.svh"

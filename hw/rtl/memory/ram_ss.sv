@@ -1,3 +1,5 @@
+// TODO - integrate this into the AHB ram  module as an option to use macro ram or not
+
 module ram_ss #(
   parameter int ADDR_WIDTH = 10,
   parameter bit USE_MACRO_RAM = 1

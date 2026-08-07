@@ -29,10 +29,12 @@ source .env/bin/activate
 pip install --upgrade pip
 pip install -r sim-requirements.txt
 
-# register this repo and the picorv32 core library with fusesoc
+# fetch IP submodules (ip/picorv32, ip/gf180mcu_ocd_ip_sram)
+git submodule update --init --recursive
+
+# register this repo with fusesoc; it scans recursively, so ip/picorv32/picorv32.core
+# is found without a library entry of its own
 fusesoc library add grouper_soc .
-fusesoc library add https://github.com/Sheffield-Chip-Design-Team/picorv32
-fusesoc library update picorv32
 
 # run the top-level testbench (picorv32_hello_tb, SystemVerilog, Verilator 5+ required in PATH)
 fusesoc run --no-export --target=tb_top grouper_soc
@@ -65,6 +67,7 @@ picorv32_hello_top (pads: sysclk, reset_btn_n, uart_tx, uart_rx)
 - `hw/rtl/ahb3lite/` defines the shared `ahb3lite_intf` interface and `ahb3lite_pkg` (transfer-type constants, byte-select helpers used by memory-mapped slaves like `ahb_ram`/`ahb_rom`).
 - `hw/rtl/common/` holds small reusable building blocks (clock dividers/gating, synchronizers, FIFO, shift register, downcounter) intended for reuse across the new peripherals.
 - `hw/rtl/reg_blk/ahb_reg_blk.sv` is a generic parameterized AHB register block (`NUM_REGS`), likely the base for peripheral CSR blocks.
+- `ip/picorv32/` is the team's picorv32 fork (`Sheffield-Chip-Design-Team/picorv32`), vendored as a git submodule. It is the single source of the CPU RTL for **both** flows: FuseSoC resolves `yosys:cpu_ip:picorv32:1.0.0` from `ip/picorv32/picorv32.core` by recursive scan of the `grouper_soc` library, and the LibreLane configs list `dir::../../ip/picorv32/picorv32.v` directly. Nothing under `librelane/` may reference `fusesoc_libraries/` — that directory is gitignored tool cache, so a path into it is unpinned and absent on a fresh clone.
 - `ip/gf180mcu_ocd_ip_sram/` is a separate git repo (Open Circuit Design's experimental 3.3 V GF180MCU SRAM macros) vendored as a submodule — this is the macro family backing the 4 KiB CPU SRAM plan (`sram1024x8m8wm1` × 4). `hw/rtl/sram/ahb_ram.sv` in the current bring-up top is a behavioral `logic [] memory []` array, not yet the hardened macro.
 
 ## Planning docs caveat

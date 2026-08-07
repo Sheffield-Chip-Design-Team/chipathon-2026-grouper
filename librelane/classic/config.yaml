@@ -33,20 +33,50 @@ meta:
     #Netgen.LVS: null
     #Checker.LVS: null
 
-DESIGN_NAME: picorv32_hello_top
 VERILOG_FILES:
-  - dir::../../src/rtl/picorv32_hello_top.sv
-  - dir::../../src/rtl/ram_ss.sv
-  - dir::../../src/rtl/sync.sv
-  - dir::../../src/rtl/picorv32.v
-  - dir::../../src/wrappers/sram1024x8_wrapper.sv
+# GrouperSoC RTL (same order as the fusesoc `rtl` fileset in grouper_soc.core)
+- dir::../../hw/rtl/ahb3lite/ahb3lite_pkg.sv
+- dir::../../hw/rtl/ahb3lite/ahb3lite_intf.sv
+- dir::../../hw/rtl/common/clk_div.sv
+- dir::../../hw/rtl/common/clk_gate.sv
+- dir::../../hw/rtl/common/clk_out.sv
+- dir::../../hw/rtl/common/downcounter.sv
+- dir::../../hw/rtl/common/pulse_sync.sv
+- dir::../../hw/rtl/common/shift_reg.sv
+- dir::../../hw/rtl/common/small_sync_fifo.sv
+- dir::../../hw/rtl/common/sync.sv
+- dir::../../ip/picorv32/picorv32.v
+- dir::../../hw/rtl/gpio/gpio_ctrl_pkg.sv
+- dir::../../hw/rtl/gpio/ahb_gpio_ctrl.sv
+- dir::../../hw/rtl/spi_s/ahb_spi_s.sv
+- dir::../../hw/rtl/uart/uart_clk_div.sv
+- dir::../../hw/rtl/uart/uart_rx.sv
+- dir::../../hw/rtl/uart/uart_tx.sv
+- dir::../../hw/rtl/uart/uart.sv
+- dir::../../hw/rtl/uart/ahb_uart.sv
+- dir::../../hw/rtl/interconnect/ahb_debug.sv
+- dir::../../hw/rtl/interconnect/ahb_conn.sv
+- dir::../../hw/rtl/interconnect/ahb_conn_buff.sv
+- dir::../../hw/rtl/interconnect/ahb_stub_slave.sv
+- dir::../../hw/rtl/ahb_interconnect_ss.sv
+- dir::../../hw/rtl/memory/ahb_rom.sv
+- dir::../../hw/rtl/memory/ahb_ram.sv
+- dir::../../hw/rtl/io_ss.sv
+- dir::../../hw/rtl/cpu_ss.sv
+- dir::../../hw/rtl/periph_ss.sv
+- dir::../../hw/rtl/digital_ss.sv
+- dir::../../hw/rtl/grouper_soc_top.sv
+
+# CHIP core wrapper
+- dir::../../hw/pd/grouper_soc_chip_core.sv
 
 # VERILOG_INCLUDE_DIRS:
   # - dir::../src/rtl/inc
 
 # Enable plugin for better SystemVerilog support
-# USE_SLANG: true
-# SLANG_ARGUMENTS: ['--keep-hierarchy']
+
+USE_SLANG: true
+SLANG_ARGUMENTS: ['--keep-hierarchy']
 
 # SYNTH_HIERARCHY_MODE: keep
 SYNTH_AUTONAME: true # human readable names
@@ -59,15 +89,15 @@ SYNTH_STRATEGY: "DELAY 2"
 # The configuration below is the proven congestion-mitigation recipe from
 # `irdrop_check_d`: detailed routing completed and the IR-drop report passed.
 FP_SIZING: absolute
-DIE_AREA: [0.0, 0.0, 1310, 1150]
+DIE_AREA: [0.0, 0.0, 1310, 2200]
 
 # Slightly smaller file sizes
 PRIMARY_GDSII_STREAMOUT_TOOL: klayout
 
 # SDC files
-PNR_SDC_FILE: dir::../../src/rtl/picorv32_hello_top.sdc
-SIGNOFF_SDC_FILE: dir::../../src/rtl/picorv32_hello_top.sdc
-FALLBACK_SDC: dir::../../src/rtl/picorv32_hello_top.sdc
+PNR_SDC_FILE:     dir::grouper_chip_top.sdc
+SIGNOFF_SDC_FILE: dir::grouper_chip_top.sdc
+FALLBACK_SDC:     dir::grouper_chip_top.sdc
 
 # Power / ground nets
 VDD_NETS:
@@ -81,6 +111,7 @@ CLOCK_PERIOD: 62.5 # 16MHz
 
 # Routing / ESD
 DIODE_ON_PORTS: in
+
 # Moved to Metal5 to relieve Metal3 congestion at 1310x1150 (see TRIAL_NOTES.md).
 # Normally capped at Metal4 because Metal5 is reserved for the parent's core
 # ring in hierarchical integration (PDN_CORE_RING: false below) -- Metal5

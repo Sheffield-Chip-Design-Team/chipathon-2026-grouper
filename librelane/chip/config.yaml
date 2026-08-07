@@ -26,8 +26,47 @@ meta:
 
 DESIGN_NAME: chip_top
 VERILOG_FILES:
-- dir::../src/chip_top.sv
-- dir::../src/chip_core.sv
+# GrouperSoC RTL (same order as the fusesoc `rtl` fileset in grouper_soc.core)
+- dir::../../hw/rtl/ahb3lite/ahb3lite_pkg.sv
+- dir::../../hw/rtl/ahb3lite/ahb3lite_intf.sv
+- dir::../../hw/rtl/common/clk_div.sv
+- dir::../../hw/rtl/common/clk_gate.sv
+- dir::../../hw/rtl/common/clk_out.sv
+- dir::../../hw/rtl/common/downcounter.sv
+- dir::../../hw/rtl/common/pulse_sync.sv
+- dir::../../hw/rtl/common/shift_reg.sv
+- dir::../../hw/rtl/common/small_sync_fifo.sv
+- dir::../../hw/rtl/common/sync.sv
+- dir::../../ip/picorv32/picorv32.v
+- dir::../../hw/rtl/gpio/gpio_ctrl_pkg.sv
+- dir::../../hw/rtl/gpio/ahb_gpio_ctrl.sv
+- dir::../../hw/rtl/spi_s/ahb_spi_s.sv
+- dir::../../hw/rtl/uart/uart_clk_div.sv
+- dir::../../hw/rtl/uart/uart_rx.sv
+- dir::../../hw/rtl/uart/uart_tx.sv
+- dir::../../hw/rtl/uart/uart.sv
+- dir::../../hw/rtl/uart/ahb_uart.sv
+- dir::../../hw/rtl/interconnect/ahb_debug.sv
+- dir::../../hw/rtl/interconnect/ahb_conn.sv
+- dir::../../hw/rtl/interconnect/ahb_conn_buff.sv
+- dir::../../hw/rtl/interconnect/ahb_stub_slave.sv
+- dir::../../hw/rtl/ahb_interconnect_ss.sv
+- dir::../../hw/rtl/memory/ahb_rom.sv
+- dir::../../hw/rtl/memory/ahb_ram.sv
+- dir::../../hw/rtl/io_ss.sv
+- dir::../../hw/rtl/cpu_ss.sv
+- dir::../../hw/rtl/periph_ss.sv
+- dir::../../hw/rtl/digital_ss.sv
+- dir::../../hw/rtl/grouper_soc_top.sv
+# Padring + core wrapper
+- dir::../../hw/pd/grouper_soc_chip_top.sv
+- dir::../../hw/pd/grouper_soc_chip_core.sv
+
+VERILOG_INCLUDE_DIRS:
+# slot_defines.svh, included by grouper_soc_chip_top.sv
+- dir::../../hw/pd
+# code.hex / code.vmem, included by ahb_rom.sv
+- dir::../../sw
 
 # Enable plugin for better SystemVerilog support
 # USE_SLANG: True
@@ -174,9 +213,11 @@ MACROS:
         location: ["expr::$DIE_AREA[2] + -169.25", "expr::$DIE_AREA[3] + -169.25"]
         orientation: N
 
-# No user macros for the workshop slot -- the core is a trivial
-# counter.  chip_id + wafer.space logo (above) are the only placed
-# macros.
+# No user macros yet: chip_core now holds grouper_soc_top, whose RAM
+# (hw/rtl/memory/ahb_ram.sv) is still behavioral. When the hardened
+# gf180mcu_ocd_ip_sram macros replace it, add them here (see the MACROS
+# block in librelane/classic/config.yaml for the placement recipe).
+# chip_id + wafer.space logo (above) are the only placed macros today.
 
 # No macro PDN connections needed beyond what the PDN grid already
 # supplies through chip_id / logo.  Keep the key as an empty list so

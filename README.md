@@ -122,12 +122,18 @@ pip install --upgrade pip
 pip install fusesoc
 ```
 
-## 3) Add FuseSoC libraries (local + picorv32)
+## 3) Fetch the IP submodules and add the FuseSoC library
 ```bash
+# picorv32 (ip/picorv32) and the SRAM macros (ip/gf180mcu_ocd_ip_sram)
+git submodule update --init --recursive
+
 fusesoc library add grouper_soc .
-fusesoc library add https://github.com/Sheffield-Chip-Design-Team/picorv32
-fusesoc library update picorv32
 ```
+FuseSoC scans this repo recursively, so `ip/picorv32/picorv32.core` is picked
+up by the `grouper_soc` library — picorv32 does **not** need a library entry of
+its own. The ASIC flow reads the same submodule path directly
+(`librelane/*/config.yaml`), so RTL sim and PnR compile identical sources at a
+commit pinned by git.
 
 ## 4) Run simulation (no export)
 ```bash
