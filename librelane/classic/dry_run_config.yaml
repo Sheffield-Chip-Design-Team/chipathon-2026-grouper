@@ -195,8 +195,16 @@ GRT_ADJUSTMENT: 0.2
 GPL_CELL_PADDING: 2
 DPL_CELL_PADDING: 2
 
-# These delay buffers materially worsen routing congestion at this die size.
-DONT_USE_CELLS:
+# The library's *delay* buffers, built to have high intrinsic delay (~2.5-2.8ns
+# even unloaded) for hold fixing. Nothing stops the resizer picking them as
+# generic fanout buffers, and it did, burning several ns per stage in the worst
+# paths -- see TRIAL_NOTES.md "Session 2.1". Excluding them is a permanent win,
+# independent of die size.
+#
+# Named DONT_USE_CELLS until LibreLane deprecated that spelling; it always
+# resolved to EXTRA_EXCLUDED_CELLS internally, so this is a rename, not a
+# behaviour change.
+EXTRA_EXCLUDED_CELLS:
   - gf180mcu_fd_sc_mcu7t5v0__dlyb_1
   - gf180mcu_fd_sc_mcu7t5v0__dlyb_2
   - gf180mcu_fd_sc_mcu7t5v0__dlyb_4
