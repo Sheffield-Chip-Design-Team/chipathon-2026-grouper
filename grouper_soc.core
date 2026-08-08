@@ -52,7 +52,6 @@ filesets:
       - hw/rtl/verilator_waivers.vlt:                     {file_type: vlt}
 
       - hw/rtl/interconnect/ahb_debug.sv:                 {file_type: systemVerilogSource}
-      - hw/rtl/interconnect/ahb_conn.sv:                  {file_type: systemVerilogSource}
       - hw/rtl/interconnect/ahb_conn_buff.sv:             {file_type: systemVerilogSource}
       - hw/rtl/interconnect/ahb_stub_slave.sv:            {file_type: systemVerilogSource}
       - hw/rtl/ahb_interconnect_ss.sv:                    {file_type: systemVerilogSource}
