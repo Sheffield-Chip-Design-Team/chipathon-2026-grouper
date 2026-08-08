@@ -166,19 +166,32 @@ if { $::env(PDN_MULTILAYER) == 1 } {
     # LibreLane validates config.yaml keys against a fixed schema and
     # rejects unrecognized ones outright, and this is an internal
     # implementation detail, not something a run needs to tune per-die-size.
-    # Intentionally much coarser than PDN_HPITCH/PDN_VPITCH (130): this
-    # layer exists to make Metal2-Metal4 vias reliable, not to carry
-    # general current, so it should stay a small fraction of Metal3's
-    # routing resource.
-    set pdn_rung_layer "Metal3"
-    set pdn_rung_pitch 300
-    set pdn_rung_spacing [expr {($pdn_rung_pitch - 2 * $::env(PDN_HWIDTH)) / 2}]
+    # Intentionally much coarser than PDN_HPITCH/PDN_VPITCH: this layer
+    # exists to make Metal2-Metal4 vias reliable, not to carry general
+    # current, so it should stay a small fraction of Metal3's routing
+    # resource - and Metal3 is the layer that ran out first in the original
+    # congestion investigation.
+    #
+    # Width/pitch/offset are Metal3's own, NOT PDN_HWIDTH/PDN_HOFFSET: those
+    # now size the Metal5 mesh and are multiples of Metal5's 0.90um track
+    # pitch, which is not a whole number of Metal3's 0.56um tracks. Reusing
+    # them here would put every rung off the Metal3 routing grid and poison
+    # the tracks alongside it - the same defect that stalled detailed routing
+    # on Metal2 (see the strap note in dry_run_config.yaml).
+    #
+    # At 448um pitch the mesh still gives each Metal2 stripe ~5 rung
+    # crossings over the 1100um die, far more than connectivity needs.
+    set pdn_rung_layer   "Metal3"
+    set pdn_rung_width   5.04    ;# 9 x 0.56 Metal3 track pitch
+    set pdn_rung_pitch   448     ;# 800 x 0.56
+    set pdn_rung_offset  13.44   ;# 24 x 0.56
+    set pdn_rung_spacing [expr {($pdn_rung_pitch - 2 * $pdn_rung_width) / 2}]  ;# 391 x 0.56
     add_pdn_stripe \
         -grid stdcell_grid \
         -layer $pdn_rung_layer \
-        -width $::env(PDN_HWIDTH) \
+        -width $pdn_rung_width \
         -pitch $pdn_rung_pitch \
-        -offset $::env(PDN_HOFFSET) \
+        -offset $pdn_rung_offset \
         -spacing $pdn_rung_spacing \
         -starts_with POWER \
         {*}$arg_list

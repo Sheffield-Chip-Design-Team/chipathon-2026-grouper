@@ -240,14 +240,55 @@ PDN_VERTICAL_LAYER:   Metal4
 PDN_HORIZONTAL_LAYER: Metal5
 
 
+# ---------------------------------------------------------------------------
 # Straps
-PDN_VWIDTH:    5         
-PDN_HWIDTH:    5          
-PDN_VPITCH:    180
-PDN_HPITCH:    180
-PDN_VSPACING:  85        # (180 - 2*5) / 2
-PDN_HSPACING:  85        # (180 - 2*5) / 2
-PDN_EXTEND_TO: boundary   
+#
+# Two independent constraints set these numbers.
+#
+# 1. ROUTING-GRID ALIGNMENT. Every width, pitch, spacing and offset below is a
+#    whole number of routing tracks: 0.56um on Metal2/3/4, 0.90um on Metal5
+#    (DEF: "TRACKS X 560 DO 1964 STEP 1120 LAYER Metal2" at 2000 DBU/um).
+#    The old 180um pitch was 321.43 Metal2 tracks, so consecutive stripe
+#    columns drifted 0.4um out of phase with the routing grid and two of the
+#    twelve landed 0.08um short of Metal2 minimum spacing (0.28um) to the
+#    nearest usable track. Any net routed there was permanently DRC-illegal,
+#    which is what made detailed routing plateau instead of converge - it
+#    showed up as four "Metal Spacing" violations against VDD/VSS on Metal2 at
+#    x=200.54 and x=830.54, both exactly a stripe edge. On-grid pitches make
+#    every column share one alignment, tunable with a single offset.
+#
+# 2. SRAM COMPATIBILITY (for when the gf180mcu_ocd_ip_sram macros return).
+#    gf180mcu_ocd_ip_sram__sram1024x8m8wm1 obstructs Metal1-Metal3 across its
+#    interior and exposes VDD/VSS only on a Metal3 perimeter frame, so the
+#    Metal4 vertical straps are the SRAM's only power path (see pdn_cfg.tcl).
+#    A macro is 301.3um wide, and one full PDN_VPITCH contains exactly one VDD
+#    and one VSS stripe - so PDN_VPITCH must stay <= 301.3um or a macro can end
+#    up with no strap of one polarity crossing it, silently floating its power.
+#    224 leaves 77.3um of margin. THIS IS A HARD CEILING: do not raise
+#    PDN_VPITCH past ~290 without re-checking against the macro width.
+#    PDN_HPITCH carries no such constraint - Metal5 never touches the macros.
+# ---------------------------------------------------------------------------
+
+PDN_VWIDTH:    5.04      # 9 x 0.56  (Metal2/Metal4 track pitch)
+PDN_HWIDTH:    5.4       # 6 x 0.90  (Metal5 track pitch)
+PDN_VPITCH:    224       # 200 x 1.12; <= 301.3 SRAM width, see note 2
+PDN_HPITCH:    360       # 200 x 1.80; no SRAM constraint, so relaxed 2x
+PDN_VSPACING:  106.96    # (224 - 2*5.04) / 2 = 191 x 0.56
+PDN_HSPACING:  174.6     # (360 - 2*5.4)  / 2 = 194 x 0.90
+PDN_VOFFSET:   13.44     # 24 x 0.56 - calibrate once, see below
+PDN_HOFFSET:   13.5      # 15 x 0.90
+PDN_EXTEND_TO: boundary
+
+# Offset calibration (do this once, after any pitch/width change):
+#
+#   librelane dry_run_config.yaml --to OpenROAD.GeneratePDN --run-tag pdn_align
+#
+# then read the Metal2 stripe centres out of the written DEF and check that
+# every stripe's left edge has the same value modulo 0.56, and that the value
+# is 0.14. At 0.14 the nearest routing track sits exactly 0.28um away, which is
+# Metal2 minimum spacing - legal, with no track wasted. If the residue is
+# something else, add the difference to PDN_VOFFSET and re-run the same check;
+# with an on-grid pitch every column moves together, so one iteration lands it.
 
 PDN_ENABLE_PINS:     true    # Metal4/Metal5 pins for the parent to grab
 PDN_CORE_RING:       false   # hierarchical integration; coordinate Metal5 use with parent
