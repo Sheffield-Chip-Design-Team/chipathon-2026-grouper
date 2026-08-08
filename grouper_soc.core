@@ -1,6 +1,42 @@
 CAPI=2:
 name: sharc:soc_ip:grouper_soc:0.0.1
-description: RISC-V 32IM SoC with UART, SPI and GPIO
+description: RISC-V 32IM SoC with UART, SPI and GPIO (RTL only, no testbench)
+
+# Testbenches live in their own cores, next to the files they drive:
+#   sharc:soc_ip:grouper_soc_tb        hw/tb/top/grouper_soc_tb.core
+#   sharc:soc_ip:grouper_soc_directed  hw/tb/top/grouper_soc_directed.core
+
+parameters:
+  DEBUG_PERIPH:
+    datatype: bool
+    paramtype: vlogdefine
+    description: >
+      Instantiate the ahb_debug peripheral in periph_ss.sv. Must be paired
+      with firmware built with -DDEBUG (FW_DEBUG=1) - otherwise
+      debug()/debug_str() compile to no-ops and never reach it.
+    default: false
+  CPU_TRACE:
+    datatype: bool
+    paramtype: vlogdefine
+    description: >
+      Build cpu_ss with picorv32's instruction trace and enable the trace
+      capture in ahb_debug (needs DEBUG_PERIPH too - ahb_debug is what writes
+      the file). Records go to CPU_TRACE_FILE (default cpu.trace); the cocotb
+      testbench decodes them into cpu_trace.dis.
+      Consumed with `ifdef, so only list it in targets that want it on.
+    default: false
+  ROM_INIT_CONST:
+    datatype: bool
+    paramtype: vlogdefine
+    description: >
+      Build ahb_rom's contents from sw/code.vmem (a list of continuous
+      assigns) instead of loading sw/code.hex with $readmemh. This is the
+      synthesisable form - standard cells have no initial-value mechanism, so
+      $readmemh cannot produce a mask ROM - and is what a synthesis target
+      should set. Simulation wants the default ($readmemh), which picks up a
+      rebuilt firmware without re-elaborating.
+      Consumed with `ifdef, so only list it in targets that want it on.
+    default: false
 
 filesets:
   rtl:
@@ -9,50 +45,46 @@ filesets:
       - sharc:amba_ip:ahb3lite_pkg:0.0.1
       - yosys:cpu_ip:picorv32:1.0.0
       - sharc:comms_ip:ahb_uart:0.0.1
+      - sharc:comms_ip:ahb_spi_s:0.0.1
+      - sharc:comms_ip:ahb_gpio_ctrl:0.0.1
 
     files:
+      - hw/rtl/verilator_waivers.vlt:                     {file_type: vlt}
+
       - hw/rtl/interconnect/ahb_debug.sv:                 {file_type: systemVerilogSource}
       - hw/rtl/interconnect/ahb_conn.sv:                  {file_type: systemVerilogSource}
-      - hw/rtl/interconnect/ahb_interconnect.sv:          {file_type: systemVerilogSource}
+      - hw/rtl/interconnect/ahb_conn_buff.sv:             {file_type: systemVerilogSource}
+      - hw/rtl/interconnect/ahb_stub_slave.sv:            {file_type: systemVerilogSource}
+      - hw/rtl/ahb_interconnect_ss.sv:                    {file_type: systemVerilogSource}
 
-      - hw/rtl/rom/ahb_rom.sv:                            {file_type: systemVerilogSource}
-      - hw/rtl/sram/ahb_ram.sv:                           {file_type: systemVerilogSource}
+      - hw/rtl/memory/ahb_rom.sv:                         {file_type: systemVerilogSource}
+      - hw/rtl/memory/ahb_ram.sv:                         {file_type: systemVerilogSource}
 
-      - hw/rtl/cpu/cpu_ss.sv:                             {file_type: systemVerilogSource}
-      - hw/rtl/periph/periph_ss.sv:                       {file_type: systemVerilogSource}
-
-      - hw/rtl/picorv32_hello_core.sv:                    {file_type: systemVerilogSource}
-      - hw/rtl/picorv32_hello_top.sv:                     {file_type: systemVerilogSource}
+      - hw/rtl/io_ss.sv:                                  {file_type: systemVerilogSource}
+      - hw/rtl/cpu_ss.sv:                                 {file_type: systemVerilogSource}
+      - hw/rtl/periph_ss.sv:                              {file_type: systemVerilogSource}
+      - hw/rtl/digital_ss.sv:                             {file_type: systemVerilogSource}
+      - hw/rtl/grouper_soc_top.sv:                        {file_type: systemVerilogSource}
   sw:
     files:
       - sw/code.vmem:                                     {file_type: systemVerilogSource, is_include_file: true}
       - sw/code.hex:                                      {file_type: systemVerilogSource, is_include_file: true}
-  tb:
-    files:
-      - hw/tb/picorv32_hello_tb.sv:                       {file_type: systemVerilogSource}
 
 targets:
-  default: &sim
-    description: Default.
-    filesets:
-      - rtl
-      - sw
-    toplevel: picorv32_hello_top
+  default: &rtl
+    description: Grouper SoC RTL.
+    filesets: [rtl, sw]
+    toplevel: grouper_soc_top
 
-  tb_top:
-    <<: *sim
-    description: Grouper SoC top-level simulation.
+  lint:
+    <<: *rtl
+    description: Verilator lint-only check of the whole SoC (no simulation)
     flow: sim
     flow_options:
       tool: verilator
+      mode: lint-only
       verilator_options:
-        - -Wno-TIMESCALEMOD
-        - -Wno-fatal
         - --sv
-        - --trace
-        - --trace-fst
-        - --binary
-        - --coverage
-    filesets_append:
-      - tb
-    toplevel: picorv32_hello_tb
+        - -Wall
+        - -Wno-fatal
+        - -Wno-TIMESCALEMOD

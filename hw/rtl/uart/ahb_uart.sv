@@ -1,5 +1,50 @@
-// AHB UART 
-
+// AHB UART Interface
+//
+// Number of addressable locations : 4
+// Size of each addressable location : 32 bits
+// Supported transfer sizes : Word, Halfword, Byte
+// Alignment of base address : Double Word aligned
+//
+// Address map :
+//   Base address + 0 :
+//     UART Control Register
+//   Base address + 4:
+//     UART Status Register
+//   Base address + 8:
+//     UART TX Data FIFO
+//   Base address + 12:
+//     UART RX Data FIFO
+//
+// Bits within UART Control Register:
+//   Bit 0       UART Enable
+//   Bit 1       TX Enable
+//   Bit 2       RX Enable
+//   Bit 3       RX Resynchronizer Enable
+//   Bit 4       TX Assert Break - Asserts a break condition on TX if 1
+//   Bit 5       Flush TX FIFO (Self Clearing)
+//   Bit 6       Flush RX FIFO (Self Clearing)
+//   Bits 25-16  Clock Divider Ratio, (Calculated using (HCLK Frequency / (8*Baud Rate))-1)
+//
+// Bits within UART Status Register:
+//   Bit 0       TX FIFO Empty
+//   Bit 1       TX FIFO Full
+//   Bit 2       RX FIFO Empty
+//   Bit 3       RX FIFO Full
+//   Bit 4       TX Active (1 if currently transmitting data)
+//   Bit 5       RX Frame Error (Self clears after being read)
+//   Bit 6       RX Break Condition (Self clears after being read)
+//
+// Bits within UART TX Data FIFO:
+//   Bits 7-0    TX Data (Write Only, causes a bus error if written to when the FIFO is full)
+//
+// Bits within UART RX Data FIFO:
+//   Bits 7-0    RX Data (Read Only, causes a bus error if written to when the FIFO is empty)
+//
+//
+// Clock Divider Ratio Example Calculation (HCLK = 10MHz, Target Baud = 19200):
+//   int clk_div = 10e+6/(19200*8) - 0.5; // Equals 64
+//   The -0.5 is used to round it to the nearest integer and correct for the offset clock divider value
+//
 
 module ahb_uart #(
   parameter int ADDR_WIDTH = 32,
@@ -43,10 +88,6 @@ module ahb_uart #(
   localparam int CLK_DIV_BITS = 10;
   localparam int UART_DATA_W = 8;
 
-  // AHB transfer codes needed in this module
-  localparam bit [1:0] No_Transfer  = 2'b00;
-  
-
   localparam bit [1:0] ADDR_CTRL    = 2'b00;
   localparam bit [1:0] ADDR_STATUS  = 2'b01;
   localparam bit [1:0] ADDR_TXDATA  = 2'b10;
@@ -70,7 +111,7 @@ module ahb_uart #(
   logic                     status_rx_full;
   logic                     status_tx_active;
   logic                     status_rx_frame_error; // RC
-  logic                     status_rx_break; // RC
+  logic                     status_rx_break;       // RC
   
   // Control signals
   logic                     rx_frame_error; // 1-cycle pulse on frame error
@@ -91,43 +132,46 @@ module ahb_uart #(
   logic [1:0]                 word_address_r;
   logic [(DATA_WIDTH/8)-1:0]  byte_select;
   logic [(DATA_WIDTH/8)-1:0]  byte_select_r;
-  logic invalid_access;
+  logic                       invalid_access;
+  logic                       invalid_access_r;
+  logic                       invalid_read;
+  logic                       invalid_read_r;
 
   // Instance the uart core
   uart #(
     .CLK_DIV_BITS (CLK_DIV_BITS),
     .DATA_WIDTH   (UART_DATA_W)
   ) u_uart (
-      .clk            (HCLK),
-      .rst_n          (HRESETn),
-      .enable         (ctrl_enable),
-      .clk_div        (ctrl_clk_div),
-      .tx_en          (ctrl_tx_en),
-      .rx_en          (ctrl_rx_en),
-      .rx_resync_en   (ctrl_rx_resync_en),
-      .tx_break       (ctrl_tx_break),
-      .tx_active      (status_tx_active),
-      .received       (rx_irq),
-      .rx_frame_error (rx_frame_error),
-      .rx_break       (rx_break),
-      .flush_tx_fifo  (ctrl_flush_tx_fifo),
-      .tx_data        (tx_data),
-      .tx_write       (tx_write),
-      .tx_full        (status_tx_full),
-      .tx_empty       (status_tx_empty),
-      .flush_rx_fifo  (ctrl_flush_rx_fifo),
-      .rx_read        (rx_read),
-      .rx_full        (status_rx_full),
-      .rx_empty       (status_rx_empty),
-      .rx_data        (rx_data),
-      .uart_tx        (uart_tx),
-      .uart_rx        (uart_rx)
+    .clk            (HCLK),
+    .rst_n          (HRESETn),
+    .enable         (ctrl_enable),
+    .clk_div        (ctrl_clk_div),
+    .tx_en          (ctrl_tx_en),
+    .rx_en          (ctrl_rx_en),
+    .rx_resync_en   (ctrl_rx_resync_en),
+    .tx_break       (ctrl_tx_break),
+    .tx_active      (status_tx_active),
+    .received       (rx_irq),
+    .rx_frame_error (rx_frame_error),
+    .rx_break       (rx_break),
+    .flush_tx_fifo  (ctrl_flush_tx_fifo),
+    .tx_data        (tx_data),
+    .tx_write       (tx_write),
+    .tx_full        (status_tx_full),
+    .tx_empty       (status_tx_empty),
+    .flush_rx_fifo  (ctrl_flush_rx_fifo),
+    .rx_read        (rx_read),
+    .rx_full        (status_rx_full),
+    .rx_empty       (status_rx_empty),
+    .rx_data        (rx_data),
+    .uart_tx        (uart_tx),
+    .uart_rx        (uart_rx)
   );
 
   assign rx_error_irq = rx_frame_error;
 
   //Generate the control signals in the address phase
-  assign access       = HREADYIN && HSEL && (HTRANS != HTRANS_IDLE);
+  assign access       = HREADYIN && HSEL && (HTRANS == HTRANS_NONSEQ || HTRANS == HTRANS_SEQ);
   assign read_enable  = access && ~HWRITE;
 
   assign word_address = access ? HADDR[3:2] : '0;
@@ -231,7 +275,7 @@ module ahb_uart #(
     end else begin
       if (read_enable_r && word_address_r == ADDR_STATUS && byte_select_r[0]) begin
         status_rx_frame_error <= '0;
-        status_rx_frame_error <= '0;
+        status_rx_break <= '0;
       end
 
       if (rx_frame_error)
@@ -241,8 +285,9 @@ module ahb_uart #(
     end
 
   //Transfer Response
-  always_comb begin
-    invalid_access = '0;
+  always_comb begin : invalid_access_check
+    // invalid_read is registered so it is valid in the data phase
+    invalid_access = invalid_read_r;
 
     if (write_enable)
       unique case (word_address_r)
@@ -251,18 +296,36 @@ module ahb_uart #(
         ADDR_RXDATA: invalid_access |= '1;
         default: begin end
       endcase
+  end
+
+  always_comb begin : invalid_read_check
+    invalid_read = '0;
 
     if (read_enable)
-      unique case (word_address_r)
-        ADDR_RXDATA: invalid_access |= status_rx_empty;
+      unique case (word_address)
+        ADDR_RXDATA: invalid_read |= status_rx_empty;
         default: begin end
       endcase
   end
 
-  assign HREADYOUT = '1; // Single cycle Write & Read. Zero Wait state operations
+  always_ff @(posedge HCLK, negedge HRESETn)
+    if (~HRESETn) begin
+      invalid_access_r <= '0;
+      invalid_read_r <= '0;
+    end else begin
+      invalid_access_r <= invalid_access;
+      invalid_read_r <= invalid_read;
+    end
 
-  // FIXME - add 2-cycle error response for invalid access.
-  assign HRESP = invalid_access ? 1'b1 : 1'b0;
+  always_comb begin : ahb_resp
+    // Single cycle Write & Read. Zero Wait state operations
+    HREADYOUT = '1;
+    HRESP = invalid_access || invalid_access_r;
+    if (invalid_access && !invalid_access_r) begin
+      // 2 Cycle AHB Error Response
+      HREADYOUT = '0;
+    end
+  end
 
 endmodule
 

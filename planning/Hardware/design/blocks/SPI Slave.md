@@ -16,7 +16,7 @@ SPI slave interface that lets an external SPI master (a host controller — devi
 | ID | Requirement |
 |---|---|
 | `GRPR-SPIS-001` | AHB-Lite subordinate interface on the CPU side. |
-| `GRPR-SPIS-002` | Custom SPI slave interface on the external side: CPOL/CPHA mode 0/3, MSB-first. |
+| `GRPR-SPIS-002` | Custom SPI slave interface on the external side: CPOL/CPHA mode 0/3, MSB-first transfer on MISO. |
 | `GRPR-SPIS-003` | Command set shall be compatible with the APS6404L datasheet's SPI-mode commands (see Purpose note on the inferred host-facing PSRAM-emulation role). |
 
 ## Key Functionality
@@ -28,27 +28,79 @@ SPI slave interface that lets an external SPI master (a host controller — devi
 
 ## Block Diagram
 
-Main blocks: Shift Register, Register Bank, AHB Bus Logic, Command FSM Control. A dedicated firmware-load path exists in parallel with normal register access: `SS` (slave select), `fw_ld_addr`, `fw_ld_wdata`, `fw_ld_we`.
+Main blocks: Shift Register, Register Bank, AHB Bus Logic, Command FSM Control. A dedicated firmware-load path exists in parallel with normal register access: `SS` (slave select)
 
-**Open question — relationship to the UART boot path.** The [Grouper SoC Specification § Boot Sequence](../Grouper%20SoC%20Specification.md#boot-sequence) states UART is the chosen boot-load peripheral specifically because it's simpler for a hand-written boot ROM than SPI/QSPI, and that SPI/QSPI become available "after the initial program code is loaded." But this block's own diagram shows dedicated firmware-load signals (`fw_ld_*`), which reads like a boot-time capability, not a post-boot one. Whether SPI Slave firmware-load is (a) an alternate/parallel boot path to UART, (b) a mechanism for loading a *second-stage* image after the UART-loaded first stage is running, or (c) leftover from an earlier design iteration, is not resolved by the source material — needs a direct answer before this block's firmware-load path is implemented.
+TODO
+
+## uARCH Diagram
+
+TODO
+
 
 ## Parameters and Configurations
 
+FIXME
+
 | ID | Requirement |
 |---|---|
-| `GRPR-SPIS-006` | 4 kB allocated memory block (matches the `SPI Slave`/`SPI S`... region size convention used elsewhere in the 4 KiB-per-peripheral memory map — see [Grouper SoC Specification § Memory Map](../Grouper%20SoC%20Specification.md#memory-map)). |
-| `GRPR-SPIS-007` | Data shall be transferred byte-by-byte. |
-| `GRPR-SPIS-008` | Hardware shall be controlled by reading/writing registers. |
+| `GRPR-SPIS-007` |  |
+| `GRPR-SPIS-008` |  |
 
 ## IOs and External Interfaces
 
 AHB-Lite bus interface plus the external SPI slave pins (`SS`, `SCK`, `MOSI`, `MISO`, per standard SPI slave convention — exact pin names not given in the source). External pin ownership depends on the still-undefined [GPIO Mux](GPIO%20Mux.md) pin-sharing scheme.
 
+## Register Map
+
+| Offset | Name | Access | Reset | Purpose |
+|--------|------|--------|-------|---------|
+| 0x00 | CTRL | R/W | 0x0000_0000 | Enable and reset SPI slave |
+| 0x04 | STATUS | RO | 0x0000_0000 | Current SPI status |
+| 0x08 | TXDATA | WO | - | Data sent to external SPI master |
+| 0x0C | RXDATA | RO | - | Data received from external SPI master |
+
+Unlisted bits are reserved: read 0, write 0.
+
+## CTRL — 0x00
+
+| Bits | Field | Access | Description |
+|------|-------|--------|-------------|
+| 0 | ENABLE | R/W | Enable SPI slave peripheral |
+| 1 | SOFT_RESET | WO | Software reset the SPI slave state machine to its default state |
+| 2 | CPHA  | R/W |  |
+| 3 | CPOL  | R/W |  |
+| 31:4 | Reserved | - | Read 0, write 0 |
+
+Writing 1 to SOFT_RESET resets the SPI slave state machine. The bit self-clears after the reset completes.
+
+## STATUS — 0x04
+
+| Bits | Field | Access | Description |
+|------|-------|--------|-------------|
+| 0 | BUSY | RO | SPI transaction in progress |
+| 1 | RX_VALID | RO | New received byte available |
+| 2 | TX_READY | RO | Ready to provide transmit byte |
+| 31:3 | Reserved | - | Read 0 |
+
+Reset value 0x04 reflects TX_READY = 1 and BUSY = RX_VALID = 0.
+
+## TXDATA — 0x08
+
+| Bits | Field | Access | Description |
+|------|-------|--------|-------------|
+| 7:0 | DATA | WO | Byte returned to the external SPI master |
+| 31:8 | Reserved | - | Read 0, write 0 |
+
+## RXDATA — 0x0C
+
+| Bits | Field | Access | Description |
+|------|-------|--------|-------------|
+| 7:0 | DATA | RO | Last byte received from the external SPI master |
+| 31:8 | Reserved | - | Read 0 |
+
 ## Clocking Strategy
 
 `GRPR-SPIS-009`: Single system clock (`clk`) for everything, per the source.
-
-**Open — internal inconsistency to double-check.** A SPI slave's `SCK` is normally driven by the external master and is therefore asynchronous to the SoC's internal clock; the source's own "single clock domain, no CDC needed" claim (see CDC Strategy below) is atypical for a SPI slave unless `SCK` is somehow phase-locked to `HCLK` by system design (as is true elsewhere in similar designs when the external master and the SoC share a clock reference) or the FSM is intentionally run in the `SCK` domain with a handshake into `HCLK` (undocumented either way). Do not assume single-clock-domain CDC-free operation without confirming which of these is actually true.
 
 ## Reset Strategy
 
@@ -56,7 +108,7 @@ AHB-Lite bus interface plus the external SPI slave pins (`SS`, `SCK`, `MOSI`, `M
 
 ## CDC Strategy
 
-Source states "not needed (single clock domain)" — see the open question under Clocking Strategy above before treating this as settled.
+`GRPR-SPIS-004`: MOSI shall be externally synchronised in the GPIO MUX.
 
 ## Performance Targets
 

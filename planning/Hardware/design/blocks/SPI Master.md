@@ -15,10 +15,11 @@ SPI master peripheral that lets the PicoRV32 CPU issue SPI transactions to an ex
 
 | ID | Requirement |
 |---|---|
-| `GRPR-SPIM-001` | AHB-Lite subordinate interface on the CPU side. |
-| `GRPR-SPIM-002` | SPI mode 0 (and mode 3, see `GRPR-SPIM-006`), MSB-first, on the external device side. |
+| `GRPR-SPIM-001` | There shall be an AHB-Lite subordinate interface on the CPU side. |
+| `GRPR-SPIM-002` | SPI mode 0 (and mode 3, see `GRPR-SPIM-006`) shall be supported.  |
+| `GRPR-SPIM-005` | Serial data shall be transmitted on MSB-first, on the MISO port   |
 | `GRPR-SPIM-003` | Command/transaction set shall be compatible with the APS6404L datasheet's SPI-mode command encoding. |
-| `GRPR-SPIM-004` | Transaction timing/behavior shall be validated for compatibility with the Raspberry Pi Pico (RP2040) hardware SPI peripheral, since APS6404L PSRAM modules are commonly hosted on RP2040-based boards and interop with that ecosystem is a stated goal. **Open — no concrete compatibility criteria (timing margins, supported modes) are documented yet; needs a specific checklist item.** |
+| `GRPR-SPIM-INFO-001` | Transaction timing/behavior shall be validated for compatibility with the Raspberry Pi Pico (RP2040) hardware SPI peripheral, since APS6404L PSRAM modules are commonly hosted on RP2040-based boards and interop with that ecosystem is a stated goal. **Open — no concrete compatibility criteria (timing margins, supported modes) are documented yet; needs a specific checklist item.** |
 
 ## Key Functionality
 

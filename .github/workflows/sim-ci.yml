@@ -29,8 +29,9 @@ jobs:
         run: |
           # ghcr.io requires a lowercase path; github.repository preserves case.
           repo_lower="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
-          version="$(cat .github/verilator-version)"
-          echo "image=ghcr.io/${repo_lower}/sim-verilator:${version}" >> "$GITHUB_OUTPUT"
+          # Must match the tag composed in publish-sim-image.yml exactly.
+          tag="$(cat .github/verilator-version)-riscv$(cat .github/riscv-toolchain-version)"
+          echo "image=ghcr.io/${repo_lower}/sim-verilator:${tag}" >> "$GITHUB_OUTPUT"
 
   sim:
     name: run ${{ matrix.name }}
@@ -48,6 +49,11 @@ jobs:
       - uses: ./.github/actions/setup-sim-env
 
       - name: Run and report ${{ matrix.name }}
+        env:
+          # Picks the firmware top level from sw/tests for the software-test
+          # legs (see sw/scripts/build_fw.sh). Empty for every other target,
+          # which build_fw.sh treats as "use the default sw/src/main.c".
+          FW_TEST: ${{ matrix.fw_test }}
         run: |
           python3 .github/scripts/ci/run_target.py \
             --name "${{ matrix.name }}" \
