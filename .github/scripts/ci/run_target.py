@@ -106,6 +106,7 @@ def main():
         if not results_xml.is_file():
             tests = [{
                 "name": "results_xml_present", "classname": None, "passed": False,
+                "skipped": False,
                 "sim_time_ns": None, "wall_time_s": None,
                 "error_msg": f"{results_xml} not found (build likely failed before cocotb ran)",
             }]
