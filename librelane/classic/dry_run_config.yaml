@@ -57,7 +57,6 @@ DESIGN_NAME: grouper_soc_chip_core
 VERILOG_FILES:
 # GrouperSoC RTL (same order as the fusesoc `rtl` fileset in grouper_soc.core)
 - dir::../../hw/rtl/ahb3lite/ahb3lite_pkg.sv
-- dir::../../hw/rtl/ahb3lite/ahb3lite_intf.sv
 
 - dir::../../hw/rtl/common/clk_div.sv
 - dir::../../hw/rtl/common/clk_gate.sv
@@ -82,7 +81,6 @@ VERILOG_FILES:
 - dir::../../hw/rtl/memory/ahb_rom.sv
 - dir::../../hw/rtl/memory/ahb_ram.sv
 
-- dir::../../hw/rtl/interconnect/ahb_conn.sv
 - dir::../../hw/rtl/interconnect/ahb_conn_buff.sv
 - dir::../../hw/rtl/interconnect/ahb_stub_slave.sv
 

@@ -65,21 +65,141 @@ module periph_ss #(
   input  logic                       ext_HRESP
 );
 
-  // ---- AHBlite interfaces ------------------------------------------------------------
-  
-  ahb3lite_intf ahb_rom        ();
-  ahb3lite_intf ahb_ram        ();
-  ahb3lite_intf ahb_uart       ();
+  // ---- AHBlite peripheral buses --------------------------------------------------------
+  //
+  // One flat signal group per fabric slot, matching the peripheral master
+  // ports on ahb_interconnect_ss. These were `ahb3lite_intf` instances; they
+  // are flat because an interface cannot cross a hierarchy boundary in a
+  // Verilog netlist - see the header of ahb_interconnect_ss.sv.
 
-  ahb3lite_intf ahb_gpio_ctrl  ();  // FIXME - slot wired to ahb_stub_slave
-  ahb3lite_intf ahb_qpsi       ();  // FIXME - slot wired to ahb_stub_slave
-  ahb3lite_intf ahb_spi_m      ();  // FIXME - slot wired to ahb_stub_slave
-  ahb3lite_intf ahb_spi_s      ();     
+  logic [ADDR_WIDTH-1:0] rom_HADDR;
+  logic [2:0]            rom_HBURST;
+  logic                  rom_HMASTLOCK;
+  logic [3:0]            rom_HPROT;
+  logic [2:0]            rom_HSIZE;
+  logic [1:0]            rom_HTRANS;
+  logic [DATA_WIDTH-1:0] rom_HWDATA;
+  logic                  rom_HWRITE;
+  logic                  rom_HREADYIN;
+  logic                  rom_HSEL;
+  logic [DATA_WIDTH-1:0] rom_HRDATA;
+  logic                  rom_HREADYOUT;
+  logic                  rom_HRESP;
 
-  ahb3lite_intf ahb_ext_periph ();
+  logic [ADDR_WIDTH-1:0] ram_HADDR;
+  logic [2:0]            ram_HBURST;
+  logic                  ram_HMASTLOCK;
+  logic [3:0]            ram_HPROT;
+  logic [2:0]            ram_HSIZE;
+  logic [1:0]            ram_HTRANS;
+  logic [DATA_WIDTH-1:0] ram_HWDATA;
+  logic                  ram_HWRITE;
+  logic                  ram_HREADYIN;
+  logic                  ram_HSEL;
+  logic [DATA_WIDTH-1:0] ram_HRDATA;
+  logic                  ram_HREADYOUT;
+  logic                  ram_HRESP;
+
+  logic [ADDR_WIDTH-1:0] uart_HADDR;
+  logic [2:0]            uart_HBURST;
+  logic                  uart_HMASTLOCK;
+  logic [3:0]            uart_HPROT;
+  logic [2:0]            uart_HSIZE;
+  logic [1:0]            uart_HTRANS;
+  logic [DATA_WIDTH-1:0] uart_HWDATA;
+  logic                  uart_HWRITE;
+  logic                  uart_HREADYIN;
+  logic                  uart_HSEL;
+  logic [DATA_WIDTH-1:0] uart_HRDATA;
+  logic                  uart_HREADYOUT;
+  logic                  uart_HRESP;
+
+  logic [ADDR_WIDTH-1:0] gpio_ctrl_HADDR;
+  logic [2:0]            gpio_ctrl_HBURST;
+  logic                  gpio_ctrl_HMASTLOCK;
+  logic [3:0]            gpio_ctrl_HPROT;
+  logic [2:0]            gpio_ctrl_HSIZE;
+  logic [1:0]            gpio_ctrl_HTRANS;
+  logic [DATA_WIDTH-1:0] gpio_ctrl_HWDATA;
+  logic                  gpio_ctrl_HWRITE;
+  logic                  gpio_ctrl_HREADYIN;
+  logic                  gpio_ctrl_HSEL;
+  logic [DATA_WIDTH-1:0] gpio_ctrl_HRDATA;
+  logic                  gpio_ctrl_HREADYOUT;
+  logic                  gpio_ctrl_HRESP;
+
+  // FIXME - slot wired to ahb_stub_slave
+  logic [ADDR_WIDTH-1:0] qpsi_HADDR;
+  logic [2:0]            qpsi_HBURST;
+  logic                  qpsi_HMASTLOCK;
+  logic [3:0]            qpsi_HPROT;
+  logic [2:0]            qpsi_HSIZE;
+  logic [1:0]            qpsi_HTRANS;
+  logic [DATA_WIDTH-1:0] qpsi_HWDATA;
+  logic                  qpsi_HWRITE;
+  logic                  qpsi_HREADYIN;
+  logic                  qpsi_HSEL;
+  logic [DATA_WIDTH-1:0] qpsi_HRDATA;
+  logic                  qpsi_HREADYOUT;
+  logic                  qpsi_HRESP;
+
+  // FIXME - slot wired to ahb_stub_slave
+  logic [ADDR_WIDTH-1:0] spi_m_HADDR;
+  logic [2:0]            spi_m_HBURST;
+  logic                  spi_m_HMASTLOCK;
+  logic [3:0]            spi_m_HPROT;
+  logic [2:0]            spi_m_HSIZE;
+  logic [1:0]            spi_m_HTRANS;
+  logic [DATA_WIDTH-1:0] spi_m_HWDATA;
+  logic                  spi_m_HWRITE;
+  logic                  spi_m_HREADYIN;
+  logic                  spi_m_HSEL;
+  logic [DATA_WIDTH-1:0] spi_m_HRDATA;
+  logic                  spi_m_HREADYOUT;
+  logic                  spi_m_HRESP;
+
+  logic [ADDR_WIDTH-1:0] spi_s_HADDR;
+  logic [2:0]            spi_s_HBURST;
+  logic                  spi_s_HMASTLOCK;
+  logic [3:0]            spi_s_HPROT;
+  logic [2:0]            spi_s_HSIZE;
+  logic [1:0]            spi_s_HTRANS;
+  logic [DATA_WIDTH-1:0] spi_s_HWDATA;
+  logic                  spi_s_HWRITE;
+  logic                  spi_s_HREADYIN;
+  logic                  spi_s_HSEL;
+  logic [DATA_WIDTH-1:0] spi_s_HRDATA;
+  logic                  spi_s_HREADYOUT;
+  logic                  spi_s_HRESP;
+
+  logic [ADDR_WIDTH-1:0] ext_periph_HADDR;
+  logic [2:0]            ext_periph_HBURST;
+  logic                  ext_periph_HMASTLOCK;
+  logic [3:0]            ext_periph_HPROT;
+  logic [2:0]            ext_periph_HSIZE;
+  logic [1:0]            ext_periph_HTRANS;
+  logic [DATA_WIDTH-1:0] ext_periph_HWDATA;
+  logic                  ext_periph_HWRITE;
+  logic                  ext_periph_HREADYIN;
+  logic                  ext_periph_HSEL;
+  logic [DATA_WIDTH-1:0] ext_periph_HRDATA;
+  logic                  ext_periph_HREADYOUT;
+  logic                  ext_periph_HRESP;
 
 `ifdef DEBUG_PERIPH
-  ahb3lite_intf ahb_debug      ();
+  logic [ADDR_WIDTH-1:0] debug_HADDR;
+  logic [2:0]            debug_HBURST;
+  logic                  debug_HMASTLOCK;
+  logic [3:0]            debug_HPROT;
+  logic [2:0]            debug_HSIZE;
+  logic [1:0]            debug_HTRANS;
+  logic [DATA_WIDTH-1:0] debug_HWDATA;
+  logic                  debug_HWRITE;
+  logic                  debug_HREADYIN;
+  logic                  debug_HSEL;
+  logic [DATA_WIDTH-1:0] debug_HRDATA;
+  logic                  debug_HREADYOUT;
+  logic                  debug_HRESP;
 `endif
 
 // --- Internal Signals -----------------------------------------------------------------
@@ -113,20 +233,135 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
     .HREADY           (HREADY),
     .HRESP            (HRESP),
 
-    // Peripheral Master Interfaces 
-    .ahb_rom_m        (ahb_rom.master),
-    .ahb_ram_m        (ahb_ram.master),
-    .ahb_uart_m       (ahb_uart.master),
-    .ahb_gpio_ctrl_m  (ahb_gpio_ctrl.master),
-    .ahb_qpsi_m       (ahb_qpsi.master),
-    .ahb_spi_m_m      (ahb_spi_m.master),
-    .ahb_spi_s_m      (ahb_spi_s.master),
+    // Peripheral master ports
+    .rom_HADDR              (rom_HADDR),
+    .rom_HBURST             (rom_HBURST),
+    .rom_HMASTLOCK          (rom_HMASTLOCK),
+    .rom_HPROT              (rom_HPROT),
+    .rom_HSIZE              (rom_HSIZE),
+    .rom_HTRANS             (rom_HTRANS),
+    .rom_HWDATA             (rom_HWDATA),
+    .rom_HWRITE             (rom_HWRITE),
+    .rom_HREADYIN           (rom_HREADYIN),
+    .rom_HSEL               (rom_HSEL),
+    .rom_HRDATA             (rom_HRDATA),
+    .rom_HREADYOUT          (rom_HREADYOUT),
+    .rom_HRESP              (rom_HRESP),
+
+    .ram_HADDR              (ram_HADDR),
+    .ram_HBURST             (ram_HBURST),
+    .ram_HMASTLOCK          (ram_HMASTLOCK),
+    .ram_HPROT              (ram_HPROT),
+    .ram_HSIZE              (ram_HSIZE),
+    .ram_HTRANS             (ram_HTRANS),
+    .ram_HWDATA             (ram_HWDATA),
+    .ram_HWRITE             (ram_HWRITE),
+    .ram_HREADYIN           (ram_HREADYIN),
+    .ram_HSEL               (ram_HSEL),
+    .ram_HRDATA             (ram_HRDATA),
+    .ram_HREADYOUT          (ram_HREADYOUT),
+    .ram_HRESP              (ram_HRESP),
+
+    .uart_HADDR             (uart_HADDR),
+    .uart_HBURST            (uart_HBURST),
+    .uart_HMASTLOCK         (uart_HMASTLOCK),
+    .uart_HPROT             (uart_HPROT),
+    .uart_HSIZE             (uart_HSIZE),
+    .uart_HTRANS            (uart_HTRANS),
+    .uart_HWDATA            (uart_HWDATA),
+    .uart_HWRITE            (uart_HWRITE),
+    .uart_HREADYIN          (uart_HREADYIN),
+    .uart_HSEL              (uart_HSEL),
+    .uart_HRDATA            (uart_HRDATA),
+    .uart_HREADYOUT         (uart_HREADYOUT),
+    .uart_HRESP             (uart_HRESP),
+
+    .gpio_ctrl_HADDR        (gpio_ctrl_HADDR),
+    .gpio_ctrl_HBURST       (gpio_ctrl_HBURST),
+    .gpio_ctrl_HMASTLOCK    (gpio_ctrl_HMASTLOCK),
+    .gpio_ctrl_HPROT        (gpio_ctrl_HPROT),
+    .gpio_ctrl_HSIZE        (gpio_ctrl_HSIZE),
+    .gpio_ctrl_HTRANS       (gpio_ctrl_HTRANS),
+    .gpio_ctrl_HWDATA       (gpio_ctrl_HWDATA),
+    .gpio_ctrl_HWRITE       (gpio_ctrl_HWRITE),
+    .gpio_ctrl_HREADYIN     (gpio_ctrl_HREADYIN),
+    .gpio_ctrl_HSEL         (gpio_ctrl_HSEL),
+    .gpio_ctrl_HRDATA       (gpio_ctrl_HRDATA),
+    .gpio_ctrl_HREADYOUT    (gpio_ctrl_HREADYOUT),
+    .gpio_ctrl_HRESP        (gpio_ctrl_HRESP),
+
+    .qpsi_HADDR             (qpsi_HADDR),
+    .qpsi_HBURST            (qpsi_HBURST),
+    .qpsi_HMASTLOCK         (qpsi_HMASTLOCK),
+    .qpsi_HPROT             (qpsi_HPROT),
+    .qpsi_HSIZE             (qpsi_HSIZE),
+    .qpsi_HTRANS            (qpsi_HTRANS),
+    .qpsi_HWDATA            (qpsi_HWDATA),
+    .qpsi_HWRITE            (qpsi_HWRITE),
+    .qpsi_HREADYIN          (qpsi_HREADYIN),
+    .qpsi_HSEL              (qpsi_HSEL),
+    .qpsi_HRDATA            (qpsi_HRDATA),
+    .qpsi_HREADYOUT         (qpsi_HREADYOUT),
+    .qpsi_HRESP             (qpsi_HRESP),
+
+    .spi_m_HADDR            (spi_m_HADDR),
+    .spi_m_HBURST           (spi_m_HBURST),
+    .spi_m_HMASTLOCK        (spi_m_HMASTLOCK),
+    .spi_m_HPROT            (spi_m_HPROT),
+    .spi_m_HSIZE            (spi_m_HSIZE),
+    .spi_m_HTRANS           (spi_m_HTRANS),
+    .spi_m_HWDATA           (spi_m_HWDATA),
+    .spi_m_HWRITE           (spi_m_HWRITE),
+    .spi_m_HREADYIN         (spi_m_HREADYIN),
+    .spi_m_HSEL             (spi_m_HSEL),
+    .spi_m_HRDATA           (spi_m_HRDATA),
+    .spi_m_HREADYOUT        (spi_m_HREADYOUT),
+    .spi_m_HRESP            (spi_m_HRESP),
+
+    .spi_s_HADDR            (spi_s_HADDR),
+    .spi_s_HBURST           (spi_s_HBURST),
+    .spi_s_HMASTLOCK        (spi_s_HMASTLOCK),
+    .spi_s_HPROT            (spi_s_HPROT),
+    .spi_s_HSIZE            (spi_s_HSIZE),
+    .spi_s_HTRANS           (spi_s_HTRANS),
+    .spi_s_HWDATA           (spi_s_HWDATA),
+    .spi_s_HWRITE           (spi_s_HWRITE),
+    .spi_s_HREADYIN         (spi_s_HREADYIN),
+    .spi_s_HSEL             (spi_s_HSEL),
+    .spi_s_HRDATA           (spi_s_HRDATA),
+    .spi_s_HREADYOUT        (spi_s_HREADYOUT),
+    .spi_s_HRESP            (spi_s_HRESP),
+
+    .ext_periph_HADDR       (ext_periph_HADDR),
+    .ext_periph_HBURST      (ext_periph_HBURST),
+    .ext_periph_HMASTLOCK   (ext_periph_HMASTLOCK),
+    .ext_periph_HPROT       (ext_periph_HPROT),
+    .ext_periph_HSIZE       (ext_periph_HSIZE),
+    .ext_periph_HTRANS      (ext_periph_HTRANS),
+    .ext_periph_HWDATA      (ext_periph_HWDATA),
+    .ext_periph_HWRITE      (ext_periph_HWRITE),
+    .ext_periph_HREADYIN    (ext_periph_HREADYIN),
+    .ext_periph_HSEL        (ext_periph_HSEL),
+    .ext_periph_HRDATA      (ext_periph_HRDATA),
+    .ext_periph_HREADYOUT   (ext_periph_HREADYOUT),
+    .ext_periph_HRESP       (ext_periph_HRESP)
 
   `ifdef DEBUG_PERIPH
-    .ahb_debug_m      (ahb_debug.master),
+    ,
+    .debug_HADDR            (debug_HADDR),
+    .debug_HBURST           (debug_HBURST),
+    .debug_HMASTLOCK        (debug_HMASTLOCK),
+    .debug_HPROT            (debug_HPROT),
+    .debug_HSIZE            (debug_HSIZE),
+    .debug_HTRANS           (debug_HTRANS),
+    .debug_HWDATA           (debug_HWDATA),
+    .debug_HWRITE           (debug_HWRITE),
+    .debug_HREADYIN         (debug_HREADYIN),
+    .debug_HSEL             (debug_HSEL),
+    .debug_HRDATA           (debug_HRDATA),
+    .debug_HREADYOUT        (debug_HREADYOUT),
+    .debug_HRESP            (debug_HRESP)
   `endif
-
-    .ahb_ext_periph_m (ahb_ext_periph.master)
   );
 
 //--- ROM ------------------------------------------------------------------------------
@@ -137,19 +372,19 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
   ) u_rom (
     .HCLK         (HCLK),
     .HRESETn      (HRESETn),
-    .HADDR        (ahb_rom.HADDR),
-    .HBURST       (ahb_rom.HBURST),
-    .HMASTLOCK    (ahb_rom.HMASTLOCK),
-    .HPROT        (ahb_rom.HPROT),
-    .HSIZE        (ahb_rom.HSIZE),
-    .HTRANS       (ahb_rom.HTRANS),
-    .HWDATA       (ahb_rom.HWDATA),
-    .HWRITE       (ahb_rom.HWRITE),
-    .HRDATA       (ahb_rom.HRDATA),
-    .HREADYOUT    (ahb_rom.HREADYOUT),
-    .HRESP        (ahb_rom.HRESP),
-    .HREADYIN     (ahb_rom.HREADYIN),
-    .HSEL         (ahb_rom.HSEL)
+    .HADDR        (rom_HADDR),
+    .HBURST       (rom_HBURST),
+    .HMASTLOCK    (rom_HMASTLOCK),
+    .HPROT        (rom_HPROT),
+    .HSIZE        (rom_HSIZE),
+    .HTRANS       (rom_HTRANS),
+    .HWDATA       (rom_HWDATA),
+    .HWRITE       (rom_HWRITE),
+    .HRDATA       (rom_HRDATA),
+    .HREADYOUT    (rom_HREADYOUT),
+    .HRESP        (rom_HRESP),
+    .HREADYIN     (rom_HREADYIN),
+    .HSEL         (rom_HSEL)
   );
 
   //--- RAM ------------------------------------------------------------------------------
@@ -160,19 +395,19 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
   ) u_ram (
     .HCLK         (HCLK),
     .HRESETn      (HRESETn),
-    .HADDR        (ahb_ram.HADDR),
-    .HBURST       (ahb_ram.HBURST),
-    .HMASTLOCK    (ahb_ram.HMASTLOCK),
-    .HPROT        (ahb_ram.HPROT),
-    .HSIZE        (ahb_ram.HSIZE),
-    .HTRANS       (ahb_ram.HTRANS),
-    .HWDATA       (ahb_ram.HWDATA),
-    .HWRITE       (ahb_ram.HWRITE),
-    .HRDATA       (ahb_ram.HRDATA),
-    .HREADYOUT    (ahb_ram.HREADYOUT),
-    .HRESP        (ahb_ram.HRESP),
-    .HREADYIN     (ahb_ram.HREADYIN),
-    .HSEL         (ahb_ram.HSEL)
+    .HADDR        (ram_HADDR),
+    .HBURST       (ram_HBURST),
+    .HMASTLOCK    (ram_HMASTLOCK),
+    .HPROT        (ram_HPROT),
+    .HSIZE        (ram_HSIZE),
+    .HTRANS       (ram_HTRANS),
+    .HWDATA       (ram_HWDATA),
+    .HWRITE       (ram_HWRITE),
+    .HRDATA       (ram_HRDATA),
+    .HREADYOUT    (ram_HREADYOUT),
+    .HRESP        (ram_HRESP),
+    .HREADYIN     (ram_HREADYIN),
+    .HSEL         (ram_HSEL)
   );
 
   //--- UART ------------------------------------------------------------------------------
@@ -183,19 +418,19 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
   ) u_uart (
     .HCLK         (HCLK),
     .HRESETn      (HRESETn),
-    .HADDR        (ahb_uart.HADDR),
-    .HBURST       (ahb_uart.HBURST),
-    .HMASTLOCK    (ahb_uart.HMASTLOCK),
-    .HPROT        (ahb_uart.HPROT),
-    .HSIZE        (ahb_uart.HSIZE),
-    .HTRANS       (ahb_uart.HTRANS),
-    .HWDATA       (ahb_uart.HWDATA),
-    .HWRITE       (ahb_uart.HWRITE),
-    .HRDATA       (ahb_uart.HRDATA),
-    .HREADYOUT    (ahb_uart.HREADYOUT),
-    .HRESP        (ahb_uart.HRESP),
-    .HREADYIN     (ahb_uart.HREADYIN),
-    .HSEL         (ahb_uart.HSEL),
+    .HADDR        (uart_HADDR),
+    .HBURST       (uart_HBURST),
+    .HMASTLOCK    (uart_HMASTLOCK),
+    .HPROT        (uart_HPROT),
+    .HSIZE        (uart_HSIZE),
+    .HTRANS       (uart_HTRANS),
+    .HWDATA       (uart_HWDATA),
+    .HWRITE       (uart_HWRITE),
+    .HRDATA       (uart_HRDATA),
+    .HREADYOUT    (uart_HREADYOUT),
+    .HRESP        (uart_HRESP),
+    .HREADYIN     (uart_HREADYIN),
+    .HSEL         (uart_HSEL),
 
     .rx_irq       (uart_rx_irq),
     .rx_error_irq (uart_rx_error_irq),
@@ -213,19 +448,19 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
   ) u_qspi_stub (
     .HCLK         (HCLK),
     .HRESETn      (HRESETn),
-    .HADDR        (ahb_qpsi.HADDR),
-    .HBURST       (ahb_qpsi.HBURST),
-    .HMASTLOCK    (ahb_qpsi.HMASTLOCK),
-    .HPROT        (ahb_qpsi.HPROT),
-    .HSIZE        (ahb_qpsi.HSIZE),
-    .HTRANS       (ahb_qpsi.HTRANS),
-    .HWDATA       (ahb_qpsi.HWDATA),
-    .HWRITE       (ahb_qpsi.HWRITE),
-    .HRDATA       (ahb_qpsi.HRDATA),
-    .HREADYOUT    (ahb_qpsi.HREADYOUT),
-    .HRESP        (ahb_qpsi.HRESP),
-    .HREADYIN     (ahb_qpsi.HREADYIN),
-    .HSEL         (ahb_qpsi.HSEL)
+    .HADDR        (qpsi_HADDR),
+    .HBURST       (qpsi_HBURST),
+    .HMASTLOCK    (qpsi_HMASTLOCK),
+    .HPROT        (qpsi_HPROT),
+    .HSIZE        (qpsi_HSIZE),
+    .HTRANS       (qpsi_HTRANS),
+    .HWDATA       (qpsi_HWDATA),
+    .HWRITE       (qpsi_HWRITE),
+    .HRDATA       (qpsi_HRDATA),
+    .HREADYOUT    (qpsi_HREADYOUT),
+    .HRESP        (qpsi_HRESP),
+    .HREADYIN     (qpsi_HREADYIN),
+    .HSEL         (qpsi_HSEL)
   );
 
   //--- SPI Master ------------------------------------------------------------------------
@@ -237,19 +472,19 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
   ) u_spi_m_stub (
     .HCLK         (HCLK),
     .HRESETn      (HRESETn),
-    .HADDR        (ahb_spi_m.HADDR),
-    .HBURST       (ahb_spi_m.HBURST),
-    .HMASTLOCK    (ahb_spi_m.HMASTLOCK),
-    .HPROT        (ahb_spi_m.HPROT),
-    .HSIZE        (ahb_spi_m.HSIZE),
-    .HTRANS       (ahb_spi_m.HTRANS),
-    .HWDATA       (ahb_spi_m.HWDATA),
-    .HWRITE       (ahb_spi_m.HWRITE),
-    .HRDATA       (ahb_spi_m.HRDATA),
-    .HREADYOUT    (ahb_spi_m.HREADYOUT),
-    .HRESP        (ahb_spi_m.HRESP),
-    .HREADYIN     (ahb_spi_m.HREADYIN),
-    .HSEL         (ahb_spi_m.HSEL)
+    .HADDR        (spi_m_HADDR),
+    .HBURST       (spi_m_HBURST),
+    .HMASTLOCK    (spi_m_HMASTLOCK),
+    .HPROT        (spi_m_HPROT),
+    .HSIZE        (spi_m_HSIZE),
+    .HTRANS       (spi_m_HTRANS),
+    .HWDATA       (spi_m_HWDATA),
+    .HWRITE       (spi_m_HWRITE),
+    .HRDATA       (spi_m_HRDATA),
+    .HREADYOUT    (spi_m_HREADYOUT),
+    .HRESP        (spi_m_HRESP),
+    .HREADYIN     (spi_m_HREADYIN),
+    .HSEL         (spi_m_HSEL)
   );
 
   //--- SPI Slave -------------------------------------------------------------------------
@@ -265,19 +500,19 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
   ) u_spi_s_stub (
     .HCLK         (HCLK),
     .HRESETn      (HRESETn),
-    .HADDR        (ahb_spi_s.HADDR),
-    .HBURST       (ahb_spi_s.HBURST),
-    .HMASTLOCK    (ahb_spi_s.HMASTLOCK),
-    .HPROT        (ahb_spi_s.HPROT),
-    .HSIZE        (ahb_spi_s.HSIZE),
-    .HTRANS       (ahb_spi_s.HTRANS),
-    .HWDATA       (ahb_spi_s.HWDATA),
-    .HWRITE       (ahb_spi_s.HWRITE),
-    .HRDATA       (ahb_spi_s.HRDATA),
-    .HREADYOUT    (ahb_spi_s.HREADYOUT),
-    .HRESP        (ahb_spi_s.HRESP),
-    .HREADYIN     (ahb_spi_s.HREADYIN),
-    .HSEL         (ahb_spi_s.HSEL)
+    .HADDR        (spi_s_HADDR),
+    .HBURST       (spi_s_HBURST),
+    .HMASTLOCK    (spi_s_HMASTLOCK),
+    .HPROT        (spi_s_HPROT),
+    .HSIZE        (spi_s_HSIZE),
+    .HTRANS       (spi_s_HTRANS),
+    .HWDATA       (spi_s_HWDATA),
+    .HWRITE       (spi_s_HWRITE),
+    .HRDATA       (spi_s_HRDATA),
+    .HREADYOUT    (spi_s_HREADYOUT),
+    .HRESP        (spi_s_HRESP),
+    .HREADYIN     (spi_s_HREADYIN),
+    .HSEL         (spi_s_HSEL)
   );
 
   // io_ss still drives mux_spi_s_{ss,sck,mosi}_i towards the (absent) slave;
@@ -293,19 +528,19 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
     .HCLK         (HCLK),
     .HRESETn      (HRESETn),
 
-    .HADDR        (ahb_spi_s.HADDR),
-    .HBURST       (ahb_spi_s.HBURST),
-    .HMASTLOCK    (ahb_spi_s.HMASTLOCK),
-    .HPROT        (ahb_spi_s.HPROT),
-    .HSIZE        (ahb_spi_s.HSIZE),
-    .HTRANS       (ahb_spi_s.HTRANS),
-    .HWDATA       (ahb_spi_s.HWDATA),
-    .HWRITE       (ahb_spi_s.HWRITE),
-    .HRDATA       (ahb_spi_s.HRDATA),
-    .HREADYOUT    (ahb_spi_s.HREADYOUT),
-    .HRESP        (ahb_spi_s.HRESP),
-    .HREADYIN     (ahb_spi_s.HREADYIN),
-    .HSEL         (ahb_spi_s.HSEL),
+    .HADDR        (spi_s_HADDR),
+    .HBURST       (spi_s_HBURST),
+    .HMASTLOCK    (spi_s_HMASTLOCK),
+    .HPROT        (spi_s_HPROT),
+    .HSIZE        (spi_s_HSIZE),
+    .HTRANS       (spi_s_HTRANS),
+    .HWDATA       (spi_s_HWDATA),
+    .HWRITE       (spi_s_HWRITE),
+    .HRDATA       (spi_s_HRDATA),
+    .HREADYOUT    (spi_s_HREADYOUT),
+    .HRESP        (spi_s_HRESP),
+    .HREADYIN     (spi_s_HREADYIN),
+    .HSEL         (spi_s_HSEL),
 
     // TODO - add IRQs
 
@@ -328,19 +563,19 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
     .HCLK            (HCLK),
     .HRESETn         (HRESETn),
 
-    .HADDR           (ahb_gpio_ctrl.HADDR),
-    .HBURST          (ahb_gpio_ctrl.HBURST),
-    .HMASTLOCK       (ahb_gpio_ctrl.HMASTLOCK),
-    .HPROT           (ahb_gpio_ctrl.HPROT),
-    .HSIZE           (ahb_gpio_ctrl.HSIZE),
-    .HTRANS          (ahb_gpio_ctrl.HTRANS),
-    .HWDATA          (ahb_gpio_ctrl.HWDATA),
-    .HWRITE          (ahb_gpio_ctrl.HWRITE),
-    .HRDATA          (ahb_gpio_ctrl.HRDATA),
-    .HREADYOUT       (ahb_gpio_ctrl.HREADYOUT),
-    .HRESP           (ahb_gpio_ctrl.HRESP),
-    .HREADYIN        (ahb_gpio_ctrl.HREADYIN),
-    .HSEL            (ahb_gpio_ctrl.HSEL),
+    .HADDR           (gpio_ctrl_HADDR),
+    .HBURST          (gpio_ctrl_HBURST),
+    .HMASTLOCK       (gpio_ctrl_HMASTLOCK),
+    .HPROT           (gpio_ctrl_HPROT),
+    .HSIZE           (gpio_ctrl_HSIZE),
+    .HTRANS          (gpio_ctrl_HTRANS),
+    .HWDATA          (gpio_ctrl_HWDATA),
+    .HWRITE          (gpio_ctrl_HWRITE),
+    .HRDATA          (gpio_ctrl_HRDATA),
+    .HREADYOUT       (gpio_ctrl_HREADYOUT),
+    .HRESP           (gpio_ctrl_HRESP),
+    .HREADYIN        (gpio_ctrl_HREADYIN),
+    .HSEL            (gpio_ctrl_HSEL),
 
     // Serial Interface Signals
     .spi_s_ss_i      (mux_spi_s_ss_i),
@@ -374,17 +609,17 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
 
   //--- External Peripheral -------------------------------------------------------------------------
 
-  assign ext_HADDR     = ahb_ext_periph.HADDR;
-  assign ext_HBURST    = ahb_ext_periph.HBURST;
-  assign ext_HMASTLOCK = ahb_ext_periph.HMASTLOCK;
-  assign ext_HPROT     = ahb_ext_periph.HPROT;
-  assign ext_HSIZE     = ahb_ext_periph.HSIZE;
-  assign ext_HTRANS    = ahb_ext_periph.HTRANS;
-  assign ext_HWDATA    = ahb_ext_periph.HWDATA;
-  assign ext_HWRITE    = ahb_ext_periph.HWRITE;
-  assign ahb_ext_periph.HRDATA    = ext_HRDATA;
-  assign ahb_ext_periph.HREADYOUT = ext_HREADY;
-  assign ahb_ext_periph.HRESP     = ext_HRESP;
+  assign ext_HADDR     = ext_periph_HADDR;
+  assign ext_HBURST    = ext_periph_HBURST;
+  assign ext_HMASTLOCK = ext_periph_HMASTLOCK;
+  assign ext_HPROT     = ext_periph_HPROT;
+  assign ext_HSIZE     = ext_periph_HSIZE;
+  assign ext_HTRANS    = ext_periph_HTRANS;
+  assign ext_HWDATA    = ext_periph_HWDATA;
+  assign ext_HWRITE    = ext_periph_HWRITE;
+  assign ext_periph_HRDATA    = ext_HRDATA;
+  assign ext_periph_HREADYOUT = ext_HREADY;
+  assign ext_periph_HRESP     = ext_HRESP;
 
   //--- Debug Peripheral -------------------------------------------------------------------------
   // Only instantiated if DEBUG_PERIPH is defined, otherwise the trace signals are unused.
@@ -401,19 +636,19 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
   ) u_debug (
     .HCLK         (HCLK),
     .HRESETn      (HRESETn),
-    .HADDR        (ahb_debug.HADDR),
-    .HBURST       (ahb_debug.HBURST),
-    .HMASTLOCK    (ahb_debug.HMASTLOCK),
-    .HPROT        (ahb_debug.HPROT),
-    .HSIZE        (ahb_debug.HSIZE),
-    .HTRANS       (ahb_debug.HTRANS),
-    .HWDATA       (ahb_debug.HWDATA),
-    .HWRITE       (ahb_debug.HWRITE),
-    .HRDATA       (ahb_debug.HRDATA),
-    .HREADYOUT    (ahb_debug.HREADYOUT),
-    .HRESP        (ahb_debug.HRESP),
-    .HREADYIN     (ahb_debug.HREADYIN),
-    .HSEL         (ahb_debug.HSEL),
+    .HADDR        (debug_HADDR),
+    .HBURST       (debug_HBURST),
+    .HMASTLOCK    (debug_HMASTLOCK),
+    .HPROT        (debug_HPROT),
+    .HSIZE        (debug_HSIZE),
+    .HTRANS       (debug_HTRANS),
+    .HWDATA       (debug_HWDATA),
+    .HWRITE       (debug_HWRITE),
+    .HRDATA       (debug_HRDATA),
+    .HREADYOUT    (debug_HREADYOUT),
+    .HRESP        (debug_HRESP),
+    .HREADYIN     (debug_HREADYIN),
+    .HSEL         (debug_HSEL),
 
     .trace_valid  (trace_valid),
     .trace_data   (trace_data)

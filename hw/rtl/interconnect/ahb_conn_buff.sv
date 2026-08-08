@@ -1,9 +1,14 @@
-// For connecting two ahb3lite interfaces together (with a buffer)
-// Useful for putting interfaces into an array
+// AHB-Lite register slice: a buffered connection between an upstream master
+// port (s_*, on which this module is the slave) and a downstream slave port
+// (m_*, on which this module is the master).
 //
-// Same role as ahb_conn, but with a register stage in BOTH the request and
-// the response direction, to break long combinational paths between the
-// fabric and a physically distant slave.
+// A register stage in BOTH the request and the response direction, to break
+// long combinational paths between the fabric and a physically distant slave.
+// Slots that do not need one are wired straight through in
+// ahb_interconnect_ss instead - a pass-through module would be pure wiring.
+//
+// Ports are flat AHB signal groups rather than `ahb3lite_intf` modports; see
+// the note at the top of ahb_interconnect_ss.sv for why.
 //
 // AHB has no way to simply "add latency": the data phase is one cycle wide
 // unless the slave stretches it, so a plain register slice makes the
@@ -19,7 +24,7 @@
 //   cycle 2  downstream data phase      capture HRDATA      HREADYOUT 0
 //   cycle 3  upstream data phase        HRDATA presented    HREADYOUT 1
 //
-// So a transfer that takes one cycle through ahb_conn takes three here.
+// So a transfer that takes one cycle straight through takes three here.
 // That is the cost of the register stage, not a bug.
 //
 // The response must be captured in exactly the downstream data-phase cycle:
@@ -33,10 +38,38 @@ module ahb_conn_buff #(
   parameter int ADDR_WIDTH = 32,
   parameter int DATA_WIDTH = 32
 ) (
-  input logic          hclk,
-  input logic          hresetn,
-  ahb3lite_intf.master ahb_m,
-  ahb3lite_intf.slave  ahb_s
+  input  logic                  hclk,
+  input  logic                  hresetn,
+
+  // Upstream port - this module is the AHB slave here
+  input  logic [ADDR_WIDTH-1:0] s_HADDR,
+  input  logic [2:0]            s_HBURST,
+  input  logic                  s_HMASTLOCK,
+  input  logic [3:0]            s_HPROT,
+  input  logic [2:0]            s_HSIZE,
+  input  logic [1:0]            s_HTRANS,
+  input  logic [DATA_WIDTH-1:0] s_HWDATA,
+  input  logic                  s_HWRITE,
+  input  logic                  s_HREADYIN,
+  input  logic                  s_HSEL,
+  output logic [DATA_WIDTH-1:0] s_HRDATA,
+  output logic                  s_HREADYOUT,
+  output logic                  s_HRESP,
+
+  // Downstream port - this module is the AHB master here
+  output logic [ADDR_WIDTH-1:0] m_HADDR,
+  output logic [2:0]            m_HBURST,
+  output logic                  m_HMASTLOCK,
+  output logic [3:0]            m_HPROT,
+  output logic [2:0]            m_HSIZE,
+  output logic [1:0]            m_HTRANS,
+  output logic [DATA_WIDTH-1:0] m_HWDATA,
+  output logic                  m_HWRITE,
+  output logic                  m_HREADYIN,
+  output logic                  m_HSEL,
+  input  logic [DATA_WIDTH-1:0] m_HRDATA,
+  input  logic                  m_HREADYOUT,
+  input  logic                  m_HRESP
 );
 
   import ahb3lite_pkg::*;
@@ -65,9 +98,9 @@ module ahb_conn_buff #(
 
   // A new upstream transfer is being presented this cycle
   logic accept;
-  assign accept = ahb_s.HSEL && ahb_s.HREADYIN
-                  && (ahb_s.HTRANS != HTRANS_IDLE)
-                  && (ahb_s.HTRANS != HTRANS_BUSY);
+  assign accept = s_HSEL && s_HREADYIN
+                  && (s_HTRANS != HTRANS_IDLE)
+                  && (s_HTRANS != HTRANS_BUSY);
 
   // Only IDLE and DONE drive HREADYOUT high, so those are the only states
   // in which an upstream address phase can complete.
@@ -88,54 +121,54 @@ module ahb_conn_buff #(
       resp_resp    <= '0;
     end else begin
       if (capture_req) begin
-        req_addr     <= ahb_s.HADDR;
-        req_burst    <= ahb_s.HBURST;
-        req_mastlock <= ahb_s.HMASTLOCK;
-        req_prot     <= ahb_s.HPROT;
-        req_size     <= ahb_s.HSIZE;
-        req_write    <= ahb_s.HWRITE;
+        req_addr     <= s_HADDR;
+        req_burst    <= s_HBURST;
+        req_mastlock <= s_HMASTLOCK;
+        req_prot     <= s_HPROT;
+        req_size     <= s_HSIZE;
+        req_write    <= s_HWRITE;
       end
 
       // Upstream is in its (stalled) data phase during REQ, so HWDATA is
       // valid and held stable by the master until we release HREADYOUT.
       if (state == REQ)
-        req_wdata <= ahb_s.HWDATA;
+        req_wdata <= s_HWDATA;
 
-      if ((state == RESP) && ahb_m.HREADYOUT) begin
-        resp_rdata <= ahb_m.HRDATA;
-        resp_resp  <= ahb_m.HRESP;
+      if ((state == RESP) && m_HREADYOUT) begin
+        resp_rdata <= m_HRDATA;
+        resp_resp  <= m_HRESP;
       end
 
       unique case (state)
-        IDLE: if (accept)          state <= REQ;
-        REQ:  if (ahb_m.HREADYOUT) state <= RESP;
-        RESP: if (ahb_m.HREADYOUT) state <= DONE;
-        DONE:                      state <= accept ? REQ : IDLE;
+        IDLE: if (accept)        state <= REQ;
+        REQ:  if (m_HREADYOUT)   state <= RESP;
+        RESP: if (m_HREADYOUT)   state <= DONE;
+        DONE:                    state <= accept ? REQ : IDLE;
       endcase
     end
 
   always_comb begin
     // Request path: driven from the capture registers
-    ahb_m.HADDR     = req_addr;
-    ahb_m.HBURST    = req_burst;
-    ahb_m.HMASTLOCK = req_mastlock;
-    ahb_m.HPROT     = req_prot;
-    ahb_m.HSIZE     = req_size;
-    ahb_m.HWRITE    = req_write;
-    ahb_m.HWDATA    = req_wdata;
+    m_HADDR     = req_addr;
+    m_HBURST    = req_burst;
+    m_HMASTLOCK = req_mastlock;
+    m_HPROT     = req_prot;
+    m_HSIZE     = req_size;
+    m_HWRITE    = req_write;
+    m_HWDATA    = req_wdata;
 
-    ahb_m.HSEL      = (state == REQ) || (state == RESP);
-    ahb_m.HTRANS    = (state == REQ) ? HTRANS_NONSEQ : HTRANS_IDLE;
+    m_HSEL      = (state == REQ) || (state == RESP);
+    m_HTRANS    = (state == REQ) ? HTRANS_NONSEQ : HTRANS_IDLE;
 
     // Point-to-point downstream, so the slave's own HREADYOUT is its HREADY
-    ahb_m.HREADYIN  = ahb_m.HREADYOUT;
+    m_HREADYIN  = m_HREADYOUT;
 
     // Response path: driven from the capture registers, with the upstream
     // data phase held open until they hold the real response.
-    ahb_s.HRDATA    = resp_rdata;
+    s_HRDATA    = resp_rdata;
 
-    ahb_s.HRESP     = (state == DONE) ? resp_resp : 1'b0;
-    ahb_s.HREADYOUT = (state == IDLE) || (state == DONE);
+    s_HRESP     = (state == DONE) ? resp_resp : 1'b0;
+    s_HREADYOUT = (state == IDLE) || (state == DONE);
   end
 
 endmodule

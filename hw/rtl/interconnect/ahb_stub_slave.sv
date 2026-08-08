@@ -38,21 +38,66 @@ module ahb_stub_slave #(
 
   import ahb3lite_pkg::*;
 
-  // Register the address-phase access into the data phase, matching the
-  // pipelining of the other peripheral register blocks in this repo.
-  logic access_r;
+  // Address-phase access qualifier.
+  logic access;
+  assign access = HREADYIN && HSEL && (HTRANS != HTRANS_IDLE);
+
+  // --- Data-path counters ----------------------------------------------------
+  //
+  // The same idea as the DRY_RUN placeholder in ahb_ram.sv: this block has no
+  // storage, so a constant HRDATA leaves the whole write path with no consumer
+  // and the read path with no real driver, and synthesis prunes the slot down
+  // to tie cells. Two counters keep both live:
+  //
+  //   wdata_cnt  loads the bus write data on a write, free-runs otherwise, so
+  //              every HWDATA bit reaches a real endpoint.
+  //   rdata_cnt  free-runs, and mixes in wdata_cnt on a read, so HRDATA has a
+  //              real driver that depends on traffic the block has seen.
+  //
+  // Neither is a memory: reads do not return what was written.
+
+  logic [DATA_WIDTH-1:0] wdata_cnt;
+  logic [DATA_WIDTH-1:0] rdata_cnt;
+
+  always_ff @(posedge HCLK, negedge HRESETn)
+    if (!HRESETn) begin
+      wdata_cnt <= '0;
+      rdata_cnt <= '0;
+    end else begin
+      wdata_cnt <= (access &&  HWRITE) ? HWDATA                : wdata_cnt + 1'b1;
+      rdata_cnt <= (access && !HWRITE) ? (rdata_cnt ^ wdata_cnt) : rdata_cnt + 1'b1;
+    end
+
+  assign HRDATA = rdata_cnt;
+
+  // --- Two-cycle error response ----------------------------------------------
+  //
+  // Same shape as the SLVERR response in ahb_gpio_ctrl.sv: cycle one drives
+  // HRESP high with HREADYOUT low, cycle two drives both high.
+  //
+  // The trigger is the MSB of wdata_cnt, sampled at the end of the address
+  // phase. Sampled rather than used live because the counters keep running
+  // through the stalled cycle, and AHB requires HRESP to stay asserted for
+  // both cycles of the response.
+  //
+  // NOTE: this is a behavioural change from "every access to an unimplemented
+  // block is an error". Roughly half of all accesses now complete with OKAY,
+  // so software can no longer rely on HRESP to detect that it hit a stub.
+
+  logic err_req;
+  logic err_phase2;
 
   always_ff @(posedge HCLK, negedge HRESETn)
     if (!HRESETn)
-      access_r <= '0;
-    else
-      access_r <= HREADYIN && HSEL && (HTRANS != HTRANS_IDLE);
+      err_req <= '0;
+    else if (HREADYOUT)   // hold the trigger for the whole response
+      err_req <= access && wdata_cnt[DATA_WIDTH-1];
 
-  assign HRDATA    = '0;
-  assign HREADYOUT = 1'b1; // Single cycle response, zero wait states.
+  always_ff @(posedge HCLK, negedge HRESETn)
+    if (~HRESETn) err_phase2 <= '0;
+    else          err_phase2 <= err_req && !err_phase2;
 
-  // FIXME - add 2-cycle error response for spec-compliant SLVERR, same as
-  // the TODO already flagged in ahb_interconnect.sv.
-  assign HRESP     = access_r;
+  assign HREADYOUT = !(err_req && !err_phase2);
+  assign HRESP     = err_req || err_phase2;
 
 endmodule
