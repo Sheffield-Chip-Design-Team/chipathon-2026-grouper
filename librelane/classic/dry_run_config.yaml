@@ -191,9 +191,9 @@ PL_RESIZER_SETUP_MAX_BUFFER_PCT: 40
 # Placement
 # The 1310x1150 `irdrop_check_d` baseline used 68% target density and a
 # relaxed fanout limit to avoid excessive buffering.
-PL_TARGET_DENSITY_PCT: 68
+PL_TARGET_DENSITY_PCT: 45
 MAX_FANOUT_CONSTRAINT: 16
-GRT_ALLOW_CONGESTION: true
+GRT_ALLOW_CONGESTION: false
 GRT_ADJUSTMENT: 0.2
 GPL_CELL_PADDING: 2
 DPL_CELL_PADDING: 2
