@@ -77,7 +77,7 @@ VERILOG_FILES:
 - dir::../../hw/rtl/uart/ahb_uart.sv
 
 - dir::../../hw/rtl/gpio/gpio_ctrl_pkg.sv
-- dir::../../hw/rtl/gpio/ahb_gpio_ctrl.s
+- dir::../../hw/rtl/gpio/ahb_gpio_ctrl.sv
 
 - dir::../../hw/rtl/memory/ahb_rom.sv
 - dir::../../hw/rtl/memory/ahb_ram.sv
