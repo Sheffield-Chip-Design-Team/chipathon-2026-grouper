@@ -33,10 +33,18 @@ set clocks [get_clocks $clock_port]
 
 # Inputs: async reset plus the pad-side input values coming back from the
 # padring. bidir_in is an input to chip_core even though the pad is bidirectional.
+#
+# Trailing `*` rather than `[*]`: this design is elaborated standalone, so it
+# takes chip_core's own NUM_INPUT_PADS default of 1 rather than the 12 that
+# slot_defines.svh gives chip_top. A one-bit port is emitted as a scalar
+# `input_in`, which `input_in[*]` does not match - STA reports
+# "[STA-0366] port 'input_in[*]' not found" and the port silently ends up with
+# no input delay at all. `input_in*` matches the scalar and every bit of a
+# bussed version, so the same constraints hold whatever the pad count is.
 set core_input_ports [get_ports {
     rst_n
-    input_in[*]
-    bidir_in[*]
+    input_in*
+    bidir_in*
 }]
 
 set_input_delay -min 0                   -clock $clocks $core_input_ports
@@ -52,8 +60,8 @@ set core_output_ports [get_ports {
     bidir_ie[*]
     bidir_pu[*]
     bidir_pd[*]
-    input_pu[*]
-    input_pd[*]
+    input_pu*
+    input_pd*
 }]
 
 set_output_delay $output_delay_value -clock $clocks $core_output_ports
