@@ -50,18 +50,18 @@ module ahb_gpio_ctrl #(
   import ahb3lite_pkg::*;
   import gpio_ctrl_pkg::*;
 
+
+  localparam int NUM_BYTES = DATA_WIDTH / 8;
+
+  // Internal Signals
+  logic [NUM_GPIO-1:0] wdata;
+  logic [NUM_GPIO-1:0] wmask;
+
   // Merge the selected byte lanes over a register's current value, so a byte
   // or halfword write leaves the other lanes alone.
   function automatic logic [NUM_GPIO-1:0] merge(input logic [NUM_GPIO-1:0] old_val);
     return (wdata & wmask) | (old_val & ~wmask);
   endfunction
-
-  localparam int NUM_BYTES = DATA_WIDTH / 8;
-
-  // Internal Signals
-
-  logic [NUM_GPIO-1:0] wdata;
-  logic [NUM_GPIO-1:0] wmask;
 
   //  Register Fields 
   logic [NUM_GPIO-1:0] out_r;         // GPIO_OUT

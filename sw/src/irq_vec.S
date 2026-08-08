@@ -32,12 +32,17 @@ irq_vec:
 	sw x13,  9*4(x1)
 	sw x14, 10*4(x1)
 	sw x15, 11*4(x1)
+	// RV32E (hw/rtl/cpu_ss.sv builds picorv32 with ENABLE_REGS_16_31=0) has no
+	// x16-x31, so a6/a7 and t3-t6 are not there to save. Keep the slot indices
+	// of the registers below unchanged - see the .fill in start.S.
+#ifndef __riscv_e
 	sw x16, 12*4(x1)
 	sw x17, 13*4(x1)
 	sw x28, 14*4(x1)
 	sw x29, 15*4(x1)
 	sw x30, 16*4(x1)
 	sw x31, 17*4(x1)
+#endif
 #else
 	sw x3,   3*4(x1)
 	sw x4,   4*4(x1)
@@ -173,12 +178,15 @@ irq_vec:
 	lw x13,  9*4(x1)
 	lw x14, 10*4(x1)
 	lw x15, 11*4(x1)
+	// Mirrors the RV32E exclusion on the save side above.
+#ifndef __riscv_e
 	lw x16, 12*4(x1)
 	lw x17, 13*4(x1)
 	lw x28, 14*4(x1)
 	lw x29, 15*4(x1)
 	lw x30, 16*4(x1)
 	lw x31, 17*4(x1)
+#endif
 #else
 	lw x3,   3*4(x1)
 	lw x4,   4*4(x1)

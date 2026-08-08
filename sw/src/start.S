@@ -52,7 +52,13 @@ irq_regs:
 	// registers are saved to this memory region during interrupt handling
 	// the program counter is saved as register 0
 #ifdef ENABLE_FASTIRQ
+#ifdef __riscv_e
+	// RV32E: x16-x31 do not exist, so slots 12-17 are never written by
+	// irq_vec.S. Reserve only what is used.
+	.fill 12,4
+#else
 	.fill 18,4 // We need less storage for this since we aren't saving all regs
+#endif
 #else
 	.fill 32,4
 #endif

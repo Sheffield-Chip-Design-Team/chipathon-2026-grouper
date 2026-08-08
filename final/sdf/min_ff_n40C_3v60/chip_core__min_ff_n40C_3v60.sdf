@@ -1,0 +1,2267 @@
+(DELAYFILE
+ (SDFVERSION "3.0")
+ (DESIGN "chip_core")
+ (DATE "Fri Aug  7 17:09:59 2026")
+ (VENDOR "Parallax")
+ (PROGRAM "STA")
+ (VERSION "2.7.0")
+ (DIVIDER .)
+ (TIMESCALE 1ns)
+ (CELL
+  (CELLTYPE "chip_core")
+  (INSTANCE)
+  (DELAY
+   (ABSOLUTE
+    (INTERCONNECT clk ANTENNA_clkbuf_0_clk_I.I (0.001:0.001:0.001))
+    (INTERCONNECT clk clkbuf_0_clk.I (0.001:0.001:0.001))
+    (INTERCONNECT input_in ANTENNA_input17_I.I (0.000:0.000:0.000))
+    (INTERCONNECT input_in input17.I (0.000:0.000:0.000))
+    (INTERCONNECT rst_n ANTENNA_hold333_I.I (0.000:0.000:0.000))
+    (INTERCONNECT rst_n hold333.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[15] ANTENNA_input7_I.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[15] input7.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[14] ANTENNA_input6_I.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[14] input6.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[13] ANTENNA_input5_I.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[13] input5.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[12] ANTENNA_input4_I.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[12] input4.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[11] ANTENNA_input3_I.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[11] input3.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[10] ANTENNA_input2_I.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[10] input2.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[9] ANTENNA_input16_I.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[9] input16.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[8] ANTENNA_input15_I.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[8] input15.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[7] ANTENNA_input14_I.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[7] input14.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[6] ANTENNA_input13_I.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[6] input13.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[5] ANTENNA_input12_I.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[5] input12.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[4] ANTENNA_input11_I.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[4] input11.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[3] ANTENNA_input10_I.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[3] input10.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[2] ANTENNA_input9_I.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[2] input9.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[1] ANTENNA_input8_I.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[1] input8.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[0] ANTENNA_input1_I.I (0.000:0.000:0.000))
+    (INTERCONNECT bidir_in[0] input1.I (0.000:0.000:0.000))
+    (INTERCONNECT chip_core.ZN bidir_cs[39] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_100.ZN bidir_ie[36] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_101.ZN bidir_ie[37] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_102.ZN bidir_ie[38] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_103.ZN bidir_ie[39] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_104.ZN bidir_ie[4] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_105.ZN bidir_ie[5] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_106.ZN bidir_ie[6] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_107.ZN bidir_ie[7] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_108.ZN bidir_ie[8] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_109.ZN bidir_ie[9] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_110.ZN bidir_oe[0] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_111.ZN bidir_oe[1] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_112.ZN bidir_oe[10] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_113.ZN bidir_oe[11] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_114.ZN bidir_oe[12] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_115.ZN bidir_oe[13] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_116.ZN bidir_oe[14] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_117.ZN bidir_oe[15] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_118.ZN bidir_oe[2] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_119.ZN bidir_oe[3] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_120.ZN bidir_oe[4] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_121.ZN bidir_oe[5] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_122.ZN bidir_oe[6] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_123.ZN bidir_oe[7] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_124.ZN bidir_oe[8] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_125.ZN bidir_oe[9] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_126.ZN bidir_out[0] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_127.ZN bidir_out[1] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_128.ZN bidir_out[10] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_129.ZN bidir_out[11] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_130.ZN bidir_out[12] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_131.ZN bidir_out[13] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_132.ZN bidir_out[14] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_133.ZN bidir_out[15] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_134.ZN bidir_out[17] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_135.ZN bidir_out[18] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_136.ZN bidir_out[19] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_137.ZN bidir_out[20] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_138.ZN bidir_out[2] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_139.ZN bidir_out[21] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_140.ZN bidir_out[22] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_141.ZN bidir_out[23] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_142.ZN bidir_out[24] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_143.ZN bidir_out[25] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_144.ZN bidir_out[26] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_145.ZN bidir_out[27] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_146.ZN bidir_out[28] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_147.ZN bidir_out[29] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_148.ZN bidir_out[30] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_149.ZN bidir_out[3] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_150.ZN bidir_out[31] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_151.ZN bidir_out[32] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_152.ZN bidir_out[33] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_153.ZN bidir_out[34] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_154.ZN bidir_out[35] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_155.ZN bidir_out[36] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_156.ZN bidir_out[37] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_157.ZN bidir_out[38] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_158.ZN bidir_out[39] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_159.ZN bidir_out[4] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_160.ZN bidir_out[5] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_161.ZN bidir_out[6] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_162.ZN bidir_out[7] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_163.ZN bidir_out[8] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_164.ZN bidir_out[9] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_165.ZN bidir_pd[0] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_166.ZN bidir_pd[1] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_167.ZN bidir_pd[10] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_168.ZN bidir_pd[11] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_169.ZN bidir_pd[12] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_170.ZN bidir_pd[13] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_171.ZN bidir_pd[14] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_172.ZN bidir_pd[15] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_173.ZN bidir_pd[16] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_174.ZN bidir_pd[17] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_175.ZN bidir_pd[18] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_176.ZN bidir_pd[19] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_177.ZN bidir_pd[2] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_178.ZN bidir_pd[20] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_179.ZN bidir_pd[21] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_180.ZN bidir_pd[22] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_181.ZN bidir_pd[23] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_182.ZN bidir_pd[24] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_183.ZN bidir_pd[25] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_184.ZN bidir_pd[26] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_185.ZN bidir_pd[27] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_186.ZN bidir_pd[28] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_187.ZN bidir_pd[29] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_188.ZN bidir_pd[3] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_189.ZN bidir_pd[30] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_190.ZN bidir_pd[31] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_191.ZN bidir_pd[32] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_192.ZN bidir_pd[33] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_193.ZN bidir_pd[34] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_194.ZN bidir_pd[35] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_195.ZN bidir_pd[36] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_196.ZN bidir_pd[37] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_197.ZN bidir_pd[38] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_198.ZN bidir_pd[39] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_199.ZN bidir_pd[4] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_200.ZN bidir_pd[5] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_201.ZN bidir_pd[6] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_202.ZN bidir_pd[7] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_203.ZN bidir_pd[8] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_204.ZN bidir_pd[9] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_205.ZN bidir_pu[0] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_206.ZN bidir_pu[1] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_207.ZN bidir_pu[10] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_208.ZN bidir_pu[11] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_209.ZN bidir_pu[12] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_210.ZN bidir_pu[13] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_211.ZN bidir_pu[14] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_212.ZN bidir_pu[15] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_213.ZN bidir_pu[16] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_214.ZN bidir_pu[17] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_215.ZN bidir_pu[18] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_216.ZN bidir_pu[19] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_217.ZN bidir_pu[2] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_218.ZN bidir_pu[20] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_219.ZN bidir_pu[21] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_220.ZN bidir_pu[22] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_221.ZN bidir_pu[23] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_222.ZN bidir_pu[24] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_223.ZN bidir_pu[25] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_224.ZN bidir_pu[26] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_225.ZN bidir_pu[27] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_226.ZN bidir_pu[28] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_227.ZN bidir_pu[29] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_228.ZN bidir_pu[3] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_229.ZN bidir_pu[30] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_230.ZN bidir_pu[31] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_231.ZN bidir_pu[32] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_232.ZN bidir_pu[33] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_233.ZN bidir_pu[34] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_234.ZN bidir_pu[35] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_235.ZN bidir_pu[36] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_236.ZN bidir_pu[37] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_237.ZN bidir_pu[38] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_238.ZN bidir_pu[39] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_239.ZN bidir_pu[4] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_240.ZN bidir_pu[5] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_241.ZN bidir_pu[6] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_242.ZN bidir_pu[7] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_243.ZN bidir_pu[8] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_244.ZN bidir_pu[9] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_245.ZN bidir_sl[0] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_246.ZN bidir_sl[1] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_247.ZN bidir_sl[10] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_248.ZN bidir_sl[11] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_249.ZN bidir_sl[12] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_250.ZN bidir_sl[13] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_251.ZN bidir_sl[14] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_252.ZN bidir_sl[15] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_253.ZN bidir_sl[16] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_254.ZN bidir_sl[17] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_255.ZN bidir_sl[18] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_256.ZN bidir_sl[19] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_257.ZN bidir_sl[2] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_258.ZN bidir_sl[20] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_259.ZN bidir_sl[21] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_260.ZN bidir_sl[22] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_261.ZN bidir_sl[23] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_262.ZN bidir_sl[24] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_263.ZN bidir_sl[25] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_264.ZN bidir_sl[26] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_265.ZN bidir_sl[27] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_266.ZN bidir_sl[28] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_267.ZN bidir_sl[29] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_268.ZN bidir_sl[3] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_269.ZN bidir_sl[30] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_270.ZN bidir_sl[31] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_271.ZN bidir_sl[32] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_272.ZN bidir_sl[33] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_273.ZN bidir_sl[34] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_274.ZN bidir_sl[35] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_275.ZN bidir_sl[36] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_276.ZN bidir_sl[37] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_277.ZN bidir_sl[38] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_278.ZN bidir_sl[39] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_279.ZN bidir_sl[4] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_280.ZN bidir_sl[5] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_281.ZN bidir_sl[6] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_282.ZN bidir_sl[7] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_283.ZN bidir_sl[8] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_284.ZN bidir_sl[9] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_285.ZN input_pd (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_286.ZN input_pu (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_287.Z bidir_oe[16] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_288.Z bidir_oe[17] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_289.Z bidir_oe[26] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_290.Z bidir_oe[27] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_291.Z bidir_oe[28] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_292.Z bidir_oe[29] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_293.Z bidir_oe[30] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_294.Z bidir_oe[31] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_295.Z bidir_oe[32] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_296.Z bidir_oe[33] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_297.Z bidir_oe[34] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_298.Z bidir_oe[35] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_299.Z bidir_oe[18] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_300.Z bidir_oe[36] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_301.Z bidir_oe[37] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_302.Z bidir_oe[38] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_303.Z bidir_oe[39] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_304.Z bidir_oe[19] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_305.Z bidir_oe[20] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_306.Z bidir_oe[21] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_307.Z bidir_oe[22] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_308.Z bidir_oe[23] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_309.Z bidir_oe[24] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_31.ZN bidir_cs[0] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_310.Z bidir_oe[25] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_311.Z bidir_out[16] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_32.ZN bidir_cs[9] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_33.ZN bidir_cs[10] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_34.ZN bidir_cs[11] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_35.ZN bidir_cs[12] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_36.ZN bidir_cs[13] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_37.ZN bidir_cs[14] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_38.ZN bidir_cs[15] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_39.ZN bidir_cs[16] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_40.ZN bidir_cs[17] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_41.ZN bidir_cs[18] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_42.ZN bidir_cs[1] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_43.ZN bidir_cs[19] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_44.ZN bidir_cs[20] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_45.ZN bidir_cs[21] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_46.ZN bidir_cs[22] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_47.ZN bidir_cs[23] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_48.ZN bidir_cs[24] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_49.ZN bidir_cs[25] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_50.ZN bidir_cs[26] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_51.ZN bidir_cs[27] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_52.ZN bidir_cs[28] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_53.ZN bidir_cs[2] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_54.ZN bidir_cs[29] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_55.ZN bidir_cs[30] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_56.ZN bidir_cs[31] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_57.ZN bidir_cs[32] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_58.ZN bidir_cs[33] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_59.ZN bidir_cs[34] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_60.ZN bidir_cs[35] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_61.ZN bidir_cs[36] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_62.ZN bidir_cs[37] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_63.ZN bidir_cs[38] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_64.ZN bidir_cs[3] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_65.ZN bidir_cs[4] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_66.ZN bidir_cs[5] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_67.ZN bidir_cs[6] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_68.ZN bidir_cs[7] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_69.ZN bidir_cs[8] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_70.ZN bidir_ie[0] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_71.ZN bidir_ie[1] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_72.ZN bidir_ie[10] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_73.ZN bidir_ie[11] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_74.ZN bidir_ie[12] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_75.ZN bidir_ie[13] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_76.ZN bidir_ie[14] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_77.ZN bidir_ie[15] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_78.ZN bidir_ie[16] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_79.ZN bidir_ie[17] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_80.ZN bidir_ie[18] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_81.ZN bidir_ie[19] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_82.ZN bidir_ie[2] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_83.ZN bidir_ie[20] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_84.ZN bidir_ie[21] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_85.ZN bidir_ie[22] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_86.ZN bidir_ie[23] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_87.ZN bidir_ie[24] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_88.ZN bidir_ie[25] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_89.ZN bidir_ie[26] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_90.ZN bidir_ie[27] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_91.ZN bidir_ie[28] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_92.ZN bidir_ie[29] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_93.ZN bidir_ie[3] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_94.ZN bidir_ie[30] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_95.ZN bidir_ie[31] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_96.ZN bidir_ie[32] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_97.ZN bidir_ie[33] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_98.ZN bidir_ie[34] (0.000:0.000:0.000))
+    (INTERCONNECT chip_core_99.ZN bidir_ie[35] (0.000:0.000:0.000))
+    (INTERCONNECT clkbuf_0_clk.Z clkbuf_2_0__f_clk.I (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_0_clk.Z clkbuf_2_1__f_clk.I (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_0_clk.Z clkbuf_2_2__f_clk.I (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_0_clk.Z clkbuf_2_3__f_clk.I (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_0__f_clk.Z clkload0.I (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_0__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[10\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_0__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[13\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_0__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[15\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.000:0.000:0.000))
+    (INTERCONNECT clkbuf_2_0__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[1\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_0__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[4\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_0__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[6\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_0__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[8\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_0__f_clk.Z u_grouper_soc_top\.u_rst_resync_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_1__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[10\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_1__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[11\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_1__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[12\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_1__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[13\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.000:0.000:0.000))
+    (INTERCONNECT clkbuf_2_1__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[15\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_1__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[1\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_1__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[4\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_1__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[6\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT clkbuf_2_1__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[8\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT clkbuf_2_1__f_clk.Z u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_1__f_clk.Z u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_1__f_clk.Z u_grouper_soc_top\.u_rst_resync_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_2__f_clk.Z clkload1.I (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_2__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[0\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_2__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[11\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_2__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[12\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_2__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[14\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_2__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[2\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_2__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[3\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_2__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[5\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_2__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[7\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_2__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[9\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_3__f_clk.Z clkload2.I (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_3__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[0\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_3__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[14\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_3__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[2\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_3__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[3\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_3__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[5\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_3__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[7\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT clkbuf_2_3__f_clk.Z u_grouper_soc_top\.gen_gpio_sync\[9\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.CLK (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT fanout19.Z load_slew21.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT fanout19.Z load_slew24.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT fanout19.Z u_grouper_soc_top\.gen_gpio_sync\[11\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT fanout25.Z load_slew27.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT fanout25.Z load_slew30.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT fanout25.Z u_grouper_soc_top\.gen_gpio_sync\[0\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT fanout25.Z u_grouper_soc_top\.gen_gpio_sync\[2\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT hold333.Z input18.I (0.000:0.000:0.000))
+    (INTERCONNECT input1.Z u_grouper_soc_top\.gen_gpio_sync\[0\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT input10.Z u_grouper_soc_top\.gen_gpio_sync\[3\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT input11.Z u_grouper_soc_top\.gen_gpio_sync\[4\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT input12.Z u_grouper_soc_top\.gen_gpio_sync\[5\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT input13.Z u_grouper_soc_top\.gen_gpio_sync\[6\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT input14.Z u_grouper_soc_top\.gen_gpio_sync\[7\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT input15.Z u_grouper_soc_top\.gen_gpio_sync\[8\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT input16.Z u_grouper_soc_top\.gen_gpio_sync\[9\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT input17.Z u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.013:0.013:0.013) (0.013:0.013:0.013))
+    (INTERCONNECT input18.Z fanout25.I (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT input18.Z u_grouper_soc_top\.gen_gpio_sync\[9\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT input18.Z u_grouper_soc_top\.gen_gpio_sync\[9\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT input2.Z u_grouper_soc_top\.gen_gpio_sync\[10\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT input3.Z u_grouper_soc_top\.gen_gpio_sync\[11\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT input4.Z u_grouper_soc_top\.gen_gpio_sync\[12\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT input5.Z u_grouper_soc_top\.gen_gpio_sync\[13\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT input6.Z u_grouper_soc_top\.gen_gpio_sync\[14\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT input7.Z u_grouper_soc_top\.gen_gpio_sync\[15\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT input8.Z u_grouper_soc_top\.gen_gpio_sync\[1\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT input9.Z u_grouper_soc_top\.gen_gpio_sync\[2\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT load_slew20.Z u_grouper_soc_top\.gen_gpio_sync\[1\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew20.Z u_grouper_soc_top\.gen_gpio_sync\[6\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew20.Z u_grouper_soc_top\.gen_gpio_sync\[8\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew21.Z load_slew20.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT load_slew21.Z u_grouper_soc_top\.gen_gpio_sync\[10\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.002:0.002:0.002) (0.002:0.002:0.002))
+    (INTERCONNECT load_slew21.Z u_grouper_soc_top\.gen_gpio_sync\[13\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew21.Z u_grouper_soc_top\.gen_gpio_sync\[4\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew22.Z u_grouper_soc_top\.gen_gpio_sync\[1\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew22.Z u_grouper_soc_top\.gen_gpio_sync\[6\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew22.Z u_grouper_soc_top\.gen_gpio_sync\[8\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew22.Z u_grouper_soc_top\.u_rst_resync_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew23.Z load_slew22.I (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew23.Z u_grouper_soc_top\.gen_gpio_sync\[13\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew23.Z u_grouper_soc_top\.gen_gpio_sync\[15\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew23.Z u_grouper_soc_top\.gen_gpio_sync\[4\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew24.Z load_slew23.I (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew24.Z u_grouper_soc_top\.gen_gpio_sync\[10\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew24.Z u_grouper_soc_top\.gen_gpio_sync\[11\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew26.Z u_grouper_soc_top\.gen_gpio_sync\[12\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew26.Z u_grouper_soc_top\.gen_gpio_sync\[14\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew26.Z u_grouper_soc_top\.gen_gpio_sync\[3\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew27.Z load_slew26.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT load_slew27.Z u_grouper_soc_top\.gen_gpio_sync\[5\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew27.Z u_grouper_soc_top\.gen_gpio_sync\[7\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew28.Z fanout19.I (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew28.Z u_grouper_soc_top\.gen_gpio_sync\[12\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew28.Z u_grouper_soc_top\.gen_gpio_sync\[14\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew28.Z u_grouper_soc_top\.gen_gpio_sync\[15\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.002:0.002:0.002) (0.002:0.002:0.002))
+    (INTERCONNECT load_slew29.Z load_slew28.I (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew29.Z u_grouper_soc_top\.gen_gpio_sync\[3\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew29.Z u_grouper_soc_top\.gen_gpio_sync\[5\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew29.Z u_grouper_soc_top\.gen_gpio_sync\[7\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew30.Z load_slew29.I (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT load_slew30.Z u_grouper_soc_top\.gen_gpio_sync\[0\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT load_slew30.Z u_grouper_soc_top\.gen_gpio_sync\[2\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.001:0.001:0.001) (0.001:0.001:0.001))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[0\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[0\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[0\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[0\]\.u_gpio_sync\/hold319.I (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[0\]\.u_gpio_sync\/hold319.Z u_grouper_soc_top\.gen_gpio_sync\[0\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[10\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[10\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[10\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[10\]\.u_gpio_sync\/hold324.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[10\]\.u_gpio_sync\/hold324.Z u_grouper_soc_top\.gen_gpio_sync\[10\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[11\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[11\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[11\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[11\]\.u_gpio_sync\/hold330.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[11\]\.u_gpio_sync\/hold330.Z u_grouper_soc_top\.gen_gpio_sync\[11\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[12\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[12\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[12\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[12\]\.u_gpio_sync\/hold326.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[12\]\.u_gpio_sync\/hold326.Z u_grouper_soc_top\.gen_gpio_sync\[12\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[13\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[13\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[13\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[13\]\.u_gpio_sync\/hold323.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[13\]\.u_gpio_sync\/hold323.Z u_grouper_soc_top\.gen_gpio_sync\[13\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[14\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[14\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[14\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[14\]\.u_gpio_sync\/hold320.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[14\]\.u_gpio_sync\/hold320.Z u_grouper_soc_top\.gen_gpio_sync\[14\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[15\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[15\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[15\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[15\]\.u_gpio_sync\/hold329.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[15\]\.u_gpio_sync\/hold329.Z u_grouper_soc_top\.gen_gpio_sync\[15\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[1\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[1\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[1\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[1\]\.u_gpio_sync\/hold322.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[1\]\.u_gpio_sync\/hold322.Z u_grouper_soc_top\.gen_gpio_sync\[1\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[2\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[2\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[2\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[2\]\.u_gpio_sync\/hold316.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[2\]\.u_gpio_sync\/hold316.Z u_grouper_soc_top\.gen_gpio_sync\[2\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[3\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[3\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[3\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[3\]\.u_gpio_sync\/hold321.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[3\]\.u_gpio_sync\/hold321.Z u_grouper_soc_top\.gen_gpio_sync\[3\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[4\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[4\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[4\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[4\]\.u_gpio_sync\/hold328.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[4\]\.u_gpio_sync\/hold328.Z u_grouper_soc_top\.gen_gpio_sync\[4\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[5\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[5\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[5\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[5\]\.u_gpio_sync\/hold315.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[5\]\.u_gpio_sync\/hold315.Z u_grouper_soc_top\.gen_gpio_sync\[5\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[6\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[6\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[6\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[6\]\.u_gpio_sync\/hold331.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[6\]\.u_gpio_sync\/hold331.Z u_grouper_soc_top\.gen_gpio_sync\[6\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[7\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[7\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[7\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[7\]\.u_gpio_sync\/hold318.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[7\]\.u_gpio_sync\/hold318.Z u_grouper_soc_top\.gen_gpio_sync\[7\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[8\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[8\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[8\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[8\]\.u_gpio_sync\/hold327.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[8\]\.u_gpio_sync\/hold327.Z u_grouper_soc_top\.gen_gpio_sync\[8\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[9\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[9\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[9\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.gen_gpio_sync\[9\]\.u_gpio_sync\/hold314.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.gen_gpio_sync\[9\]\.u_gpio_sync\/hold314.Z u_grouper_soc_top\.gen_gpio_sync\[9\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/hold317.I (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/hold317.Z u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/hold332.Z u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/hold332.Z u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.u_rst_resync_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/hold332.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.u_rst_resync_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.u_rst_resync_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z.I (0.000:0.000:0.000) (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.u_rst_resync_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q_312.Z u_grouper_soc_top\.u_rst_resync_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.u_rst_resync_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.Q u_grouper_soc_top\.u_rst_resync_sync\/hold325.I (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.u_rst_resync_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q_313.Z u_grouper_soc_top\.u_rst_resync_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.RN (0.000:0.000:0.000))
+    (INTERCONNECT u_grouper_soc_top\.u_rst_resync_sync\/hold325.Z u_grouper_soc_top\.u_rst_resync_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q.D (0.000:0.000:0.000))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__clkbuf_16")
+  (INSTANCE clkbuf_0_clk)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.208:0.208:0.208) (0.210:0.210:0.210))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__clkbuf_16")
+  (INSTANCE clkbuf_2_0__f_clk)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.211:0.211:0.211) (0.219:0.219:0.219))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__clkbuf_16")
+  (INSTANCE clkbuf_2_1__f_clk)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.216:0.216:0.216) (0.224:0.224:0.224))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__clkbuf_16")
+  (INSTANCE clkbuf_2_2__f_clk)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.208:0.208:0.208) (0.216:0.216:0.216))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__clkbuf_16")
+  (INSTANCE clkbuf_2_3__f_clk)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.212:0.212:0.212) (0.220:0.220:0.220))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__inv_3")
+  (INSTANCE clkload0)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I ZN (0.051:0.051:0.051) (0.030:0.030:0.030))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__clkbuf_8")
+  (INSTANCE clkload1)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.162:0.162:0.162) (0.173:0.173:0.173))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__clkbuf_12")
+  (INSTANCE clkload2)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.163:0.163:0.163) (0.173:0.173:0.173))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE fanout19)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.488:1.488:1.488) (1.599:1.599:1.599))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE fanout25)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.520:1.520:1.520) (1.641:1.641:1.641))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE hold333)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.266:1.266:1.266) (1.352:1.352:1.352))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE input1)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.273:1.273:1.273) (1.358:1.358:1.358))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE input10)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.312:1.312:1.312) (1.397:1.397:1.397))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE input11)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.281:1.281:1.281) (1.366:1.366:1.366))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE input12)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.276:1.276:1.276) (1.361:1.361:1.361))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE input13)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.284:1.284:1.284) (1.369:1.369:1.369))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE input14)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.265:1.265:1.265) (1.350:1.350:1.350))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE input15)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.269:1.269:1.269) (1.354:1.354:1.354))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE input16)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.298:1.298:1.298) (1.384:1.384:1.384))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_2")
+  (INSTANCE input17)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.464:0.464:0.464) (0.354:0.354:0.354))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE input18)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.493:1.493:1.493) (1.575:1.575:1.575))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE input2)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.278:1.278:1.278) (1.363:1.363:1.363))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE input3)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.347:1.347:1.347) (1.431:1.431:1.431))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE input4)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.295:1.295:1.295) (1.380:1.380:1.380))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE input5)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.263:1.263:1.263) (1.348:1.348:1.348))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE input6)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.295:1.295:1.295) (1.380:1.380:1.380))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE input7)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.315:1.315:1.315) (1.401:1.401:1.401))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE input8)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.272:1.272:1.272) (1.357:1.357:1.357))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE input9)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.282:1.282:1.282) (1.367:1.367:1.367))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE load_slew20)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.454:0.454:0.454) (0.429:0.429:0.429))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__clkbuf_2")
+  (INSTANCE load_slew21)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.404:0.404:0.404) (0.406:0.406:0.406))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__clkbuf_2")
+  (INSTANCE load_slew22)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.365:0.365:0.365) (0.373:0.373:0.373))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__clkbuf_2")
+  (INSTANCE load_slew23)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.399:0.399:0.399) (0.410:0.410:0.410))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__clkbuf_1")
+  (INSTANCE load_slew24)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.415:0.415:0.415) (0.406:0.406:0.406))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE load_slew26)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.414:0.414:0.414) (0.415:0.415:0.415))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__clkbuf_1")
+  (INSTANCE load_slew27)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.391:0.391:0.391) (0.386:0.386:0.386))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__clkbuf_2")
+  (INSTANCE load_slew28)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.377:0.377:0.377) (0.361:0.361:0.361))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_2")
+  (INSTANCE load_slew29)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.302:0.302:0.302) (0.278:0.278:0.278))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_2")
+  (INSTANCE load_slew30)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.271:0.271:0.271) (0.305:0.305:0.305))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[0\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.728:0.728:0.728) (0.582:0.582:0.582))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.336:0.336:0.336))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.174:-0.174:-0.174))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.259:0.259:0.259))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.149:0.149:0.149))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.092:-0.092:-0.092))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.069:0.069:0.069))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[0\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.723:0.723:0.723) (0.580:0.580:0.580))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.310:0.310:0.310))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.193:-0.193:-0.193))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.250:0.250:0.250))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.141:0.141:0.141))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.083:-0.083:-0.083))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.075:0.075:0.075))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[0\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.146:0.146:0.146) (0.174:0.174:0.174))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[0\]\.u_gpio_sync\/hold319)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.327:1.327:1.327) (1.411:1.411:1.411))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[10\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.737:0.737:0.737) (0.588:0.588:0.588))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.336:0.336:0.336))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.177:-0.177:-0.177))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.257:0.257:0.257))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.147:0.147:0.147))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.090:-0.090:-0.090))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.070:0.070:0.070))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[10\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.715:0.715:0.715) (0.574:0.574:0.574))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.326:0.326:0.326))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.187:-0.187:-0.187))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.250:0.250:0.250))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.141:0.141:0.141))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.084:-0.084:-0.084))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.075:0.075:0.075))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[10\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.148:0.148:0.148) (0.176:0.176:0.176))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[10\]\.u_gpio_sync\/hold324)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.320:1.320:1.320) (1.404:1.404:1.404))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[11\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.752:0.752:0.752) (0.598:0.598:0.598))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.335:0.335:0.335))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.176:-0.176:-0.176))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.261:0.261:0.261))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.152:0.152:0.152))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.095:-0.095:-0.095))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.067:0.067:0.067))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[11\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.746:0.746:0.746) (0.595:0.595:0.595))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.334:0.334:0.334))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.183:-0.183:-0.183))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.269:0.269:0.269))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.158:0.158:0.158))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.101:-0.101:-0.101))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.063:0.063:0.063))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[11\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.151:0.151:0.151) (0.180:0.180:0.180))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[11\]\.u_gpio_sync\/hold330)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.342:1.342:1.342) (1.427:1.427:1.427))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[12\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.742:0.742:0.742) (0.591:0.591:0.591))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.337:0.337:0.337))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.173:-0.173:-0.173))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.263:0.263:0.263))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.153:0.153:0.153))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.096:-0.096:-0.096))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.066:0.066:0.066))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[12\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.754:0.754:0.754) (0.600:0.600:0.600))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.324:0.324:0.324))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.187:-0.187:-0.187))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.255:0.255:0.255))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.146:0.146:0.146))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.090:-0.090:-0.090))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.072:0.072:0.072))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[12\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.150:0.150:0.150) (0.177:0.177:0.177))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[12\]\.u_gpio_sync\/hold326)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.349:1.349:1.349) (1.435:1.435:1.435))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[13\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.714:0.714:0.714) (0.573:0.573:0.573))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.323:0.323:0.323))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.186:-0.186:-0.186))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.259:0.259:0.259))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.149:0.149:0.149))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.093:-0.093:-0.093))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.069:0.069:0.069))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[13\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.751:0.751:0.751) (0.598:0.598:0.598))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.326:0.326:0.326))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.187:-0.187:-0.187))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.245:0.245:0.245))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.137:0.137:0.137))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.079:-0.079:-0.079))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.079:0.079:0.079))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[13\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.142:0.142:0.142) (0.171:0.171:0.171))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[13\]\.u_gpio_sync\/hold323)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.336:1.336:1.336) (1.421:1.421:1.421))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[14\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.721:0.721:0.721) (0.578:0.578:0.578))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.337:0.337:0.337))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.173:-0.173:-0.173))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.265:0.265:0.265))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.155:0.155:0.155))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.098:-0.098:-0.098))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.065:0.065:0.065))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[14\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.738:0.738:0.738) (0.590:0.590:0.590))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.323:0.323:0.323))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.186:-0.186:-0.186))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.256:0.256:0.256))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.146:0.146:0.146))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.090:-0.090:-0.090))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.071:0.071:0.071))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[14\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.144:0.144:0.144) (0.173:0.173:0.173))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[14\]\.u_gpio_sync\/hold320)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.355:1.355:1.355) (1.439:1.439:1.439))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[15\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.724:0.724:0.724) (0.580:0.580:0.580))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.323:0.323:0.323))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.186:-0.186:-0.186))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.264:0.264:0.264))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.154:0.154:0.154))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.097:-0.097:-0.097))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.065:0.065:0.065))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[15\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.736:0.736:0.736) (0.588:0.588:0.588))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.324:0.324:0.324))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.187:-0.187:-0.187))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.260:0.260:0.260))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.150:0.150:0.150))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.094:-0.094:-0.094))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.068:0.068:0.068))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[15\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.145:0.145:0.145) (0.173:0.173:0.173))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[15\]\.u_gpio_sync\/hold329)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.354:1.354:1.354) (1.438:1.438:1.438))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[1\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.722:0.722:0.722) (0.578:0.578:0.578))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.320:0.320:0.320))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.187:-0.187:-0.187))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.255:0.255:0.255))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.145:0.145:0.145))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.088:-0.088:-0.088))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.071:0.071:0.071))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[1\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.727:0.727:0.727) (0.582:0.582:0.582))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.348:0.348:0.348))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.158:-0.158:-0.158))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.248:0.248:0.248))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.139:0.139:0.139))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.082:-0.082:-0.082))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.077:0.077:0.077))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[1\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.144:0.144:0.144) (0.173:0.173:0.173))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[1\]\.u_gpio_sync\/hold322)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.316:1.316:1.316) (1.400:1.400:1.400))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[2\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.739:0.739:0.739) (0.590:0.590:0.590))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.336:0.336:0.336))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.174:-0.174:-0.174))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.257:0.257:0.257))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.148:0.148:0.148))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.090:-0.090:-0.090))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.070:0.070:0.070))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[2\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.722:0.722:0.722) (0.579:0.579:0.579))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.310:0.310:0.310))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.193:-0.193:-0.193))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.252:0.252:0.252))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.143:0.143:0.143))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.086:-0.086:-0.086))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.073:0.073:0.073))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[2\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.149:0.149:0.149) (0.177:0.177:0.177))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[2\]\.u_gpio_sync\/hold316)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.321:1.321:1.321) (1.405:1.405:1.405))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[3\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.739:0.739:0.739) (0.589:0.589:0.589))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.337:0.337:0.337))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.173:-0.173:-0.173))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.263:0.263:0.263))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.153:0.153:0.153))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.096:-0.096:-0.096))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.066:0.066:0.066))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[3\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.729:0.729:0.729) (0.583:0.583:0.583))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.320:0.320:0.320))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.188:-0.188:-0.188))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.261:0.261:0.261))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.151:0.151:0.151))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.094:-0.094:-0.094))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.068:0.068:0.068))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[3\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.149:0.149:0.149) (0.177:0.177:0.177))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[3\]\.u_gpio_sync\/hold321)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.347:1.347:1.347) (1.431:1.431:1.431))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[4\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.739:0.739:0.739) (0.590:0.590:0.590))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.323:0.323:0.323))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.186:-0.186:-0.186))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.264:0.264:0.264))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.154:0.154:0.154))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.097:-0.097:-0.097))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.065:0.065:0.065))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[4\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.744:0.744:0.744) (0.593:0.593:0.593))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.326:0.326:0.326))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.187:-0.187:-0.187))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.251:0.251:0.251))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.142:0.142:0.142))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.085:-0.085:-0.085))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.075:0.075:0.075))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[4\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.149:0.149:0.149) (0.177:0.177:0.177))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[4\]\.u_gpio_sync\/hold328)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.356:1.356:1.356) (1.440:1.440:1.440))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[5\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.728:0.728:0.728) (0.582:0.582:0.582))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.330:0.330:0.330))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.181:-0.181:-0.181))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.260:0.260:0.260))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.150:0.150:0.150))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.093:-0.093:-0.093))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.068:0.068:0.068))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[5\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.743:0.743:0.743) (0.592:0.592:0.592))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.320:0.320:0.320))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.188:-0.188:-0.188))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.250:0.250:0.250))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.141:0.141:0.141))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.084:-0.084:-0.084))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.075:0.075:0.075))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[5\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.146:0.146:0.146) (0.174:0.174:0.174))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[5\]\.u_gpio_sync\/hold315)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.336:1.336:1.336) (1.420:1.420:1.420))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[6\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.719:0.719:0.719) (0.576:0.576:0.576))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.320:0.320:0.320))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.187:-0.187:-0.187))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.249:0.249:0.249))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.140:0.140:0.140))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.083:-0.083:-0.083))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.076:0.076:0.076))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[6\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.744:0.744:0.744) (0.594:0.594:0.594))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.348:0.348:0.348))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.158:-0.158:-0.158))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.252:0.252:0.252))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.143:0.143:0.143))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.086:-0.086:-0.086))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.074:0.074:0.074))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[6\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.143:0.143:0.143) (0.172:0.172:0.172))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[6\]\.u_gpio_sync\/hold331)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.301:1.301:1.301) (1.386:1.386:1.386))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[7\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.729:0.729:0.729) (0.583:0.583:0.583))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.330:0.330:0.330))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.181:-0.181:-0.181))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.263:0.263:0.263))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.154:0.154:0.154))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.096:-0.096:-0.096))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.066:0.066:0.066))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[7\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.719:0.719:0.719) (0.576:0.576:0.576))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.320:0.320:0.320))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.188:-0.188:-0.188))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.247:0.247:0.247))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.138:0.138:0.138))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.081:-0.081:-0.081))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.077:0.077:0.077))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[7\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.146:0.146:0.146) (0.175:0.175:0.175))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[7\]\.u_gpio_sync\/hold318)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.345:1.345:1.345) (1.429:1.429:1.429))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[8\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.700:0.700:0.700) (0.564:0.564:0.564))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.320:0.320:0.320))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.187:-0.187:-0.187))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.258:0.258:0.258))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.149:0.149:0.149))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.092:-0.092:-0.092))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.069:0.069:0.069))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[8\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.749:0.749:0.749) (0.597:0.597:0.597))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.348:0.348:0.348))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.158:-0.158:-0.158))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.247:0.247:0.247))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.138:0.138:0.138))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.081:-0.081:-0.081))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.077:0.077:0.077))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[8\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.138:0.138:0.138) (0.168:0.168:0.168))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[8\]\.u_gpio_sync\/hold327)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.333:1.333:1.333) (1.418:1.418:1.418))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[9\]\.u_gpio_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.731:0.731:0.731) (0.584:0.584:0.584))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.336:0.336:0.336))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.175:-0.175:-0.175))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.257:0.257:0.257))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.147:0.147:0.147))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.090:-0.090:-0.090))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.070:0.070:0.070))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[9\]\.u_gpio_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.726:0.726:0.726) (0.581:0.581:0.581))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.337:0.337:0.337))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.176:-0.176:-0.176))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.257:0.257:0.257))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.147:0.147:0.147))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.091:-0.091:-0.091))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.070:0.070:0.070))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[9\]\.u_gpio_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.147:0.147:0.147) (0.175:0.175:0.175))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.gen_gpio_sync\[9\]\.u_gpio_sync\/hold314)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.320:1.320:1.320) (1.404:1.404:1.404))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.699:0.699:0.699) (0.563:0.563:0.563))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.322:0.322:0.322))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.189:-0.189:-0.189))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.246:0.246:0.246))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.137:0.137:0.137))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.080:-0.080:-0.080))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.079:0.079:0.079))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.704:0.704:0.704) (0.567:0.567:0.567))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.322:0.322:0.322))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.189:-0.189:-0.189))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.317:0.317:0.317))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.191:0.191:0.191))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.142:-0.142:-0.142))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.040:0.040:0.040))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.294:0.294:0.294))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.137:0.137:0.137) (0.167:0.167:0.167))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/hold317)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.285:1.285:1.285) (1.370:1.370:1.370))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.u_grouper_soc_dig_ss\.u_periph_ss\.u_uart\.u_uart\.u_uart_rx\.u_sync\/hold332)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.410:1.410:1.410) (1.487:1.487:1.487))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.u_rst_resync_sync\/data_o_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.746:0.746:0.746) (0.595:0.595:0.595))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.283:0.283:0.283))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.188:-0.188:-0.188))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.248:0.248:0.248))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.140:0.140:0.140))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.083:-0.083:-0.083))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.077:0.077:0.077))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.000:0.000:0.000))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dffrnq_1")
+  (INSTANCE u_grouper_soc_top\.u_rst_resync_sync\/data_r\[0\]_gf180mcu_fd_sc_mcu7t5v0__dffrnq_1_Q)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH CLK Q (0.713:0.713:0.713) (0.572:0.572:0.572))
+    (IOPATH RN Q () (0.000:0.000:0.000))
+    (COND CLK===1'b1 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b1 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b1
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+    (COND CLK===1'b0 && D===1'b0
+     (IOPATH RN Q () (0.000:0.000:0.000)))
+   )
+  )
+  (TIMINGCHECK
+    (REMOVAL (posedge RN) (posedge CLK) (0.281:0.281:0.281))
+    (RECOVERY (posedge RN) (posedge CLK) (-0.186:-0.186:-0.186))
+    (SETUP (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.278:0.278:0.278))
+    (SETUP (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.166:0.166:0.166))
+    (HOLD (COND ENABLE_RN === 1'b1 (posedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (-0.109:-0.109:-0.109))
+    (HOLD (COND ENABLE_RN === 1'b1 (negedge D)) (COND ENABLE_RN === 1'b1 (posedge CLK)) (0.057:0.057:0.057))
+    (WIDTH (posedge CLK) (0.446:0.446:0.446))
+    (WIDTH (negedge CLK) (0.379:0.379:0.379))
+    (PERIOD CLK (1.012:1.012:1.012))
+    (WIDTH (negedge RN) (0.000:0.000:0.000))
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__buf_1")
+  (INSTANCE u_grouper_soc_top\.u_rst_resync_sync\/data_r\[1\]_gf180mcu_fd_sc_mcu7t5v0__buf_1_Z)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (0.150:0.150:0.150) (0.178:0.178:0.178))
+   )
+  )
+ )
+ (CELL
+  (CELLTYPE "gf180mcu_fd_sc_mcu7t5v0__dlyc_1")
+  (INSTANCE u_grouper_soc_top\.u_rst_resync_sync\/hold325)
+  (DELAY
+   (ABSOLUTE
+    (IOPATH I Z (1.297:1.297:1.297) (1.381:1.381:1.381))
+   )
+  )
+ )
+)
