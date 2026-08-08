@@ -23,35 +23,38 @@ meta:
   substituting_steps:
     # Skip Yosys unmapped cells check as it incorrectly flags submodules due to them starting with $ (e.g. $paramod$...)
     # Also even if it didn't flag it, it wouldn't check submodules for unmapped cells
-    Checker.YosysUnmappedCells: null
+    # Checker.YosysUnmappedCells: null
 
     # Ignore yosys warnings about signal used by no driver
     # Warning: Wire $paramod$1.../small_sync_fifo.sv:53$1261 [31] is used but has no driver.
     # TODO: figure out why yosys is sad
-    Checker.YosysSynthChecks: null
+    # Checker.YosysSynthChecks: null
 
     # Why is this checker broken?
     # Probably submodules???????
     # OpenROAD.CheckMacroInstances: null
+
     # Disable KLayout DRC
-    #KLayout.DRC: null
-    #Checker.KLayoutDRC: null
+    KLayout.DRC: null
+    Checker.KLayoutDRC: null
+
     # Disable KLayout antenna check
-    #KLayout.Antenna: null
+    KLayout.Antenna: null
     #Checker.KLayoutAntenna: null
     # Disable KLayout density check
     #KLayout.Density: null
     #Checker.KLayoutDensity: null
+
     # Save time during development
     # Enable for sign-off
     #OpenROAD.IRDropReport: null
     #Magic.DRC: null
     #Checker.MagicDRC: null
-    #KLayout.XOR: null
+    KLayout.XOR: null
     #Netgen.LVS: null
     #Checker.LVS: null
 
-DESIGN_NAME: chip_core
+DESIGN_NAME: grouper_soc_chip_core
 
 VERILOG_FILES:
 # GrouperSoC RTL (same order as the fusesoc `rtl` fileset in grouper_soc.core)

@@ -3,7 +3,7 @@
 
 `default_nettype none
 
-module chip_core #(
+module grouper_soc_chip_core #(
     // Defaults are the slot 1x1 pad counts; chip_top always overrides these
     // from slot_defines.svh.
     parameter int unsigned NUM_INPUT_PADS = 1,
