@@ -249,15 +249,6 @@ e_state                  prev_state;
 
   assign busy = (state != ST_IDLE);
 
-  always_ff @(posedge clk or negedge rst_n) begin
-  if (!rst_n) begin
-    spi_sck <= 1'b0;
-  end else if (state == ST_IDLE) begin
-    spi_sck <= cpol;
-  end else if (spi_clk_en) begin
-    spi_sck <= ~spi_sck;
-  end
-end
 
   assign done = (state == ST_DONE);
 

@@ -42,6 +42,8 @@ module spi_m_core #(
     output logic [DATA_WIDTH-1:0]   rx_data,
     output logic                    rx_full,
     output logic                    rx_empty,
+    output logic [2:0] tx_level,
+    output logic [2:0] rx_level,
 
 
     // Status
@@ -60,7 +62,7 @@ module spi_m_core #(
 ); 
 
 
-//internal signals
+//Internal signals
 
 logic               spi_clk_en;
 
@@ -68,6 +70,8 @@ logic               spi_clk_en;
 logic               tx_busy;
 logic               tx_done;
 logic               rx_received;
+
+
 
 
 
@@ -153,5 +157,8 @@ spi_rx u_rx (
 
 assign busy = tx_busy;
 assign done = tx_done;
+
+assign tx_level = 3'd0;
+assign rx_level = 3'd0;
 
 endmodule 
