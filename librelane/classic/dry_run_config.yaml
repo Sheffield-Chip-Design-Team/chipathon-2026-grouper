@@ -60,6 +60,7 @@ VERILOG_FILES:
 # GrouperSoC RTL (same order as the fusesoc `rtl` fileset in grouper_soc.core)
 - dir::../../hw/rtl/ahb3lite/ahb3lite_pkg.sv
 - dir::../../hw/rtl/ahb3lite/ahb3lite_intf.sv
+
 - dir::../../hw/rtl/common/clk_div.sv
 - dir::../../hw/rtl/common/clk_gate.sv
 - dir::../../hw/rtl/common/clk_out.sv
@@ -68,23 +69,26 @@ VERILOG_FILES:
 - dir::../../hw/rtl/common/shift_reg.sv
 - dir::../../hw/rtl/common/small_sync_fifo.sv
 - dir::../../hw/rtl/common/sync.sv
+
 - dir::../../ip/picorv32/picorv32.v
-- dir::../../hw/rtl/gpio/gpio_ctrl_pkg.sv
-- dir::../../hw/rtl/gpio/ahb_gpio_ctrl.sv
-# ahb_spi_s.sv is deliberately absent: periph_ss.sv puts an ahb_stub_slave in
-# the SPI slave's fabric slot under DRY_RUN.
+
 - dir::../../hw/rtl/uart/uart_clk_div.sv
 - dir::../../hw/rtl/uart/uart_rx.sv
 - dir::../../hw/rtl/uart/uart_tx.sv
 - dir::../../hw/rtl/uart/uart.sv
 - dir::../../hw/rtl/uart/ahb_uart.sv
-- dir::../../hw/rtl/interconnect/ahb_debug.sv
+
+- dir::../../hw/rtl/gpio/gpio_ctrl_pkg.sv
+- dir::../../hw/rtl/gpio/ahb_gpio_ctrl.s
+
+- dir::../../hw/rtl/memory/ahb_rom.sv
+- dir::../../hw/rtl/memory/ahb_ram.sv
+
 - dir::../../hw/rtl/interconnect/ahb_conn.sv
 - dir::../../hw/rtl/interconnect/ahb_conn_buff.sv
 - dir::../../hw/rtl/interconnect/ahb_stub_slave.sv
+
 - dir::../../hw/rtl/ahb_interconnect_ss.sv
-- dir::../../hw/rtl/memory/ahb_rom.sv
-- dir::../../hw/rtl/memory/ahb_ram.sv
 - dir::../../hw/rtl/io_ss.sv
 - dir::../../hw/rtl/cpu_ss.sv
 - dir::../../hw/rtl/periph_ss.sv
