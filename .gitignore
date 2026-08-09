@@ -21,3 +21,4 @@ sw/build/
 sw/fw_id.svh
 sw/code.hex
 sw/code.vmem
+.vscode/settings.json
