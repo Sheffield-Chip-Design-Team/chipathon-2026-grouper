@@ -59,6 +59,15 @@ def _test_record(name, status, classname=None, sim_time_ns=None, wall_time_s=Non
 
 
 def parse_cocotb_results(results_xml: Path):
+    """Three states, not two: a cocotb <skipped/> testcase neither passed nor
+    failed, and must not be scored as a failure.
+
+    This matters because several suites here are parameterised by an
+    environment variable and deliberately skip the cases that don't apply -
+    hw/tb/top/test_soc.py gates each of its tests on FW_TEST, so any single
+    run reports one executed test and the rest skipped. Counting skips as
+    failures made every one of those legs red regardless of the result.
+    """
     root = ET.parse(results_xml).getroot()
     tests = []
     for testcase in root.iter("testcase"):
@@ -73,14 +82,15 @@ def parse_cocotb_results(results_xml: Path):
         else:
             status, error_msg = PASSED, None
         tests.append(
-            _test_record(
-                testcase.get("name"),
-                status,
-                classname=testcase.get("classname"),
-                sim_time_ns=float(testcase.get("sim_time_ns", 0.0)),
-                wall_time_s=float(testcase.get("time", 0.0)),
-                error_msg=error_msg,
-            )
+            {
+                "name": testcase.get("name"),
+                "classname": testcase.get("classname"),
+                "passed": failure is None and skipped is None,
+                "skipped": skipped is not None,
+                "sim_time_ns": float(testcase.get("sim_time_ns", 0.0)),
+                "wall_time_s": float(testcase.get("time", 0.0)),
+                "error_msg": failure.get("error_msg") if failure is not None else None,
+            }
         )
     return tests
 
@@ -89,22 +99,30 @@ def parse_log_grep(log_file: Path, success_pattern: str):
     text = log_file.read_text(errors="replace")
     passed = success_pattern in text
     return [
-        _test_record(
-            "log_contains_success_marker",
-            PASSED if passed else FAILED,
-            error_msg=None if passed else f"pattern {success_pattern!r} not found in log",
-        )
+        {
+            "name": "log_contains_success_marker",
+            "classname": None,
+            "passed": passed,
+            "skipped": False,
+            "sim_time_ns": None,
+            "wall_time_s": None,
+            "error_msg": None if passed else f"pattern {success_pattern!r} not found in log",
+        }
     ]
 
 
 def parse_exit_code(exit_code: int):
     passed = exit_code == 0
     return [
-        _test_record(
-            "process_exit_code",
-            PASSED if passed else FAILED,
-            error_msg=None if passed else f"exited with code {exit_code}",
-        )
+        {
+            "name": "process_exit_code",
+            "classname": None,
+            "passed": passed,
+            "skipped": False,
+            "sim_time_ns": None,
+            "wall_time_s": None,
+            "error_msg": None if passed else f"exited with code {exit_code}",
+        }
     ]
 
 
@@ -163,17 +181,13 @@ def write_metrics(
     target: str, kind: str, tests: list, coverage_dat: Path | None, coverage_scope: str, out_dir: Path,
     group: str = "directed_tb", fail_ok: bool = False,
 ) -> int:
-    """Write metrics-<target>.json and return the process exit code to use.
+    """Write metrics-<target>.json and return the process exit code to use
+    (0 unless a test actually failed). Shared by report_target's own CLI
+    and run_target.py, so both produce identical metrics output.
 
-    Nonzero when the target should be considered failed: any test reported a
-    <failure>, or nothing actually ran (every test skipped, which would
-    otherwise pass silently with no evidence). Skipped tests on their own are
-    not failures and are excluded from the pass-rate denominator - pass_rate
-    is passed/tests_run, so a leg that runs 1 of 3 tests and passes it reads
-    as 100%, not 33%.
-
-    Shared by report_target's own CLI and run_target.py, so both produce
-    identical metrics output.
+    Skipped tests are their own category: they are excluded from both the
+    failure count and the pass_rate denominator, so a suite that skips the
+    cases not selected for this run scores on what it actually executed.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -181,10 +195,10 @@ def write_metrics(
     coverage = apply_coverage_scope(full_breakdown, coverage_scope)
 
     tests_total = len(tests)
-    tests_passed = sum(1 for t in tests if t["status"] == PASSED)
-    tests_failed = sum(1 for t in tests if t["status"] == FAILED)
-    tests_skipped = sum(1 for t in tests if t["status"] == SKIPPED)
-    tests_run = tests_passed + tests_failed
+    tests_passed = sum(1 for t in tests if t["passed"])
+    tests_skipped = sum(1 for t in tests if t.get("skipped"))
+    tests_failed = tests_total - tests_passed - tests_skipped
+    tests_run = tests_total - tests_skipped
 
     metrics = {
         "target": target,
@@ -209,8 +223,8 @@ def write_metrics(
         f"{cat}={v['pct']:.1f}%" if isinstance(v, dict) else f"{cat}={v}"
         for cat, v in coverage.items()
     )
-    skipped_note = f" ({tests_skipped} skipped)" if tests_skipped else ""
-    print(f"Wrote {out_file}: {tests_passed}/{tests_run} passed{skipped_note}{cov_summary}")
+    skip_summary = f" ({tests_skipped} skipped)" if tests_skipped else ""
+    print(f"Wrote {out_file}: {tests_passed}/{tests_run} passed{skip_summary}{cov_summary}")
 
     if tests_failed:
         return 1
@@ -247,20 +261,24 @@ def main():
             # Most likely a build/compile failure upstream, so cocotb never ran.
             # Still record a data point instead of crashing, so the aggregator
             # doesn't get a silent gap for this target.
-            tests = [_test_record(
-                "results_xml_present", FAILED,
-                error_msg=f"{args.results_xml} not found (build likely failed before cocotb ran)",
-            )]
+            tests = [{
+                "name": "results_xml_present", "classname": None, "passed": False,
+                "skipped": False,
+                "sim_time_ns": None, "wall_time_s": None,
+                "error_msg": f"{args.results_xml} not found (build likely failed before cocotb ran)",
+            }]
         else:
             tests = parse_cocotb_results(args.results_xml)
     elif args.kind == "log-grep":
         if not args.log_file or not args.success_pattern:
             ap.error("--kind log-grep requires --log-file and --success-pattern")
         if not args.log_file.is_file():
-            tests = [_test_record(
-                "log_contains_success_marker", FAILED,
-                error_msg=f"{args.log_file} not found (run likely failed before it was captured)",
-            )]
+            tests = [{
+                "name": "log_contains_success_marker", "classname": None, "passed": False,
+                "skipped": False,
+                "sim_time_ns": None, "wall_time_s": None,
+                "error_msg": f"{args.log_file} not found (run likely failed before it was captured)",
+            }]
         else:
             tests = parse_log_grep(args.log_file, args.success_pattern)
     else:

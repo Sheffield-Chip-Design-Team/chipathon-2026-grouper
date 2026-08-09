@@ -85,18 +85,18 @@ def main():
     with csv_path.open("w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
-            "timestamp", "git_sha", "run_id", "group", "target",
-            "tests_total", "tests_run", "tests_passed", "tests_failed", "tests_skipped",
-            "pass_rate",
+            "timestamp", "git_sha", "run_id", "target",
+            "tests_total", "tests_passed", "tests_failed", "tests_skipped", "pass_rate",
             *[f"coverage_{cat}_pct" for cat in COVERAGE_CATEGORIES],
         ])
         for t in targets:
             coverage = t.get("coverage") or {}
             writer.writerow([
-                run_meta["timestamp"], run_meta["git_sha"], run_meta["run_id"],
-                t.get("group", ""), t["target"],
-                t["tests_total"], t.get("tests_run"), t["tests_passed"], t["tests_failed"],
-                t.get("tests_skipped", 0), t["pass_rate"],
+                run_meta["timestamp"], run_meta["git_sha"], run_meta["run_id"], t["target"],
+                # .get for tests_skipped: metrics-*.json written before the key
+                # was introduced still aggregate, rather than crashing the job.
+                t["tests_total"], t["tests_passed"], t["tests_failed"], t.get("tests_skipped", 0),
+                t["pass_rate"],
                 *[_coverage_cell(coverage.get(cat, "N/A")) for cat in COVERAGE_CATEGORIES],
             ])
 
