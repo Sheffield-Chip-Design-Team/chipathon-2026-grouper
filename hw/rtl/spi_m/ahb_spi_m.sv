@@ -190,7 +190,7 @@ assign irq =
 //------------------------------------------------------
 // AHB pipeline register 
 //------------------------------------------------------
-always_ff @(posedge HCLK) begin
+always_ff @(posedge HCLK, negedge HRESETn) begin
     if (!HRESETn) begin
         write_enable   <= '0;
         read_enable_r  <= '0;
@@ -210,7 +210,7 @@ end
 //------------------------------------------------------
 // Register write 
 //------------------------------------------------------
-always_ff @(posedge HCLK) begin
+always_ff @(posedge HCLK, negedge HRESETn) begin
     if (!HRESETn) begin
         ctrl_cpha      <= 1'b0;
         ctrl_cpol      <= 1'b0;
