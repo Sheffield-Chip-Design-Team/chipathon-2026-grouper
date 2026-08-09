@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: © 2025 Project Template Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-// Example chip_top : This module instantiates the core design and connects it to the I/O pads.
-
-
 `default_nettype none
 
 `include "slot_defines.svh"
@@ -170,7 +167,7 @@ module chip_top #(
 
     // Core design
 
-    chip_core #(
+    grouper_soc_chip_core #(
         .NUM_INPUT_PADS  (NUM_INPUT_PADS),
         .NUM_BIDIR_PADS  (NUM_BIDIR_PADS)
     ) i_chip_core (    
@@ -191,15 +188,6 @@ module chip_top #(
         .bidir_pd   (bidir_CORE2PAD_PD)
     );
 
-// `ifdef USE_POWER_PINS
-//     generate
-//         for (genvar i = 0; i < 4; i++) begin : gen_power_assign
-//             assign i_chip_core.u_hello_top.u_core.u_periph_ss.u_ram.gen_macro_ram.gen_sram[i].u_wrapper.VDD = VDD;
-//             assign i_chip_core.u_hello_top.u_core.u_periph_ss.u_ram.gen_macro_ram.gen_sram[i].u_wrapper.VSS = VSS;
-//         end
-//     endgenerate
-// `endif
-    
     // Chip ID - do not remove, necessary for tapeout
     (* keep *)
     gf180mcu_ws_ip__id chip_id ();
@@ -207,7 +195,6 @@ module chip_top #(
     // wafer.space logo - can be removed
     (* keep *)
     gf180mcu_ws_ip__logo wafer_space_logo ();
-
 endmodule
 
 `default_nettype wire
