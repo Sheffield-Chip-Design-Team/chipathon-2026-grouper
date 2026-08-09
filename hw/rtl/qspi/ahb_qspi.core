@@ -1,0 +1,27 @@
+CAPI=2:
+
+name: sharc:comms_ip:ahb_qspi:0.0.1
+description: Minimal AHB-Lite arbitrary-command quad QSPI controller
+
+filesets:
+  rtl:
+    files:
+      - qspi.sv:     {file_type: systemVerilogSource}
+      - ahb_qspi.sv: {file_type: systemVerilogSource}
+
+targets:
+  default: &rtl
+    filesets: [rtl]
+    toplevel: ahb_qspi
+
+  lint:
+    <<: *rtl
+    description: Verilator lint-only check
+    flow: sim
+    flow_options:
+      tool: verilator
+      mode: lint-only
+      verilator_options:
+        - --sv
+        - -Wall
+        - -Wno-fatal

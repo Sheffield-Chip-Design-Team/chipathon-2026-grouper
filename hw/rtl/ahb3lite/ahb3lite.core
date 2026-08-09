@@ -1,6 +1,6 @@
 CAPI=2:
 
-name: sharc:ip:ahb3lite:0.0.1
+name: sharc:amba_ip:ahb3lite:0.0.1
 description: AHB3-Lite package (transfer-type constants, byte-select helpers) and interface
 
 filesets:

@@ -60,7 +60,7 @@ Per the Schematic Review's block-level testbench diagram: **QSPI VIP (active) �
 | <a id="v-qspi-stm-009"></a>`V-QSPI-STM-009` | Stimulus | Sweep clock-divider and CPHA/CPOL configuration | `GRPR-QSPI-009` | New directed test |
 | <a id="v-qspi-cov-003"></a>`V-QSPI-COV-003` | Coverage | Clock-divider corners × CPOL/CPHA combinations cross-covered | `GRPR-QSPI-009` | Coverage collector |
 | <a id="v-qspi-stm-010"></a>`V-QSPI-STM-010` | Stimulus | Toggle the single/quad mode configuration bit | `GRPR-QSPI-010` | New directed test |
-| <a id="v-qspi-stm-011"></a>`V-QSPI-STM-011` | Stimulus | Program distinct read-command and write-command opcode fields | `GRPR-QSPI-011` | New directed test |
+| <a id="v-qspi-stm-011"></a>`V-QSPI-STM-011` | Stimulus | Toggle `FAST_TXN_EN` across supported read and write transactions and confirm selection of the corresponding fixed command variant | `GRPR-QSPI-011` | New directed test |
 | <a id="v-qspi-stm-012"></a>`V-QSPI-STM-012` | Stimulus | Toggle the AHB-write-to-flash enable bit | `GRPR-QSPI-012` | New directed test |
 | <a id="v-qspi-chk-007"></a>`V-QSPI-CHK-007` | Check | AHB writes to the NOR flash target are only accepted when this bit is set; otherwise rejected/ignored regardless of `GRPR-QSPI-002`'s read-only enforcement (i.e. this is a distinct, more general gate — verify both interact correctly, not just individually) | `GRPR-QSPI-012` | Scoreboard |
 | <a id="v-qspi-stm-013"></a>`V-QSPI-STM-013` | Stimulus | Sweep the fast-read dummy-cycle count configuration | `GRPR-QSPI-013` | New directed test |

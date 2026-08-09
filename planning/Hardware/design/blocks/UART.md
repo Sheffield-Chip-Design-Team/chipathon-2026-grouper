@@ -14,7 +14,7 @@ AHB-Lite UART peripheral. Two roles: (1) the boot-load path — the boot ROM rec
 
 ## Protocols / Standards Conformity
 
-- **Bus side:** AHB-Lite subordinate. Zero-wait-state (`HREADYOUT` tied high), byte/halfword/word accesses via `HSIZE` + byte-select, word-aligned 4-register map.
+- **Bus side:** AHB-Lite subordinate. A valid access is zero-wait-state; an invalid access (see [Invalid Access Rules](#invalid-access-rules-hresp1)) inserts a single wait state for the first cycle of the AHB-Lite two-cycle ERROR response. Byte/halfword/word accesses via `HSIZE` + byte-select, word-aligned 4-register map.
 - **Serial side:** Async UART, LSB-first, 1 start bit (`0`) + 8 data bits + 1 stop bit (`1`), no parity. 8× oversampling with a resync window of ±1 sample around the bit-center sample point for baud-drift tolerance (`rx_resync_en`). No hardware flow control (no RTS/CTS).
 
 ## Key Functionality
@@ -167,7 +167,8 @@ HREADYOUT,HRESP   |                       | |                       uart_rx     
 | 16MHz | 15625 | 128 | 15625 (÷128) | 0.00% |
 
 ## AHB3-Lite Interface Behavior
-- No wait states from slave (`HREADYOUT=1`)
+- A valid transfer completes with no wait states (`HREADYOUT=1`).
+- An invalid transfer is answered with the AMBA 3 AHB-Lite **two-cycle ERROR response**: `HRESP` high for two cycles, `HREADYOUT` low on the first and high on the second, giving the master a cycle to cancel the transfer already in its address phase. The address-phase capture is held while `HREADYOUT` is low, so the stalled transfer is sampled exactly once.
 
 ## Register Map (base + offset)
 - `0x00` (`CTRL`,   RW)
@@ -215,26 +216,31 @@ Not yet documented in the source deck or estimated from synthesis. **Open item.*
 - "Size Estimate".
 - Boot-load baud rate / target throughput not specified anywhere yet — needed to validate the boot-sequence timing budget in the top-level spec.
 
-- `ahb_uart.sv` carries a stale header comment (lines 1–11) describing a "BCD Converter" register map — leftover from an earlier/different module template. The actual implementation below it (the 4-register UART map documented above) is what's real; the comment should be deleted by whoever next touches that file.
+### Resolved
 
-- `STATUS.RX_FRAME_ERROR`/`RX_BREAK` read-clear behavior: the RTL clears `status_rx_frame_error` on a `STATUS` read but does not appear to clear 
+- ~~`ahb_uart.sv` carries a stale "BCD Converter" header comment.~~ **Resolved** — the file now opens `// AHB UART`.
 
-`status_rx_break` the same way (`hw/rtl/uart/ahb_uart.sv` lines 240–250) — worth a directed test to confirm intended behavior before relying on it.
+- ~~`STATUS.RX_FRAME_ERROR`/`RX_BREAK` read-clear behavior: the RTL does not appear to clear `status_rx_break`.~~ **Resolved** — it does. The read-clear block assigns both `status_rx_frame_error` and `status_rx_break` on a `STATUS` read, so both sticky bits clear. The duplicated-assignment bug this item described belongs to the abandoned UART copy that became `hw/rtl/gpio/ahb_gpio_ctrl.sv`, not to the UART. `V-UART-DIR-010` in the [verification plan](../../verification/blocks/UART%20Verification%20Plan.md#grpr-uart-003--status-fields) exists to keep it that way.
 
 ## Verification Cross-Reference
 
-| Req ID | Verification Item(s) |
-|---|---|
-| `GRPR-UART-001` | `V-UART-STM-001`, `V-UART-CHK-001` |
-| `GRPR-UART-002` | `V-UART-STM-002`, `V-UART-CHK-002`, `V-UART-COV-001` |
-| `GRPR-UART-003` | `V-UART-CHK-003`, `V-UART-COV-002` |
-| `GRPR-UART-004` | `V-UART-STM-003`, `V-UART-CHK-004` |
-| `GRPR-UART-005` | `V-UART-STM-004`, `V-UART-CHK-005` |
-| `GRPR-UART-006` | `V-UART-STM-005`, `V-UART-CHK-006` |
-| `GRPR-UART-007` | `V-UART-STM-006`, `V-UART-CHK-007` |
-| `GRPR-UART-008` | `V-UART-STM-007`, `V-UART-CHK-008` |
-| `GRPR-UART-009` | `V-UART-CHK-009` |
-| `GRPR-UART-010` | `V-UART-STM-008`, `V-UART-COV-003` |
-| `GRPR-UART-011` | `V-UART-STM-009`, `V-UART-CHK-010` |
+`STM`/`CHK`/`COV` items belong to the pyuvm flow and are blocked on a scoreboard that does not exist yet. `DIR` items are the directed cocotb bench, which runs today — **bold** ones already pass.
+
+| Req ID | pyuvm items | Directed items |
+|---|---|---|
+| `GRPR-UART-001` | `V-UART-STM-001`, `V-UART-CHK-001` | `V-UART-DIR-001..003` |
+| `GRPR-UART-002` | `V-UART-STM-002`, `V-UART-CHK-002`, `V-UART-COV-001` | `V-UART-DIR-004..007` |
+| `GRPR-UART-003` | `V-UART-CHK-003`, `V-UART-COV-002` | `V-UART-DIR-008..010` |
+| `GRPR-UART-004` | `V-UART-STM-003`, `V-UART-CHK-004` | **`V-UART-DIR-011`**, `012..013` |
+| `GRPR-UART-005` | `V-UART-STM-004`, `V-UART-CHK-005` | **`V-UART-DIR-014`**, **`015`**, `016` |
+| `GRPR-UART-006` | `V-UART-STM-005`, `V-UART-CHK-006` | **`V-UART-DIR-017`** |
+| `GRPR-UART-007` | `V-UART-STM-006`, `V-UART-CHK-007` | `V-UART-DIR-018..021` |
+| `GRPR-UART-008` | `V-UART-STM-007`, `V-UART-CHK-008` | `V-UART-DIR-022..023` |
+| `GRPR-UART-009` | `V-UART-CHK-009` | — structural, needs CDC lint |
+| `GRPR-UART-010` | `V-UART-STM-008`, `V-UART-COV-003` | `V-UART-DIR-024..025` |
+| `GRPR-UART-011` | `V-UART-STM-009`, `V-UART-CHK-010` | `V-UART-DIR-026..027` |
+| `GRPR-UART-012` | — | — structural, established by inspection |
+| `GRPR-UART-013` | — | — needs an SoC-wide reset-strategy review |
+| *Invalid Access Rules* | — | **`V-UART-DIR-028`**, **`029`** |
 
 See [UART Verification Plan](../../verification/blocks/UART%20Verification%20Plan.md) for the full item definitions and test list.
