@@ -249,6 +249,7 @@ e_state                  prev_state;
 
   assign busy = (state != ST_IDLE);
 
+
   assign done = (state == ST_DONE);
 
   assign spi_leading_edge  = spi_clk_en && (spi_sck == cpol);
@@ -256,6 +257,8 @@ e_state                  prev_state;
   assign spi_trailing_edge = spi_clk_en && (spi_sck != cpol);
 
   assign load_next_byte = spi_clk_en && shift_ctr_zero;
+
+
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -282,6 +285,8 @@ e_state                  prev_state;
       end
 
       // Counters only advance on SPI clock
+     
+
       if (spi_clk_en) begin
 
         if (state == ST_ADDR && shift_ctr_zero) begin
@@ -298,5 +303,15 @@ e_state                  prev_state;
       end
     end
   end
+
+always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        spi_sck <= 1'b0;
+    end else if (state == ST_IDLE) begin
+        spi_sck <= cpol;
+    end else if (spi_clk_en) begin
+        spi_sck <= ~spi_sck;
+    end
+end  
 
 endmodule
