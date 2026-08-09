@@ -1,6 +1,6 @@
 // AHB spi master
 
-module ahb_spi_master #(
+module ahb_spi_m #(
   parameter int ADDR_WIDTH = 32,
   parameter int DATA_WIDTH = 32
 ) (
@@ -118,6 +118,7 @@ assign cfg_error_access =
 //------------------------------------------------------
 // SPI core instantiation
 //------------------------------------------------------
+
 spi_m_core #(
     .DATA_WIDTH (8),
     .FIFO_DEPTH (4)
@@ -149,7 +150,7 @@ spi_m_core #(
     .rx_data        (rx_data),
     .rx_full        (rx_full),
     .rx_empty       (rx_empty),
-   
+
     .busy           (spi_busy),
     .done           (spi_done),
     .spi_mosi       (SPI_MOSI),
@@ -161,7 +162,7 @@ spi_m_core #(
 //------------------------------------------------------
 // AHB address phase decode
 //------------------------------------------------------
-assign access       = HREADYIN && HSEL && (HTRANS != HTRANS_IDLE);
+assign access       = HREADYIN && HSEL && (HTRANS != HTRANS_IDLE); // FIXME - look the 4 AHB transfer types.
 assign read_enable  = access && ~HWRITE;
 assign word_address = access ? HADDR[4:2] : '0;
 assign byte_select  = access ? generate_byte_select_32(HSIZE, HADDR[1:0]) : '0;
@@ -184,9 +185,6 @@ assign status_rx_level = 3'd0;
 assign irq =
     (int_done    && ctrl_ie_done) ||
     ((int_overrun || int_underrun || int_cfg_err) && ctrl_ie_err);
-
-//------------------------------------------------------
-
 
 
 //------------------------------------------------------
@@ -240,8 +238,6 @@ always_ff @(posedge HCLK) begin
         int_cfg_err    <= 1'b0;
     end else begin
 
-  
-
         // Latch DONE 
         if (spi_done)
             int_done <= 1'b1;
@@ -283,6 +279,7 @@ always_ff @(posedge HCLK) begin
                         end
                     end
                 end
+
                 // INT
                 ADDR_INT: begin
                     if (byte_select_r[0]) begin
@@ -292,7 +289,6 @@ always_ff @(posedge HCLK) begin
                         if (hwdata_r[3]) int_cfg_err  <= 1'b0;
                     end
                 end
-
                 // ADDR
                 ADDR_ADDR: begin
                     spi_addr <= hwdata_r;
@@ -305,7 +301,6 @@ always_ff @(posedge HCLK) begin
                 end
 
                 default: begin end
-
             endcase
 
         // RX read 
@@ -324,68 +319,69 @@ end
 // Read mux
 //------------------------------------------------------
 always_comb begin
-    if (!read_enable_r)
-        HRDATA = '0;
-    else
-        unique case (word_address_r)
+  if (!read_enable_r)
+    HRDATA = '0;
+  else
+    unique case (word_address_r)
 
-            ADDR_CTRL: HRDATA = {
-                16'b0,
-                ctrl_ie_err,
-                ctrl_ie_done,
-                4'b0,
-                ctrl_clk_div,
-                ctrl_cpol,
-                ctrl_cpha
-            };
+      ADDR_CTRL: HRDATA = {
+          16'b0,
+          ctrl_ie_err,
+          ctrl_ie_done,
+          4'b0,
+          ctrl_clk_div,
+          ctrl_cpol,
+          ctrl_cpha
+      };
 
-            ADDR_CMD: HRDATA = {
-                4'b0,
-                cmd_len,
-                cmd_dummy,
-                cmd_dir,
-                cmd_data_en,
-                cmd_addr_bytes,
-                cmd_addr_en,
-                cmd_en,
-                cmd_opcode,
-                1'b0
-            };
+      ADDR_CMD: HRDATA = {
+          4'b0,
+          cmd_len,
+          cmd_dummy,
+          cmd_dir,
+          cmd_data_en,
+          cmd_addr_bytes,
+          cmd_addr_en,
+          cmd_en,
+          cmd_opcode,
+          1'b0
+      };
 
-            ADDR_STATUS: HRDATA = {
-               17'b0,
-                status_rx_level,
-                status_tx_level,
-                status_rx_full,
-                status_rx_empty,
-                status_tx_full,
-                status_tx_empty,
-                status_busy
-            };
+      ADDR_STATUS: HRDATA = {
+        21'b0, // FIX - needs to add to 32 bits
+        status_rx_level,
+        status_tx_level,
+        status_rx_full,
+        status_rx_empty,
+        status_tx_full,
+        status_tx_empty,
+        status_busy
+      };
 
-            ADDR_INT: HRDATA = {
-                28'b0,
-                int_cfg_err,
-                int_underrun,
-                int_overrun,
-                int_done
-            };
+      ADDR_INT: HRDATA = {
+          28'b0,
+          int_cfg_err,
+          int_underrun,
+          int_overrun,
+          int_done
+      };
 
-            ADDR_ADDR: HRDATA = spi_addr;
+      ADDR_ADDR: HRDATA = spi_addr;
 
-            // DATA read 
-            ADDR_DATA: HRDATA = rx_empty
-                ? {{(DATA_WIDTH-8){1'b0}}, rx_last_data}
-                : {{(DATA_WIDTH-8){1'b0}}, rx_data};
+      // DATA read 
+      ADDR_DATA: HRDATA = rx_empty
+          ? {{(DATA_WIDTH-8){1'b0}}, rx_last_data}
+          : {{(DATA_WIDTH-8){1'b0}}, rx_data};
 
-            default: HRDATA = '0;
+      default: HRDATA = '0;
 
-        endcase
+    endcase
 end
 
 //------------------------------------------------------
 // Invalid access detection
 //------------------------------------------------------
+
 always_comb begin
     invalid_access = 1'b0;
 
@@ -400,6 +396,7 @@ always_comb begin
 end
 
 assign HREADYOUT = 1'b1;
+// FIMXE - add a protocol-correct 2-stage error response for invalid access and cfg_error_access
 assign HRESP     = invalid_access || cfg_error_access;
 
 endmodule
