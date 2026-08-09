@@ -60,6 +60,8 @@ jobs:
             --core "${{ matrix.core }}" \
             --fusesoc-target "${{ matrix.fusesoc_target }}" \
             --kind "${{ matrix.kind }}" \
+            --group "${{ matrix.group }}" \
+            --fail-ok "${{ matrix.fail_ok }}" \
             --fusesoc-args="${{ matrix.fusesoc_args }}" \
             --success-pattern="${{ matrix.success_pattern }}" \
             --coverage-scope="${{ matrix.coverage_scope }}" \
@@ -91,7 +93,22 @@ jobs:
       - name: Aggregate metrics
         run: python3 .github/scripts/ci/aggregate_metrics.py --results-dir all-results --out-dir sim-metrics
 
+      # Renders on the run's own page, so results are readable without
+      # downloading the artifact or opening each matrix job's log.
+      - name: Publish simulation summary
+        if: always()
+        run: |
+          if [ -f sim-metrics/summary.md ]; then
+            cat sim-metrics/summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            # Aggregation itself failed (e.g. no metrics-*.json at all) - say so
+            # here rather than leaving the run page blank.
+            echo "## Simulation CI summary" >> "$GITHUB_STEP_SUMMARY"
+            echo "No summary was produced - see the 'Aggregate metrics' step." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Upload sim-metrics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: sim-metrics
