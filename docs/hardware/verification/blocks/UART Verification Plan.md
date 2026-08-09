@@ -12,7 +12,7 @@ The matrix above describes the pyuvm flow, whose `CHK` items are all blocked on 
 
 ```bash
 source .env/bin/activate
-fusesoc run --no-export sharc:comms_ip:ahb_uart_directed
+fusesoc run ahb_uart_directed
 ```
 
 - **Bench:** `hw/tb/uart/test_uart.py`

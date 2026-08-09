@@ -75,21 +75,37 @@ Target memory map, per the Schematic Review §3b:
 TODO
 
 
-
 ## Interrupt Handling Scheme
 TODO
 
 
-
 ## GPIO Multiplexing Scheme
-TODO
 
+### Pin Assignment
 
+15 of the 16 pads carry an alternate function. Direction is given from the pad's point of view.
+
+| Pad | Alternate Function | Alternative Function Direction |
+|---|---|---|
+| 0 | `spi_s_ss` | in |
+| 1 | `spi_s_sck` | in |
+| 2 | `spi_s_mosi` | in |
+| 3 | `spi_s_miso` | out |
+| 4 | `spi_m_ss` | out |
+| 5 | `spi_m_sck` | out |
+| 6 | `spi_m_mosi` | out |
+| 7 | `spi_m_miso` | in |
+| 8 | `qspi_sck` | out |
+| 9 | `qspi_ce_n[0]` | out |
+| 10 | `qspi_ce_n[1]` | out |
+| 11 | `qspi_sio[0]` | bidir |
+| 12 | `qspi_sio[1]` | bidir |
+| 13 | `qspi_sio[2]` | bidir |
+| 14 | `qspi_sio[3]` | bidir |
+| 15 | none — GPIO only | — |
 
 ## Debug/Test Features
 TODO
-
-
 
 ## Physical Design Requirements
 
@@ -97,8 +113,54 @@ TODO
 |---|---|
 | `GRPR-SOC-013` | Target process: GF180MCU, fabricated via the 2026 Chipathon / wafer.space shared-die shuttle. |
 | `GRPR-SOC-014` | Unified CPU SRAM: 4 KiB total, implemented as 4× `gf180mcu_ocd_ip_sram__sram1024x8m8wm1` macros (1024 × 8-bit words each, with byte/bit write enables) — see `ip/gf180mcu_ocd_ip_sram/`. |
-| `GRPR-SOC-015` | GrouperSoC's RTL occupies a bounded area/pad allocation within a shared multi-team chipathon die. Exact pad list and die placement are **not yet documented** 
-| `GRPR-SOC-016` | Total gate-equivalent (GE) area is the sum of the 5 peripheral block estimates plus CPU/interconnect/SRAM overhead (not separately estimated yet). Of the 5 blocks, only [SPI Master](blocks/SPI%20Master.md#size-estimate) has a stated estimate (1,500–2,000 GE); UART, GPIO Mux, SPI Slave, and QSPI are all TBD pending RTL/synthesis. **ESTIMATE: 1.4 * 1.4mm** 
+| `GRPR-SOC-015` | GrouperSoC needs **20 signal pads**: 1 clock, 1 reset, 1 UART RX (input-only), and 17 bidirectional (16 GPIO + 1 UART TX). See the Pad List below. Die placement within the shared multi-team die is still TBD. |
+| `GRPR-SOC-016` | Total gate-equivalent (GE) area is the sum of the 5 peripheral block estimates plus CPU/interconnect/SRAM overhead (not separately estimated yet). Of the 5 blocks, only [SPI Master](blocks/SPI%20Master.md#size-estimate) has a stated estimate (1,500–2,000 GE); UART, GPIO Mux, SPI Slave, and QSPI are all TBD pending RTL/synthesis. **ESTIMATE: 1.4 * 1.4mm** |
+
+### Pad List
+
+Derived from `hw/pd/grouper_soc_chip_core.sv` (pad↔SoC wiring) and `hw/pd/grouper_soc_chip_top.sv` (pad cell types). Side placement is for the **1x1** slot, per `librelane/chip/slots/slot_1x1.yaml`.
+
+#### Dedicated pads
+
+| Pad | Cell | Dir | Function | Side |
+|---|---|---|---|---|
+| `clk_PAD` | `gf180mcu_fd_io__in_s` | in | System clock. Schmitt-trigger input; `PU`/`PD` tied off. | South |
+| `rst_n_PAD` | `gf180mcu_fd_io__in_c` | in | Asynchronous reset, active low. `PU`/`PD` tied off. | South |
+
+#### Input-only pads
+
+| Pad | Cell | Dir | Function | Side |
+|---|---|---|---|---|
+| `input_PAD[0]` | `gf180mcu_fd_io__in_c` | in | `uart_rx` | West |
+| `input_PAD[n:1]` | `gf180mcu_fd_io__in_c` | — | Unused. `input_pu`/`input_pd` tied 0, value unread. | West |
+
+#### Bidirectional pads
+
+All `gf180mcu_fd_io__bi_24t`. For pads 0–14 the GPIO controller drives every pad control (`out`/`oe`/`cs`/`sl`/`ie`/`pu`/`pd`), and `GPIO_ALTSEL` selects between the GPIO register value and the alternate function — see [Pin Assignment](#pin-assignment).
+
+| Pad | GPIO | Alternate Function | Alt Dir | Side |
+|---|---|---|---|---|
+| `bidir_PAD[0]` | `gpio[0]` | `spi_s_ss`   | in | South |
+| `bidir_PAD[1]` | `gpio[1]` | `spi_s_sck`  | in | South |
+| `bidir_PAD[2]` | `gpio[2]` | `spi_s_mosi` | in | South |
+| `bidir_PAD[3]` | `gpio[3]` | `spi_s_miso` | out | South |
+| `bidir_PAD[4]` | `gpio[4]` | `spi_m_ss`   | out | South |
+| `bidir_PAD[5]` | `gpio[5]` | `spi_m_sck`  | out | South |
+| `bidir_PAD[6]` | `gpio[6]` | `spi_m_mosi` | out | South |
+| `bidir_PAD[7]` | `gpio[7]` | `spi_m_miso` | in | South |
+| `bidir_PAD[8]` | `gpio[8]` | `qspi_sck`   | out | South |
+| `bidir_PAD[9]` | `gpio[9]` | `qspi_ce_n[0]` | out | South |
+| `bidir_PAD[10]` | `gpio[10]` | `qspi_ce_n[1]` | out | South |
+| `bidir_PAD[11]` | `gpio[11]` | `qspi_sio[0]` | bidir | South |
+| `bidir_PAD[12]` | `gpio[12]` | `qspi_sio[1]` | bidir | South |
+| `bidir_PAD[13]` | `gpio[13]` | `qspi_sio[2]` | bidir | South |
+| `bidir_PAD[14]` | `gpio[14]` | `qspi_sio[3]` | bidir | East |
+| `bidir_PAD[15]` | `gpio[15]` | none — GPIO only | — | East |
+| `bidir_PAD[16]` | — | `uart_tx` | out | East |
+| `bidir_PAD[n:17]` | — | Unused | — | East / North |
+
+`bidir_PAD[16]` is a permanent output: `oe` tied 1, `ie`/`cs`/`sl`/`pu`/`pd` tied 0. Spare pads above it are driven low (`out=0`, `oe=1`) with `ie=0` so they never float.
+
 
 ## System Integration Requirements Trace
 
@@ -117,11 +179,11 @@ Each integration requirement above depends on requirements defined in the block-
 
 - Boot ROM / reset-vector address discrepancy (`0x0001_0000` vs `0x0000_1000`) — see Boot Sequence.
 
-- L1 register-stage fabric doesn't exist in current RTL — see Interconnect Architecture.
+- L1 register-stage should be moved away from AHB bus.
 
 - CPU ISA label mismatch (RV32EMC diagram label vs. actual RV32IM RTL config) — see Interconnect Architecture.
 
-- No pad list / die placement — see Physical Design Requirements.
+- Die placement within the shared multi-team die is undecided. The pad list itself is now documented — see [Pad List](#pad-list).
 - No total area estimate — 4 of 5 blocks have no GE figure yet.
 
 - GPIO Mux pin-sharing scheme (which physical pins are shared across SPI M/S, QSPI, UART, and how ownership/priority is arbitrated) is undocumented — see [GPIO Mux § Open Items](blocks/GPIO%20Mux.md#open-items).

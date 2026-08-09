@@ -171,7 +171,6 @@ TBD. Dominated by 11 × 16 = 176 register flops plus 16 2:1 output muxes; the pa
 - `GPIO_SYNC_EN_N` cannot be verified at SoC level until [hw/tb/top/grouper_soc_hello_tb.sv](../../../../hw/tb/top/grouper_soc_hello_tb.sv) instantiates `grouper_soc_top` instead of `digital_ss` — the synchronisers sit above the current DUT boundary. The testbench already carries a FIXME for this.
 - `GPIO_RO_MASK` gates `GPIO_OUT` only. Extending it to `GPIO_OE` and `GPIO_ALTSEL` — which also change who drives a pad — and making `GPIO_RO_MASK` self-locking so a locked configuration cannot be undone, are both deliberate non-goals of this revision.
 - Pad 15 has no alternate function. If a fifth serial signal is ever needed, it is the free one.
-- The two-cycle error response is implemented in this block only; `ahb_uart`, `ahb_spi_s`, `ahb_stub_slave` and `ahb_interconnect_ss` still use a non-compliant single-cycle `HRESP`.
 - The [GPIO Mux Verification Plan](../../verification/blocks/GPIO%20Mux%20Verification%20Plan.md) lists the GPIO agent as missing; `hw/dv/uvc/gpio/` now exists. That plan also lists `V-GPIO-STM-003`/`V-GPIO-COV-001` as blocked on the pin-sharing scheme, which this document now defines — both are unblocked and the plan needs updating.
 
 ## Verification Cross-Reference
