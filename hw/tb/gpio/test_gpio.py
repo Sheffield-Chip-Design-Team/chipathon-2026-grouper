@@ -493,7 +493,7 @@ async def test_halfword_write_touches_one_lane(dut):
 
 
 # --------------------------------------------------------------------------
-# GRPR-GPIO-007, -010 - read-only mas
+# GRPR-GPIO-007, -010 - read-only mask holds masekd bits and allows unmasked bits
 # --------------------------------------------------------------------------
 
 @cocotb.test()
@@ -510,7 +510,6 @@ async def test_ro_mask_holds_masked_bits_only (dut):
     # Check that everything except bit 3 changed, and that the mux sees the same.
     check_eq(await read_ok(dut, GPIO_OUT), 0x0008, "GPIO_OUT after a masked write")
     check_eq(port(dut, "mux_io_o"), 0x0008, "mux_io_o after a masked write")
-
 
 @cocotb.test()
 async def test_ro_mask_allows_unchanging_write(dut):
@@ -534,7 +533,6 @@ async def test_ro_mask_allows_unchanging_write(dut):
     await write_ok(dut, GPIO_OUT, 0x0008, what="GPIO_OUT")
     check_eq(await read_ok(dut, GPIO_OUT), 0x0008, "GPIO_OUT <- 0x0008, pad 3 unchanged")
 
-
 @cocotb.test()
 async def test_ro_mask_respects_byte_lanes(dut):
     """A locked pad outside the addressed byte lane cannot be violated."""
@@ -550,7 +548,6 @@ async def test_ro_mask_respects_byte_lanes(dut):
     check_eq(await read_ok(dut, GPIO_OUT), 0x00FF,
              "byte-0 write neither blocked by nor writing locked pad 11")
 
-
 @cocotb.test()
 async def test_ro_mask_zero_never_blocks(dut):
     """With no pad locked, every GPIO_OUT write succeeds."""
@@ -561,7 +558,6 @@ async def test_ro_mask_zero_never_blocks(dut):
         await write_ok(dut, GPIO_OUT, pattern, what="GPIO_OUT")
         check_eq(await read_ok(dut, GPIO_OUT), pattern,
                  f"GPIO_OUT <- 0x{pattern:04x} with no mask")
-
 
 # --------------------------------------------------------------------------
 # GRPR-GPIO-008 - illegal writes
@@ -576,7 +572,6 @@ async def test_write_to_gpio_in_errors(dut):
     trace = await drive_error_write(dut, GPIO_IN, 0xFFFF)
     assert_two_cycle_error(trace, "write to GPIO_IN")
 
-
 @cocotb.test()
 async def test_write_to_reserved_errors(dut):
     """Writing any reserved offset raises the two-cycle error."""
@@ -586,7 +581,6 @@ async def test_write_to_reserved_errors(dut):
     for addr in range(RESERVED, 0x40, 4):
         trace = await drive_error_write(dut, addr, 0xFFFF)
         assert_two_cycle_error(trace, f"write to reserved {addr:#04x}")
-
 
 # --------------------------------------------------------------------------
 # GRPR-GPIO-010, -013, -014 - response timing
