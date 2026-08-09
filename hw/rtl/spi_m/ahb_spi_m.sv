@@ -1,7 +1,7 @@
 // AHB spi master
 
 module ahb_spi_m #(
-  parameter int ADDR_WIDTH = 32,
+  parameter int ADDR_WIDTH = 5,
   parameter int DATA_WIDTH = 32
 ) (
   input logic                   HCLK,
@@ -9,9 +9,12 @@ module ahb_spi_m #(
 
   // GRPR-SPIM-001
   input logic [ADDR_WIDTH-1:0]  HADDR,
+
+  /*unused signals(after lint)
   input logic [2:0]             HBURST,
   input logic                   HMASTLOCK,
   input logic [3:0]             HPROT,
+  */
   input logic [2:0]             HSIZE,
   input logic [1:0]             HTRANS,
   input logic [DATA_WIDTH-1:0]  HWDATA,
@@ -35,8 +38,7 @@ module ahb_spi_m #(
 
 import ahb3lite_pkg::*;
 
-localparam int CLK_DIV_BITS = 8;
-localparam int SPI_DATA_W   = 8;
+
 
 localparam logic [2:0] ADDR_CTRL   = 3'd0;
 localparam logic [2:0] ADDR_CMD    = 3'd1;
@@ -69,8 +71,8 @@ logic status_tx_empty;
 logic status_tx_full;
 logic status_rx_empty;
 logic status_rx_full;
-logic [2:0] status_tx_level;
-logic [2:0] status_rx_level;
+logic [4:0] status_tx_level;
+logic [4:0] status_rx_level;
 
 // INT register
 logic int_done;
@@ -162,8 +164,7 @@ spi_m_core #(
 //------------------------------------------------------
 // AHB address phase decode
 //------------------------------------------------------
-assign access       = HREADYIN && HSEL && (HTRANS != HTRANS_IDLE); // FIXME - look the 4 AHB transfer types.
-assign read_enable  = access && ~HWRITE;
+assign access = HREADYIN && HSEL && (HTRANS == HTRANS_NONSEQ || HTRANS == HTRANS_SEQ); assign read_enable  = access && ~HWRITE; //fixed
 assign word_address = access ? HADDR[4:2] : '0;
 assign byte_select  = access ? generate_byte_select_32(HSIZE, HADDR[1:0]) : '0;
 
@@ -176,8 +177,8 @@ assign status_tx_empty = tx_empty;
 assign status_rx_full  = rx_full;
 assign status_rx_empty = rx_empty;
 
-assign status_tx_level = 3'd0;
-assign status_rx_level = 3'd0;
+assign status_tx_level = 5'd0;
+assign status_rx_level = 5'd0;
 
 //------------------------------------------------------
 // IRQ 
@@ -348,7 +349,7 @@ always_comb begin
       };
 
       ADDR_STATUS: HRDATA = {
-        21'b0, // FIX - needs to add to 32 bits
+        17'b0, // FIX - needs to add to 32 bits
         status_rx_level,
         status_tx_level,
         status_rx_full,
@@ -397,6 +398,25 @@ end
 
 assign HREADYOUT = 1'b1;
 // FIMXE - add a protocol-correct 2-stage error response for invalid access and cfg_error_access
-assign HRESP     = invalid_access || cfg_error_access;
+logic hresp_r;
+logic hreadyout_r;
+
+always_ff @(posedge HCLK, negedge HRESETn) begin
+    if (!HRESETn) begin
+        hresp_r     <= 1'b0;
+        hreadyout_r <= 1'b1;
+    end else begin
+        if (invalid_access || cfg_error_access) begin
+            hresp_r     <= 1'b1;
+            hreadyout_r <= 1'b0;
+        end else begin
+            hresp_r     <= 1'b0;
+            hreadyout_r <= 1'b1;
+        end
+    end
+end
+
+assign HRESP     = hresp_r;
+assign HREADYOUT = hreadyout_r;
 
 endmodule
