@@ -4,7 +4,6 @@ from cocotb.triggers import RisingEdge, Timer, FallingEdge
 import logging
 log = logging.getLogger("cocotb.spi_m_tb")
 
-
 # ------------------------------------------------------------
 # AHB SPI MASTER TEST
 # ------------------------------------------------------------
