@@ -1,6 +1,6 @@
 // GPIO Controller with external MUX support
 //
-// Specification: planning/Hardware/design/blocks/GPIO Mux.md
+// Specification: docs/hardware/design/blocks/GPIO Mux.md
 // Directed tests: hw/tb/gpio/test_gpio.py (port names must match)
 
 module ahb_gpio_ctrl #(

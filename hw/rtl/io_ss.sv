@@ -6,7 +6,7 @@
 // module a pad input is an output port (it is driven towards the peripheral)
 // and a pad output is an input port.
 //
-// Specification: planning/Hardware/design/blocks/GPIO Mux.md
+// Specification: docs/hardware/design/blocks/GPIO Mux.md
 
 module io_ss #(
   parameter int ADDR_WIDTH = 32,

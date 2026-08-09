@@ -1,6 +1,6 @@
 """Directed cocotb testbench for ahb_gpio_ctrl.
 
-Written against `planning/Hardware/design/blocks/GPIO Mux.md` before the RTL
+Written against `planning/hardware/design/blocks/GPIO Mux.md` before the RTL
 exists, so this file is the interface contract as much as it is a test. Each
 test names the requirement it covers.
 
@@ -95,7 +95,7 @@ CLK_PERIOD_NS = 10
 NUM_GPIO = 16
 PIN_MASK = (1 << NUM_GPIO) - 1
 
-# Register map - planning/Hardware/design/blocks/GPIO Mux.md
+# Register map - planning/hardware/design/blocks/GPIO Mux.md
 GPIO_OUT = 0x00
 GPIO_IN = 0x04
 GPIO_OE = 0x08

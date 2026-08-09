@@ -4,7 +4,7 @@
 
 This document is scoped to **integration** requirements — clocking, reset, interconnect, memory map, boot flow, and physical design. Peripheral-internal design lives in the block docs under [`blocks/`](blocks/): [UART](blocks/UART.md), [GPIO Mux](blocks/GPIO%20Mux.md), [SPI Master](blocks/SPI%20Master.md), [SPI Slave](blocks/SPI%20Slave.md), [QSPI](blocks/QSPI.md).
 
-**Related:** [Grouper SoC Verification Plan](../../verification/Grouper%20SoC%20Verification%20Plan.md)
+**Related:** [Grouper SoC Verification Plan](../verification/Grouper%20SoC%20Verification%20Plan.md)
 
 ---
 
@@ -144,6 +144,6 @@ Each integration requirement above depends on requirements defined in the block-
 | `GRPR-SOC-012` | `V-SOC-STM-007`, `V-SOC-CHK-011` |
 | `GRPR-SOC-013`–`GRPR-SOC-016` | *(physical design — not covered by functional verification; tracked as synthesis/PD signoff items, not simulation checks)* |
 
-See [Grouper SoC Verification Plan](../../verification/Grouper%20SoC%20Verification%20Plan.md) for the full item definitions and test list.
+See [Grouper SoC Verification Plan](../verification/Grouper%20SoC%20Verification%20Plan.md) for the full item definitions and test list.
 
 ---

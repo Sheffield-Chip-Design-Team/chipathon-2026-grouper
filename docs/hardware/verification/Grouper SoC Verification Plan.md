@@ -1,8 +1,8 @@
 # Grouper SoC Verification Plan
 
-**Design doc:** [Grouper SoC Specification](../Hardware/design/Grouper%20SoC%20Specification.md)
-**Source:** [Schematic Review](../Hardware/Schematic%20Review.md) §5 "Verification Summary" — top-level testbench architecture.
-**Scope:** Integration-level verification only — CPU, interconnect (L1/L2 fabric), ROM/RAM, boot sequence, memory map, clocking/reset. Peripheral-internal verification lives in the block plans under [`blocks/`](blocks/): [UART](../Hardware/verification/blocks/UART%20Verification%20Plan.md), [GPIO Mux](../Hardware/verification/blocks/GPIO%20Mux%20Verification%20Plan.md), [SPI Master](../Hardware/verification/blocks/SPI%20Master%20Verification%20Plan.md), [SPI Slave](../Hardware/verification/blocks/SPI%20Slave%20Verification%20Plan.md), [QSPI](blocks/QSPI%20Verification%20Plan.md).
+**Design doc:** [Grouper SoC Specification](../design/Grouper%20SoC%20Specification.md)
+**Source:** [Schematic Review](../Schematic%20Review.md) §5 "Verification Summary" — top-level testbench architecture.
+**Scope:** Integration-level verification only — CPU, interconnect (L1/L2 fabric), ROM/RAM, boot sequence, memory map, clocking/reset. Peripheral-internal verification lives in the block plans under [`blocks/`](blocks/): [UART](blocks/UART%20Verification%20Plan.md), [GPIO Mux](blocks/GPIO%20Mux%20Verification%20Plan.md), [SPI Master](blocks/SPI%20Master%20Verification%20Plan.md), [SPI Slave](blocks/SPI%20Slave%20Verification%20Plan.md), [QSPI](blocks/QSPI%20Verification%20Plan.md).
 
 ---
 
@@ -28,7 +28,7 @@ Per the Schematic Review's top-level testbench diagram:
                                                     └──────────────────┘
 ```
 
-The core SoC (SRAM + boot ROM + CPU + L1/L2 fabric) is **not** individually VIP-wrapped — it's verified as a unit via the top-level directed test plus the checks below, consistent with the block-scope decision documented in [Grouper SoC Specification](../Hardware/design/Grouper%20SoC%20Specification.md). Each of the 5 peripherals reuses its own block-level VIP (see the block plans) rather than a separate top-level-only VIP.
+The core SoC (SRAM + boot ROM + CPU + L1/L2 fabric) is **not** individually VIP-wrapped — it's verified as a unit via the top-level directed test plus the checks below, consistent with the block-scope decision documented in [Grouper SoC Specification](../design/Grouper%20SoC%20Specification.md). Each of the 5 peripherals reuses its own block-level VIP (see the block plans) rather than a separate top-level-only VIP.
 
 **Existing infrastructure:** `hw/tb/picorv32_hello_tb.sv` + the `tb_top` FuseSoC target (`grouper_soc.core`, run via `fusesoc run --target=tb_top grouper_soc`) is the current top-level directed testbench — a "hello world" test exercising UART, RAM, ROM, and CPU, and validating the software build flow. This plan extends that test rather than replacing it.
 
@@ -40,7 +40,7 @@ The core SoC (SRAM + boot ROM + CPU + L1/L2 fabric) is **not** individually VIP-
 | Interrupt Checker / Interrupt Interface | **Missing** | GrouperSoC's IRQ sources (`uart_rx_irq`, `uart_rx_error_irq` today, more as SPI/QSPI/GPIO land — see `hw/rtl/cpu/cpu_ss.sv`'s `NUM_IRQ` parameter) need a checker confirming each source reaches the CPU's `irq` input correctly and at the right priority/masking behavior. |
 | External AHB-Lite Interface (AHB VIP, passive) | **Exists** — `hw/dv/uvc/ahb3lite/` (`is_active=False` mode already supported per `ahb3lite_agent.py`) | Reuse in passive mode to observe/checkpoint internal bus traffic during the top-level test, per the Schematic Review's diagram. |
 | Per-peripheral VIPs | **Partial** — UART exists (`hw/dv/uvc/uart/`); SPI/QSPI/GPIO don't yet | Reuse the block-level VIPs being built per the block verification plans — do not duplicate them at the top level. |
-| GPIO IO MUX + MUX CTRL routing checker | **Missing**, blocked | Depends on the [GPIO Mux](../Hardware/design/blocks/GPIO%20Mux.md) pin-sharing scheme being defined first. |
+| GPIO IO MUX + MUX CTRL routing checker | **Missing**, blocked | Depends on the [GPIO Mux](../design/blocks/GPIO%20Mux.md) pin-sharing scheme being defined first. |
 | Scoreboard(s) | **Missing** | Top-level scoreboard needs: boot-flow state tracking (ROM→RAM bank-switch), memory-map address-decode correctness, and IRQ aggregation correctness. |
 
 ## Traceability Matrix
@@ -54,7 +54,7 @@ The core SoC (SRAM + boot ROM + CPU + L1/L2 fabric) is **not** individually VIP-
 | `V-SOC-STM-003` | Stimulus | Execute the Bank Switch Reset PCPI instruction from a running program | `GRPR-SOC-003` | New directed test |
 | `V-SOC-CHK-003` | Check | ROM and RAM regions are swapped in the address map immediately after the instruction executes | `GRPR-SOC-003` | Scoreboard |
 | `V-SOC-CHK-004` | Check | CPU fetches and executes correctly from RAM post-swap (continuation of `V-SOC-STM-002`/`003`) | `GRPR-SOC-004` | Scoreboard |
-| `V-SOC-STM-004` | Stimulus | Exercise SPI Master/QSPI-based external storage access from a running program, both immediately post-boot and via NOR-flash boot-bypass | `GRPR-SOC-005` | Coordinate with [SPI Master](../Hardware/verification/blocks/SPI%20Master%20Verification%20Plan.md) and [QSPI](blocks/QSPI%20Verification%20Plan.md) plans |
+| `V-SOC-STM-004` | Stimulus | Exercise SPI Master/QSPI-based external storage access from a running program, both immediately post-boot and via NOR-flash boot-bypass | `GRPR-SOC-005` | Coordinate with [SPI Master](blocks/SPI%20Master%20Verification%20Plan.md) and [QSPI](blocks/QSPI%20Verification%20Plan.md) plans |
 | `V-SOC-CHK-005` | Check | Both storage-access paths behave per `GRPR-SOC-005` | `GRPR-SOC-005` | Scoreboard, coordinated with block-level scoreboards |
 | `V-SOC-STM-005` | Stimulus | Sweep every address in and around each memory-map region (ROM, RAM, UART, GPIO CTRL, QSPI, SPI M, external peripheral), including boundary and unmapped addresses | `GRPR-SOC-006` | New directed test — full address-decode sweep |
 | `V-SOC-COV-001` | Coverage | Every memory-map region hit at least once at its low, high, and mid address; every unmapped gap hit at least once to confirm defined (error) behavior | `GRPR-SOC-006` | Coverage collector |

@@ -95,7 +95,7 @@ targets:
     coverage_scope: none
     fw_test: ""
 
-  # --- Peripheral block-level DV -------------------------------------------
+  # --- Peripheral block-level directed tests -------------------------------------------
 
   - name: ahb_uart_directed
     group: directed_tb
@@ -121,7 +121,6 @@ targets:
     coverage_scope: full
     fw_test: ""
 
-  # 19/19 passing when this was added.
   - name: ahb_gpio_ctrl_directed
     group: directed_tb
     core: sharc:comms_ip:ahb_gpio_ctrl_directed
@@ -133,10 +132,6 @@ targets:
     coverage_scope: full
     fw_test: ""
 
-  # QSPI and SPI-slave DV has not been run green end-to-end in CI yet, and the
-  # RTL for both is still a stub in the fabric (periph_ss.sv wires their slots
-  # to ahb_stub_slave). Recorded in the metrics from day one, but not blocking
-  # until they have a known-good baseline - flip to false then.
   - name: ahb_qspi_directed
     group: directed_tb
     core: sharc:comms_ip:ahb_qspi_directed

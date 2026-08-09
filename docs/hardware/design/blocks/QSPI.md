@@ -4,7 +4,7 @@
 **Status:** RTL scaffold committed. Register map under design review; functional QSPI RTL not yet implemented.
 **Source:** [Schematic Review](../../Schematic%20Review.md) §"Block-Level Design Checklists → 5. AHB QSPI", with corrections noted below.
 
-**Related:** [Grouper SoC Specification](../Grouper%20SoC%20Specification.md) — boot sequence, memory map | [QSPI Verification Plan](../../../verification/blocks/QSPI%20Verification%20Plan.md)
+**Related:** [Grouper SoC Specification](../Grouper%20SoC%20Specification.md) — boot sequence, memory map | [QSPI Verification Plan](../../verification/blocks/QSPI%20Verification%20Plan.md)
 
 ---
 
@@ -268,4 +268,4 @@ TBD after RTL synthesis (per source).
 | `GRPR-QSPI-020` | [`V-QSPI-CHK-014`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-chk-014) |
 | `GRPR-QSPI-021` | [`V-QSPI-CHK-015`](../../verification/blocks/QSPI%20Verification%20Plan.md#v-qspi-chk-015) |
 
-See [QSPI Verification Plan](../../../verification/blocks/QSPI%20Verification%20Plan.md) for the full item definitions and test list.
+See [QSPI Verification Plan](../../verification/blocks/QSPI%20Verification%20Plan.md) for the full item definitions and test list.
