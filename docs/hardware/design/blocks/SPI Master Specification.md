@@ -17,8 +17,8 @@ SPI master peripheral that lets the PicoRV32 CPU issue SPI transactions to an ex
 | `GRPR-SPIM-001` | There shall be an AHB-Lite subordinate interface on the CPU side. |
 | `GRPR-SPIM-002` | SPI mode 0 (and mode 3, see `GRPR-SPIM-006`) shall be supported.  |
 | `GRPR-SPIM-003` | Serial data shall be transmitted on MSB-first, on the MOSI port   |
-| `GRPR-SPIM-004` | Command/transaction set shall be compatible with the APS6404L datasheet's SPI-mode command encoding. |
-| `GRPR-SPIM-INFO-001` | Transaction timing/behavior shall be validated for compatibility with the Raspberry Pi Pico (RP2040) hardware SPI peripheral, since APS6404L PSRAM modules are commonly hosted on RP2040-based boards and interop with that ecosystem is a stated goal. **Open — no concrete compatibility criteria (timing margins, supported modes) are documented yet; needs a specific checklist item.** |
+| `GRPR-SPIM-004` | Command/transaction set shall be compatible with the [APS6404L](https://www.pjrc.com/store/APS6404L_3SQR.pdf) datasheet's SPI-mode command encoding. |
+| `GRPR-SPIM-INFO-001` | Transaction timing/behavior shall be validated for compatibility with the Raspberry Pi Pico (RP2040) hardware SPI peripheral |
 
 ## Key Functionality
 
@@ -33,7 +33,8 @@ SPI master peripheral that lets the PicoRV32 CPU issue SPI transactions to an ex
 ### SPI Transactions
 | `GRPR-SPIM-014` | A SPI phase shall end only after the final bit's sampling edge. |
 | `GRPR-SPIM-016` | Each SPI byte transfer shall occupy exactly 8 SCK cycles. |
-| `GRPR-SPIM-017` | CS_N be de-asserted after every transaction.|
+| `GRPR-SPIM-017` | CS_N shall be de-asserted after every transaction.|
+
 
 ## Block Diagram
 
