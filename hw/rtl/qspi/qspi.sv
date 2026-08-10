@@ -9,6 +9,7 @@
 
 
 // FIXME - no CPHA or POL, no dummy cycles, etc...
+// FIXME - There should be an arbitrary command interface that can be used to send any spi command ( look at spi review docs)
 
 module qspi (
   input  logic        clk,
