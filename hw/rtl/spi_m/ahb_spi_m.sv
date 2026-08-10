@@ -10,11 +10,10 @@ module ahb_spi_m #(
   // GRPR-SPIM-001
   input logic [ADDR_WIDTH-1:0]  HADDR,
 
-  /*unused signals(after lint)
   input logic [2:0]             HBURST,
   input logic                   HMASTLOCK,
   input logic [3:0]             HPROT,
-  */
+  
   input logic [2:0]             HSIZE,
   input logic [1:0]             HTRANS,
   input logic [DATA_WIDTH-1:0]  HWDATA,
@@ -379,44 +378,32 @@ always_comb begin
     endcase
 end
 
+
+
+
+// FIMXE - add a protocol-correct 2-stage error response for invalid access and cfg_error_access
+
+
+
+
+
 //------------------------------------------------------
 // Invalid access detection
 //------------------------------------------------------
 
-always_comb begin
-    invalid_access = 1'b0;
+assign invalid_access =
+    write_enable &&
+    (
+        (word_address_r == ADDR_STATUS) ||
+        (word_address_r == 3'd6) ||
+        (word_address_r == 3'd7)
+    );
 
-    if (write_enable) begin
-        unique case (word_address_r)
-            ADDR_STATUS: invalid_access = 1'b1;
-            3'd6:        invalid_access = 1'b1;
-            3'd7:        invalid_access = 1'b1;
-            default:     invalid_access = 1'b0;
-        endcase
-    end
-end
+//------------------------------------------------------
+// AHB error response
+//------------------------------------------------------
 
+assign HRESP     = invalid_access || cfg_error_access;
 assign HREADYOUT = 1'b1;
-// FIMXE - add a protocol-correct 2-stage error response for invalid access and cfg_error_access
-logic hresp_r;
-logic hreadyout_r;
-
-always_ff @(posedge HCLK, negedge HRESETn) begin
-    if (!HRESETn) begin
-        hresp_r     <= 1'b0;
-        hreadyout_r <= 1'b1;
-    end else begin
-        if (invalid_access || cfg_error_access) begin
-            hresp_r     <= 1'b1;
-            hreadyout_r <= 1'b0;
-        end else begin
-            hresp_r     <= 1'b0;
-            hreadyout_r <= 1'b1;
-        end
-    end
-end
-
-assign HRESP     = hresp_r;
-assign HREADYOUT = hreadyout_r;
 
 endmodule
