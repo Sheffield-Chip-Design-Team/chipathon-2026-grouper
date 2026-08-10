@@ -30,6 +30,11 @@ SPI master peripheral that lets the PicoRV32 CPU issue SPI transactions to an ex
 | `GRPR-SPIM-008` | The block shall expose a transaction complete  flag to the CPU. |
 | `GRPR-SPIM-009` | `CPOL` and `CPHA` shall be independently programmable (SPI mode 0 or mode 3). |
 
+### SPI Transactions
+| `GRPR-SPIM-014` | A SPI phase shall end only after the final bit's sampling edge. |
+| `GRPR-SPIM-016` | Each SPI byte transfer shall occupy exactly 8 SCK cycles. |
+| `GRPR-SPIM-017` | CS_N be de-asserted after every transaction.|
+
 ## Block Diagram
 
 TODO
