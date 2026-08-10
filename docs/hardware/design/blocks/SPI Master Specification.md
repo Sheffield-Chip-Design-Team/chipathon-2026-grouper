@@ -1,8 +1,7 @@
 # AHB SPI Master
 
 **Owner:** Safaa
-**Status:** RTL design starting (per [Schematic Review](../../Schematic%20Review.md) §4, one of the three peripherals — SPI M, SPI S, QSPI — where RTL design has begun).
-
+**Status:** RTL design 
 **Related:** [Grouper SoC Specification](../Grouper%20SoC%20Specification.md) — memory map, boot sequence (SPI M is a candidate post-boot storage path) | [SPI Master Verification Plan](../../verification/blocks/SPI%20Master%20Verification%20Plan.md)
 
 ---
