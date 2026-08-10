@@ -130,8 +130,8 @@ Reset value 0x0A reflects TX_EMPTY = 1 and RX_EMPTY = 1.
 | Bits | Field | Description |
 | --- | --- | --- |
 | 0 | TXN_COMPLETE | Transfer completed |
-| 1 | OVERRUN | RX byte arrived with RX FIFO full |
-| 2 | UNDERRUN | TX byte needed with TX FIFO empty |
+| 1 | OVERRUN | RX fifo read attempted when the FIFO is empty. |
+| 2 | UNDERRUN | TX fifo write attempted when the FIFO is full.|
 | 3 | CFG_ERR | START while BUSY, illegal descriptor, or CTRL write while BUSY |
 
 Interrupt asserts when (DONE & CTRL.IE_COMPLETE) or ((OVERRUN | UNDERRUN | CFG_ERR) & CTRL.IE_ERR).
