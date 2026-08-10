@@ -7,6 +7,9 @@
 //
 // All fields use SIO[3:0], most-significant nibble first.
 
+
+// FIXME - no CPHA or POL, no dummy cycles, etc...
+
 module qspi (
   input  logic        clk,
   input  logic        rst_n,
