@@ -142,9 +142,9 @@ IO_PIN_ORDER_CFG: dir::pin_order.cfg
 # PRIMARY_GDSII_STREAMOUT_TOOL: magic
 
 # SDC files
-PNR_SDC_FILE:     dir::grouper_chip_top.sdc
-SIGNOFF_SDC_FILE: dir::grouper_chip_top.sdc
-FALLBACK_SDC:     dir::grouper_chip_top.sdc
+PNR_SDC_FILE:     dir::grouper_chip_core.sdc
+SIGNOFF_SDC_FILE: dir::grouper_chip_core.sdc
+FALLBACK_SDC:     dir::grouper_chip_core.sdc
 
 # Power / ground nets
 VDD_NETS:
