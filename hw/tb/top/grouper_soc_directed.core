@@ -30,11 +30,23 @@ parameters:
     paramtype: vlogdefine
     description: Enable picorv32's instruction trace. Needs DEBUG_PERIPH too.
     default: false
+  MACRO_RAM:
+    datatype: bool
+    paramtype: vlogdefine
+    description: >
+      Build ahb_ram from the four SRAM macros rather than a behavioural array.
+      Pair with the ram_macro fileset, which brings the macro RTL and the
+      simulation model in hw/tb/models.
+    default: false
 
 filesets:
   rtl:
     depend:
       - sharc:soc_ip:grouper_soc:0.0.1
+
+  ram_macro:
+    depend:
+      - sharc:mem_ip:gf180mcu_4096_32w1_ram_ss:0.0.1
 
 # Deliberately no YAML merge key - prevents firmware build re-running 
 targets:
@@ -53,6 +65,23 @@ targets:
       run_options:
         - --trace
     toplevel: grouper_soc_top
+    hooks:
+      pre_build: [build_fw]
+
+  # Same test suite over the storage the chip actually has. Worth running any
+  # change to ahb_ram or the interconnect against: the macros are single-port,
+  # so a read landing in a write's data phase takes a wait state here that the
+  # behavioural array never produces.
+  #
+  #   FW_TEST=gpio fusesoc run --no-export --target=macro_ram sharc:soc_ip:grouper_soc_directed
+  macro_ram:
+    description: As default, with ahb_ram built from the four SRAM macros.
+    filesets: [rtl, ram_macro]
+    flow: sim
+    flow_options: *flow_opts
+    toplevel: grouper_soc_top
+    parameters:
+      - MACRO_RAM=true
     hooks:
       pre_build: [build_fw]
 
