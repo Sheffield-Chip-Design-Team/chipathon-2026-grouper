@@ -226,13 +226,20 @@ DESIGN_REPAIR_MAX_SLEW_PCT: 10
 DESIGN_REPAIR_MAX_CAP_PCT:  10
 
 # Placement
-# The 1310x1150 `irdrop_check_d` baseline used 68% target density and a
-# relaxed fanout limit to avoid excessive buffering. ~692,000um^2 is placeable
-# after the 2x2 macro block and its halos, so 68% is comfortably above the
-# density the design actually needs; it is a ceiling for the global placer,
-# not a target it has to reach. Lower it (55-60) before widening the die if
-# the L-shaped region turns out to route badly.
-PL_TARGET_DENSITY_PCT: 68
+#
+# 62, down from the 68 of the 1310x1150 `irdrop_check_d` baseline. This is a
+# *distribution* control, not an area one: global placement pushes bin
+# densities toward it, so a lower number spreads the same cells into more
+# uniform whitespace. That is what the late insertions need -- CTS buffers,
+# repair buffers and especially antenna diodes, which have to land next to a
+# specific pin and failed to at 68 (DPL-0036 in antenna_repair.tcl, 5
+# instances with nowhere to shuffle).
+#
+# The floor is set by GPL-0302, which compares the target against utilisation
+# WITH GPL_CELL_PADDING applied: 425,581um^2 of cells in 974,111um^2 of free
+# area is 43.7%, inflated to 52.6% by the 2 sites of padding. 62 leaves 9
+# points of headroom; do not go below ~56 without recomputing this.
+PL_TARGET_DENSITY_PCT: 62
 MAX_FANOUT_CONSTRAINT: 16
 GRT_ALLOW_CONGESTION: true
 GRT_ADJUSTMENT: 0.2
