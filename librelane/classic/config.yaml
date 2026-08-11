@@ -1,4 +1,4 @@
-# GF180MCU LibreLane config -- classic flow for the picorv32_hello_top macro
+# GF180MCU LibreLane config -- classic flow for the grouper_soc_chip_core macro
 meta:
   version: 3
   flow: Classic
@@ -33,6 +33,8 @@ meta:
     #Netgen.LVS: null
     #Checker.LVS: null
 
+DESIGN_NAME: grouper_soc_chip_core
+
 VERILOG_FILES:
 # GrouperSoC RTL (same order as the fusesoc `rtl` fileset in grouper_soc.core)
 - dir::../../hw/rtl/ahb3lite/ahb3lite_pkg.sv
@@ -59,6 +61,8 @@ VERILOG_FILES:
 - dir::../../hw/rtl/ahb_interconnect_ss.sv
 - dir::../../hw/rtl/memory/ahb_rom.sv
 - dir::../../hw/rtl/memory/ahb_ram.sv
+- dir::../../hw/rtl/memory/ram_ss.sv
+- dir::../../hw/pd/wrappers/sram1024x8_wrapper.sv
 - dir::../../hw/rtl/io_ss.sv
 - dir::../../hw/rtl/cpu_ss.sv
 - dir::../../hw/rtl/periph_ss.sv
@@ -68,8 +72,27 @@ VERILOG_FILES:
 # CHIP core wrapper
 - dir::../../hw/pd/grouper_soc_chip_core.sv
 
-# VERILOG_INCLUDE_DIRS:
-  # - dir::../src/rtl/inc
+VERILOG_INCLUDE_DIRS:
+# Supplies code.vmem -- the boot stub built by sw/scripts/build_rom_boot.sh.
+# ahb_rom.sv includes `PROG_FILE_VMEM, which defaults to "code.vmem", so
+# pointing the include path at sw/dry_run is what selects the boot stub over
+# the full firmware image in sw/.
+- dir::../../sw/dry_run
+
+VERILOG_DEFINES:
+# 64 B boot ROM, SPI slave stubbed out. See the header above. The RAM is NOT
+# stubbed here any more -- MACRO_RAM below builds the real macros.
+- DRY_RUN
+# Storage for ahb_ram is four hardened sram1024x8m8wm1 macros (via ram_ss)
+# rather than a behavioural array. This is what puts
+# u_ram_ss.gen_macro_ram.gen_sram[*].u_wrapper.u_sram_macro in the netlist for
+# the MACROS block at the bottom of this file to place; without it the flow
+# fails in OpenROAD.CheckMacroInstances with nothing to place.
+- MACRO_RAM
+# Build the ROM contents from code.vmem (continuous assigns) rather than
+# $readmemh, which has no synthesisable equivalent - standard cells have no
+# initial-value mechanism, so this is what actually produces a mask ROM.
+- ROM_INIT_CONST
 
 # Enable plugin for better SystemVerilog support
 
@@ -83,14 +106,40 @@ SYNTH_ABC_DFF: true
 # SYNTH_ABC_USE_MFS3: true
 SYNTH_STRATEGY: "DELAY 2"
 
-# Baseline die: 1310x1150 (23.1% below the original 1400x1400 die).
-# The configuration below is the proven congestion-mitigation recipe from
-# `irdrop_check_d`: detailed routing completed and the IR-drop report passed.
+# ---------------------------------------------------------------------------
+# Floorplan: 1000 x 1500.
+#
+# 1,500,000 um^2, within a percent of the 1310x1150 `irdrop_check_d` baseline
+# (1,506,500 um^2) that routed and passed IR drop, so the congestion recipe
+# below carries over unchanged -- only the aspect ratio and the macro
+# arrangement are new.
+#
+# LibreLane insets the core by 6.72um (12 sites) in x and 15.68um (4 rows) in
+# y, so the core is 6.72 15.68 .. 993.28 1484.32. Every macro coordinate and
+# PDN offset below is derived from that core origin, NOT from the die origin.
+# ---------------------------------------------------------------------------
 FP_SIZING: absolute
-DIE_AREA: [0.0, 0.0, 1100, 1100]
+DIE_AREA: [0.0, 0.0, 1000, 1500]
+
+# ---------------------------------------------------------------------------
+# I/O pins: north and west edges only (librelane/classic/pin_order.cfg).
+#
+# The four SRAMs occupy the bottom ~1116um of the die (see MACROS), leaving an
+# L of placeable area -- a 303um strip down the west side and a 359um band
+# across the top. Pins are confined to the two edges that L actually reaches:
+# south and east are macro wall, and a pin there would have to route over the
+# SRAMs on Metal4/Metal5 to find a cell.
+#
+# Split: the GPIO data path (in/out/oe/ie, 160 pins) on north, the pad-config
+# buses (cs/sl/pu/pd) plus clk, rst_n and the input-only pads (165 pins) on
+# west. Odb.CustomIOPlacement errors on any design pin the cfg does not match
+# (ERRORS_ON_UNMATCHED_IO defaults to unmatched_design), so the regexes there
+# must cover every port of grouper_soc_chip_core.
+# ---------------------------------------------------------------------------
+IO_PIN_ORDER_CFG: dir::pin_order.cfg
 
 # Slightly smaller file sizes
-PRIMARY_GDSII_STREAMOUT_TOOL: klayout
+# PRIMARY_GDSII_STREAMOUT_TOOL: magic
 
 # SDC files
 PNR_SDC_FILE:     dir::grouper_chip_top.sdc
@@ -111,9 +160,6 @@ CLOCK_PERIOD: 62.5 # 16MHz
 DIODE_ON_PORTS: in
 
 # Moved to Metal5 to relieve Metal3 congestion at 1310x1150 (see TRIAL_NOTES.md).
-# Normally capped at Metal4 because Metal5 is reserved for the parent's core
-# ring in hierarchical integration (PDN_CORE_RING: false below) -- Metal5
-# ownership still needs to be cleared with the parent integration owner.
 RT_MAX_LAYER: Metal5
 
 CTS_OBSTRUCTION_AWARE: true
@@ -148,7 +194,11 @@ PL_RESIZER_SETUP_MAX_BUFFER_PCT: 40
 
 # Placement
 # The 1310x1150 `irdrop_check_d` baseline used 68% target density and a
-# relaxed fanout limit to avoid excessive buffering.
+# relaxed fanout limit to avoid excessive buffering. ~692,000um^2 is placeable
+# after the 2x2 macro block and its halos, so 68% is comfortably above the
+# density the design actually needs; it is a ceiling for the global placer,
+# not a target it has to reach. Lower it (55-60) before widening the die if
+# the L-shaped region turns out to route badly.
 PL_TARGET_DENSITY_PCT: 68
 MAX_FANOUT_CONSTRAINT: 16
 GRT_ALLOW_CONGESTION: true
@@ -189,14 +239,61 @@ PDN_VERTICAL_LAYER:   Metal4    # carries over the SRAMs
 PDN_HORIZONTAL_LAYER: Metal5
 
 
+# ---------------------------------------------------------------------------
 # Straps
-PDN_VWIDTH:    5         
-PDN_HWIDTH:    5          
-PDN_VPITCH:    180
-PDN_HPITCH:    180
-PDN_VSPACING:  85        # (180 - 2*5) / 2
-PDN_HSPACING:  85        # (180 - 2*5) / 2
-PDN_EXTEND_TO: boundary   
+#
+# Three independent constraints set these numbers.
+#
+# 1. ROUTING-GRID ALIGNMENT (this is the DRC one). Every width, pitch and
+#    spacing is a whole number of routing tracks: 0.56um on Metal2/3/4,
+#    0.90um on Metal5 (DEF: "TRACKS X 560 DO 1964 STEP 1120 LAYER Metal2" at
+#    2000 DBU/um). The old 180um pitch was 321.43 Metal2 tracks, so
+#    consecutive stripe columns drifted 0.4um out of phase with the routing
+#    grid and two of them landed 0.08um short of Metal2 minimum spacing
+#    (0.28um) to the nearest usable track -- permanently DRC-illegal, which is
+#    what made detailed routing plateau instead of converge (four "Metal
+#    Spacing" violations against VDD/VSS on Metal2, both at a stripe edge).
+#    See TRIAL_NOTES.md.
+#
+# 2. STRIPE PHASE. pdngen treats PDN_VOFFSET as the offset from the core's
+#    lower-left to the *centre* of the first stripe, and cuts the stripe at
+#    centre +/- width/2 (OpenROAD src/pdn/src/straps.cpp, Straps::makeStraps).
+#    So a stripe's left edge is core_llx + PDN_VOFFSET - PDN_VWIDTH/2 =
+#    6.72 + 14.98 - 2.52 = 19.18, and because the pitch is a whole number of
+#    tracks every other column shares that edge phase: 19.18 mod 0.56 = 0.14.
+#    At 0.14 the track on one side of the stripe sits exactly 0.28um (Metal2
+#    minimum spacing) away -- legal and usable; at 0.00 both neighbouring
+#    tracks would be 0.14um away, i.e. illegal to route on. Re-derive this
+#    number if PDN_VWIDTH or PDN_VPITCH changes.
+#
+# 3. SRAM TAPPING. gf180mcu_ocd_ip_sram__sram1024x8m8wm1 obstructs
+#    Metal1-Metal3 over its interior (LEF OBS: 3.0 3.0 .. 298.3 512.81) and
+#    exposes VDD/VSS on Metal3 only in the 3um frame outside that box, so the
+#    Metal4 straps are the SRAM's only power path. The two vertical edge bands
+#    of the frame are 298.3um apart and carry both nets, so a stripe lattice
+#    whose HALF period divides 298.3 an ODD number of times puts opposite nets
+#    on the two bands of every macro. 298.3/5 = 59.66 -> 59.92 (107 tracks),
+#    hence PDN_VPITCH 119.84 and PDN_VSPACING 119.84/2 - 5.04. With the macro
+#    x-coordinates in MACROS below this lands a full-height VSS stripe on each
+#    macro's west band and a VDD stripe on its east band: ~580-620um^2 of
+#    Metal3/Metal4 overlap per net per macro, versus 0um^2 of VSS for the
+#    right-hand column at the old 180um pitch. THE MACRO X-COORDINATES AND
+#    THESE THREE NUMBERS ARE ONE UNIT -- changing either alone silently floats
+#    an SRAM rail. Re-check with scripts in TRIAL_NOTES.md or
+#    `check_power_grid -net VSS`.
+#
+# Metal5 (horizontal) never touches the macros, so PDN_HPITCH only has to obey
+# constraint 1: 360 = 400 x 0.90, width 6 x 0.90, offset 15 x 0.90.
+# ---------------------------------------------------------------------------
+PDN_VWIDTH:    5.04      # 9 x 0.56  (Metal2/Metal4 track pitch)
+PDN_HWIDTH:    5.4       # 6 x 0.90  (Metal5 track pitch)
+PDN_VPITCH:    119.84    # 214 x 0.56; 2 x 59.92, and 5 x 59.92 ~= 298.3
+PDN_HPITCH:    360       # 400 x 0.90; no SRAM constraint, so relaxed
+PDN_VSPACING:  54.88     # 119.84/2 - 5.04 = 98 x 0.56
+PDN_HSPACING:  174.6     # (360 - 2*5.4) / 2 = 194 x 0.90
+PDN_VOFFSET:   14.98     # stripe centre; puts the left edge at 19.18 (see 2)
+PDN_HOFFSET:   13.5      # 15 x 0.90
+PDN_EXTEND_TO: boundary
 
 PDN_ENABLE_PINS:     true    # Metal3/Metal4 pins for the parent to grab
 PDN_CORE_RING:       false   # hierarchical integration; coordinate Metal5 use with parent
@@ -289,29 +386,59 @@ MACROS:
       - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__blackbox_pp.v
     instances:
       # SIZE 301.300 BY 515.810 ; native (unrotated) footprint: 301.3(X) x 515.81(Y).
-      # Row of 4 along the bottom-right of the die: right edge of the last macro
-      # is flush with the die edge (x=1400, 0 margin -- too tight for any std
-      # cell row to fit), so the whole row is pushed as far right as possible.
-      # Left margin absorbs the remainder: 1400 - (4*301.3 + 3*20) = 134.8um.
       #
-      # y=25 with FP_MACRO_VERTICAL_HALO=10 cuts rows from y=15, which is below
-      # the core floor at y=15.68. No orphaned rows survive beneath the macros.
+      # 2 x 2 block in the bottom-right of the 1000x1500 die. A row of 4 does
+      # not fit any more: 4*301.3 + 3*20 = 1265.2um against a 986.56um core.
       #
-      # Orientation S (rather than N) so the pin row -- which sits on the native
-      # y=0 edge of the cell -- faces up into the core instead of the die edge.
-      # 20um gap between macros == FP_MACRO_HORIZONTAL_HALO on each side, so
-      # halos meet without overlapping.
-      "u_ram_ss.gen_macro_ram.gen_sram[0].u_wrapper.u_sram_macro":
-        location: [22.4, 25]
+      #     x      319.76        621.06   679.28        980.58    993.28 (core)
+      #            +--------------+  gap  +--------------+          |
+      #   1115.57  |   sram[2]    | 58.22 |   sram[3]    |          |
+      #    599.76  +--------------+       +--------------+          |
+      #                    row channel 60.43um (10 std cell rows)
+      #    539.33  +--------------+       +--------------+          |
+      #     23.52  |   sram[0]    |       |   sram[1]    |          |
+      #            +--------------+       +--------------+          |
+      #
+      # Leaves ~692,000um^2 placeable in an L: a 303um strip west of the block
+      # (full height), a 359um band across the top, and 9 rows in the column
+      # gap. Pins live on the north and west edges to face that L.
+      #
+      # x: 319.76 and 679.28 are both multiples of the 0.56um site width, and
+      #    their 359.52um spacing is 6 x the 59.92um PDN half-period, which is
+      #    what puts a VSS strap on each macro's west power band and a VDD
+      #    strap on its east one -- see constraint 3 in the PDN section. These
+      #    are not free parameters. The block is pushed right until only
+      #    12.70um of core is left east of it: 2.70um after the 10um macro
+      #    halo, less than one 3.92um row, so no orphan row is stranded there.
+      # y: 23.52 = 6 rows. With FP_MACRO_VERTICAL_HALO=10 the cut starts at
+      #    13.52, below the 15.68 core floor, so no orphan rows survive under
+      #    the macros either. 599.76 = 153 rows leaves a 60.43um channel, wide
+      #    enough for the bottom row's Metal2 pin escape plus 10 std cell rows.
+      #
+      # Orientation S (rather than N) so the pin row -- all 32 signal pins sit
+      # on the native y=0 edge of the cell -- faces up into the core: the
+      # bottom row escapes into the channel, the top row into the top band.
+      #
+      # Instance names are the full flattened path from grouper_soc_chip_core:
+      #   u_grouper_soc_top      (grouper_soc_top)
+      #   u_grouper_soc_dig_ss   (digital_ss)
+      #   u_periph_ss            (periph_ss)
+      #   u_ram                  (ahb_ram, MACRO_RAM branch)
+      #   u_ram_ss               (ram_ss)
+      # The keys used to start at u_ram_ss, which is four levels too shallow to
+      # match anything. Confirm against the netlist after a synthesis run:
+      #   grep -o '[^ ]*u_sram_macro' <run>/*-yosys-synthesis/*.nl.v | sort -u
+      "u_grouper_soc_top.u_grouper_soc_dig_ss.u_periph_ss.u_ram.u_ram_ss.gen_macro_ram.gen_sram[0].u_wrapper.u_sram_macro":
+        location: [319.76, 23.52]
         orientation: S
-      "u_ram_ss.gen_macro_ram.gen_sram[1].u_wrapper.u_sram_macro":
-        location: [343.7, 25]
+      "u_grouper_soc_top.u_grouper_soc_dig_ss.u_periph_ss.u_ram.u_ram_ss.gen_macro_ram.gen_sram[1].u_wrapper.u_sram_macro":
+        location: [679.28, 23.52]
         orientation: S
-      "u_ram_ss.gen_macro_ram.gen_sram[2].u_wrapper.u_sram_macro":
-        location: [665.0, 25]
+      "u_grouper_soc_top.u_grouper_soc_dig_ss.u_periph_ss.u_ram.u_ram_ss.gen_macro_ram.gen_sram[2].u_wrapper.u_sram_macro":
+        location: [319.76, 599.76]
         orientation: S
-      "u_ram_ss.gen_macro_ram.gen_sram[3].u_wrapper.u_sram_macro":
-        location: [986.3, 25]
+      "u_grouper_soc_top.u_grouper_soc_dig_ss.u_periph_ss.u_ram.u_ram_ss.gen_macro_ram.gen_sram[3].u_wrapper.u_sram_macro":
+        location: [679.28, 599.76]
         orientation: S
 
     lib:

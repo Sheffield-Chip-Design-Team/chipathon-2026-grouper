@@ -174,15 +174,26 @@ if { $::env(PDN_MULTILAYER) == 1 } {
     # general current, so it should stay a small fraction of Metal3's
     # routing resource. Trimmed where the SRAMs obstruct Metal3, same as
     # the old full mesh.
+    #
+    # These do NOT reuse PDN_HWIDTH / PDN_HOFFSET: those are whole numbers of
+    # 0.90um Metal5 tracks, and Metal3 is on the 0.56um grid like Metal2 and
+    # Metal4. Using them here would put every Metal3 rung edge off-grid, which
+    # is the exact defect that produced the Metal2 spacing violations at the
+    # old 180um pitch (see the Straps note in config.yaml). All four numbers
+    # below are 0.56um multiples, and the offset is the same 14.98 used for
+    # PDN_VOFFSET, so the rung edges land on the same 0.14 residue:
+    #   core_lly + 14.98 - 5.04/2 = 15.68 + 12.46 = 28.14 ; 28.14 % 0.56 = 0.14
     set pdn_rung_layer "Metal3"
-    set pdn_rung_pitch 300
-    set pdn_rung_spacing [expr {($pdn_rung_pitch - 2 * $::env(PDN_HWIDTH)) / 2}]
+    set pdn_rung_width 5.04                  ;#   9 x 0.56, matches PDN_VWIDTH
+    set pdn_rung_pitch 299.04                ;# 534 x 0.56
+    set pdn_rung_offset 14.98                ;# stripe centre, as PDN_VOFFSET
+    set pdn_rung_spacing [expr {$pdn_rung_pitch / 2 - $pdn_rung_width}] ;# 258 x 0.56
     add_pdn_stripe \
         -grid stdcell_grid \
         -layer $pdn_rung_layer \
-        -width $::env(PDN_HWIDTH) \
+        -width $pdn_rung_width \
         -pitch $pdn_rung_pitch \
-        -offset $::env(PDN_HOFFSET) \
+        -offset $pdn_rung_offset \
         -spacing $pdn_rung_spacing \
         -starts_with POWER \
         {*}$arg_list
@@ -287,8 +298,8 @@ if { $::env(PDN_CORE_RING) == 1 } {
 # ---------------------------------------------------------------------------
 # SRAM macro grid
 #
-# Four instances of gf180mcu_ocd_ip_sram__sram1024x8m8wm1, in a row along the
-# bottom of the die, orientation S.
+# Four instances of gf180mcu_ocd_ip_sram__sram1024x8m8wm1, in a 2x2 block in
+# the bottom-right of the die, orientation S.
 #
 # Matched by -cells rather than -instances: Yosys escapes the generate-block
 # indices, so the DB names contain literal backslashes
@@ -308,11 +319,20 @@ if { $::env(PDN_CORE_RING) == 1 } {
 # Decoupled so PDN_HORIZONTAL_LAYER can be Metal5 without breaking this tap.
 #
 # WARNING: vias only form where a Metal4 stripe physically crosses a Metal3
-# pin tab. The native bottom edge of the LEF (= the placed *top* edge, given
-# orientation S) has a ~36.6um gap in its VSS tabs between x=187 and x=224
-# (macro-relative). Verify PDN_VOFFSET does not park a VSS stripe in that
-# band for any of the four macro origins. Confirm with:
-# check_power_grid -net VSS
+# pin tab, and the tabs are NOT uniformly distributed. The dense, reliable
+# ones are the two vertical bands in the 3um frame at the macro's own x=0..3
+# and x=298.3..301.3, which carry VDD and VSS in alternating y slices for the
+# full height. The top and bottom tab rows are sparse by comparison -- the
+# VSS row in particular has a ~36.6um hole -- so a stripe that crosses the
+# macro interior instead of a frame band can produce zero vias: at the old
+# 180um pitch the right-hand macros had no VSS tap at all.
+#
+# PDN_VPITCH and the macro x-coordinates in config.yaml are chosen together so
+# that a VSS stripe lands on every macro's west band and a VDD stripe on its
+# east band (constraint 3 in that file's Straps section). Re-verify after ANY
+# change to either, with:
+#   check_power_grid -net VDD
+#   check_power_grid -net VSS
 # ---------------------------------------------------------------------------
 define_pdn_grid \
     -macro \
