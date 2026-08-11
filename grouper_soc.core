@@ -25,6 +25,19 @@ parameters:
       testbench decodes them into cpu_trace.dis.
       Consumed with `ifdef, so only list it in targets that want it on.
     default: false
+  MACRO_RAM:
+    datatype: bool
+    paramtype: vlogdefine
+    description: >
+      Build ahb_ram's 4 KiB of storage from four hardened
+      gf180mcu_ocd_ip_sram__sram1024x8m8wm1 macros (via ram_ss) instead of a
+      behavioural array. This is what the chip actually contains, and it
+      changes the bus timing: a read presented while a write is still using the
+      single SRAM port costs one wait state.
+      Needs the sharc:mem_ip:gf180mcu_4096_32w1_ram_ss fileset for the macro RTL and its
+      simulation model - the define alone leaves ram_ss unresolved.
+      Consumed with `ifdef, so only list it in targets that want it on.
+    default: false
   ROM_INIT_CONST:
     datatype: bool
     paramtype: vlogdefine
@@ -64,6 +77,12 @@ filesets:
       - hw/rtl/periph_ss.sv:                              {file_type: systemVerilogSource}
       - hw/rtl/digital_ss.sv:                             {file_type: systemVerilogSource}
       - hw/rtl/grouper_soc_top.sv:                        {file_type: systemVerilogSource}
+  
+  ram_macro:
+    # Pair with MACRO_RAM=true
+    depend:
+      - sharc:mem_ip:gf180mcu_4096_32w1_ram_ss:0.0.1
+
   sw:
     files:
       - sw/code.vmem:                                     {file_type: systemVerilogSource, is_include_file: true}
@@ -75,7 +94,7 @@ targets:
     filesets: [rtl, sw]
     toplevel: grouper_soc_top
 
-  lint:
+  lint: &lint
     <<: *rtl
     description: Verilator lint-only check of the whole SoC (no simulation)
     flow: sim
@@ -87,3 +106,10 @@ targets:
         - -Wall
         - -Wno-fatal
         - -Wno-TIMESCALEMOD
+
+  lint_macro_ram:
+    <<: *lint
+    description: As lint, with ahb_ram built from the SRAM macros.
+    filesets: [rtl, sw, ram_macro]
+    parameters:
+      - MACRO_RAM=true
