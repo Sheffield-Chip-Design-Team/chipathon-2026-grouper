@@ -107,28 +107,34 @@ SYNTH_ABC_DFF: true
 SYNTH_STRATEGY: "DELAY 2"
 
 # ---------------------------------------------------------------------------
-# Floorplan: 1000 x 1500.
+# Floorplan: 1100 x 1500.
 #
-# 1,500,000 um^2, within a percent of the 1310x1150 `irdrop_check_d` baseline
-# (1,506,500 um^2) that routed and passed IR drop, so the congestion recipe
-# below carries over unchanged -- only the aspect ratio and the macro
-# arrangement are new.
+# Was 1000x1500, which legalised at post-GPL but failed at post-CTS
+# (DPL-0036): 341,814 sites = 750,350um^2 of rows against ~492,000um^2 of
+# cells after repair, before CTS and post-CTS hold repair had added theirs.
+# The extra 100um of width is ~160,000um^2 more rows, taking post-repair
+# occupancy from 66% to ~54%.
 #
+# The die grew EASTWARD and the macros did not move. That is deliberate:
 # LibreLane insets the core by 6.72um (12 sites) in x and 15.68um (4 rows) in
-# y, so the core is 6.72 15.68 .. 993.28 1484.32. Every macro coordinate and
-# PDN offset below is derived from that core origin, NOT from the die origin.
+# y, so the core's lower-left stays at 6.72 15.68 and only the far corner
+# moves, to 1093.28 1484.32. Every PDN strap position is measured from that
+# origin, so the strap lattice, its 0.14 grid phase and all four SRAM power
+# taps are untouched by the change -- re-verified, byte for byte. Moving the
+# macros instead would have required re-deriving the lot.
 # ---------------------------------------------------------------------------
 FP_SIZING: absolute
-DIE_AREA: [0.0, 0.0, 1000, 1500]
+DIE_AREA: [0.0, 0.0, 1100, 1500]
 
 # ---------------------------------------------------------------------------
 # I/O pins: north and west edges only (librelane/classic/pin_order.cfg).
 #
-# The four SRAMs occupy the bottom ~1116um of the die (see MACROS), leaving an
-# L of placeable area -- a 303um strip down the west side and a 359um band
-# across the top. Pins are confined to the two edges that L actually reaches:
-# south and east are macro wall, and a pin there would have to route over the
-# SRAMs on Metal4/Metal5 to find a cell.
+# The four SRAMs occupy the bottom ~1116um of the die (see MACROS), leaving a
+# 303um strip down the west side, a 359um band across the top and -- since the
+# die went to 1100 wide -- a 103um strip down the east side. Pins stay on north
+# and west: south is macro wall, and the east strip is a 103um column whose
+# cells are better served by the top band than by pins that would have to squeeze
+# past the macros. Revisit if east-side logic ends up starved.
 #
 # Split: the GPIO data path (in/out/oe/ie, 160 pins) on north, the pad-config
 # buses (cs/sl/pu/pd) plus clk, rst_n and the input-only pads (165 pins) on
@@ -180,9 +186,23 @@ CTS_CLK_BUFFERS:
   - "gf180mcu_fd_sc_mcu7t5v0__clkbuf_12"
   - "gf180mcu_fd_sc_mcu7t5v0__clkbuf_16"
 
-# Fix hold violations
-PL_RESIZER_HOLD_SLACK_MARGIN: 0.6
-GRT_RESIZER_HOLD_SLACK_MARGIN: 0.5
+# Fix hold violations.
+#
+# LibreLane's default for both is 0.1. 0.6/0.5 is 5-6x that, and every extra
+# 0.1ns of margin is delay cells the post-CTS and post-GRT repair passes have
+# to insert and then legalise -- which is where DPL-0036 came from at
+# rsz_timing_postcts.tcl. 0.3/0.25 is still 3x the default.
+#
+# Note this got harder, not easier, with the SRAM Liberty fix above: hold
+# repair at the macro interface (A[9:0], D/WEN x4 lanes, CEN, GWEN) is now
+# working against the real ff-corner constraints instead of typical ones, so
+# some of the new growth is repair the earlier runs simply were not doing.
+#
+# These are the first things to raise again if signoff reports hold
+# violations -- hold is not something to be casual about, and the right
+# response to a hold failure is more margin plus more die, not less margin.
+PL_RESIZER_HOLD_SLACK_MARGIN: 0.3
+GRT_RESIZER_HOLD_SLACK_MARGIN: 0.25
 
 # Pre-routing setup repair (fixes timing before route guides exist, unlike
 # the RUN_POST_GRT_* flags which are gated off by default and hung on this
@@ -230,7 +250,7 @@ GRT_ADJUSTMENT: 0.2
 # narrow channels. 560 unlegalisable instances out of 19,873 is what that
 # looks like. One site of padding puts it at 62.5%.
 GPL_CELL_PADDING: 2
-DPL_CELL_PADDING: 1
+DPL_CELL_PADDING: 0
 
 # These delay buffers materially worsen routing congestion at this die size.
 DONT_USE_CELLS:
@@ -413,29 +433,34 @@ MACROS:
     instances:
       # SIZE 301.300 BY 515.810 ; native (unrotated) footprint: 301.3(X) x 515.81(Y).
       #
-      # 2 x 2 block in the bottom-right of the 1000x1500 die. A row of 4 does
-      # not fit any more: 4*301.3 + 3*20 = 1265.2um against a 986.56um core.
+      # 2 x 2 block in the bottom of the 1100x1500 die. A row of 4 does not
+      # fit: 4*301.3 + 3*20 = 1265.2um against a 1086.56um core.
       #
-      #     x      319.76        621.06   679.28        980.58    993.28 (core)
+      #     x      319.76        621.06   679.28        980.58   1093.28 (core)
       #            +--------------+  gap  +--------------+          |
-      #   1115.57  |   sram[2]    | 58.22 |   sram[3]    |          |
-      #    599.76  +--------------+       +--------------+          |
-      #                    row channel 60.43um (10 std cell rows)
+      #   1115.57  |   sram[2]    | 58.22 |   sram[3]    |  east    |
+      #    599.76  +--------------+       +--------------+  strip   |
+      #                    row channel 60.43um (10 std cell rows)  102.70
       #    539.33  +--------------+       +--------------+          |
       #     23.52  |   sram[0]    |       |   sram[1]    |          |
       #            +--------------+       +--------------+          |
       #
-      # Leaves ~692,000um^2 placeable in an L: a 303um strip west of the block
-      # (full height), a 359um band across the top, and 9 rows in the column
-      # gap. Pins live on the north and west edges to face that L.
+      # ~840,000um^2 placeable (a conservative hand count; the flow measured
+      # 750,350 where this method said 692,000, so expect ~910,000): a 303um
+      # strip west of the block, a 359um band across the top, a 103um strip
+      # east of it, and 9 rows in the column gap.
       #
       # x: 319.76 and 679.28 are both multiples of the 0.56um site width, and
       #    their 359.52um spacing is 6 x the 59.92um PDN half-period, which is
       #    what puts a VSS strap on each macro's west power band and a VDD
       #    strap on its east one -- see constraint 3 in the PDN section. These
-      #    are not free parameters. The block is pushed right until only
-      #    12.70um of core is left east of it: 2.70um after the 10um macro
-      #    halo, less than one 3.92um row, so no orphan row is stranded there.
+      #    are not free parameters, and they are why the macros stayed put
+      #    when the die went from 1000 to 1100 wide: the strap lattice is
+      #    measured from the core's left edge, which did not move. Shifting
+      #    the block east would have to move in whole 59.92um half-periods.
+      #    The 112.70um now east of the block is 102.70um of rows after the
+      #    halo -- a real 183-site-wide placeable column, not a stranded
+      #    sliver.
       # y: 23.52 = 6 rows. With FP_MACRO_VERTICAL_HALO=10 the cut starts at
       #    13.52, below the 15.68 core floor, so no orphan rows survive under
       #    the macros either. 599.76 = 153 rows leaves a 60.43um channel, wide
