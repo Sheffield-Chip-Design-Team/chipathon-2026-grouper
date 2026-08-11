@@ -1,4 +1,11 @@
-// TODO - integrate this into the AHB ram  module as an option to use macro ram or not
+// Storage array for ahb_ram: four gf180mcu_ocd_ip_sram__sram1024x8m8wm1
+// macros, one per byte lane of a 32-bit word, or a behavioural equivalent.
+//
+// Timing is the macro's: everything is captured on the clock edge, and read
+// data appears on ram_rdata during the following cycle. ahb_ram owns the AHB
+// side of that -- see the MACRO_RAM branch there.
+//
+// CEN, GWEN and WEN are all active low on the macro.
 
 module ram_ss #(
   parameter int ADDR_WIDTH = 10,
@@ -24,7 +31,11 @@ module ram_ss #(
           .CLK  (clk),
           .CEN  (~(ram_read || ram_write)),
           .GWEN (~ram_write),
-          .WEN  ({8{ram_wstrb[j]}}),
+          // Active low, and per bit. A lane the strobe does not select holds
+          // WEN all ones, which the macro reads as "no write" (its write_flag
+          // is !(&WEN)) -- so an unselected lane is untouched even though GWEN
+          // is asserted for the word.
+          .WEN  ({8{~ram_wstrb[j]}}),
           .A    (ram_addr),
           .D    (ram_wdata[j*8 +: 8]),
           .Q    (ram_rdata[j*8 +: 8])

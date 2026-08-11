@@ -5,14 +5,21 @@
 // Supported transfer sizes : Word, Halfword, Byte
 // Alignment of base address : Word aligned
 //
-// Under `DRY_RUN the memory array is replaced by counters on the address and
-// data lines - a placeholder for the hardened SRAM macros. See the comment on
-// that branch below.
+// Storage comes from one of two places:
+//
+//   `MACRO_RAM   four hardened gf180mcu_ocd_ip_sram__sram1024x8m8wm1 macros,
+//                one per byte lane, instantiated through ram_ss. This is the
+//                path both LibreLane flows build; it is what the MACROS block
+//                in librelane/classic/config.yaml places.
+//   otherwise    a behavioural array, for simulation.
+//
+// Both are 4 KiB (MEM_WIDTH 12), which is the RAM window the interconnect
+// decodes (0x0000_2000-0x0000_2fff) and exactly four 1024x8 macros.
 
 module ahb_ram #(
   parameter int ADDR_WIDTH = 32,
   parameter int DATA_WIDTH = 32,
-  parameter int MEM_WIDTH = 11,
+  parameter int MEM_WIDTH = 12,
   localparam int BYTE_ADDR_WIDTH = $clog2(DATA_WIDTH/8),
   localparam int WORD_ADDR_WIDTH = MEM_WIDTH - BYTE_ADDR_WIDTH,
   localparam int MEM_WORDS = 2**WORD_ADDR_WIDTH
@@ -70,45 +77,65 @@ module ahb_ram #(
       byte_select_r   <= byte_select;
     end
 
-`ifdef DRY_RUN
+`ifdef MACRO_RAM
 
-  // Placeholder for the hardened gf180mcu_ocd_ip_sram macros, which are out of
-  // scope for the dry run (see librelane/classic/dry_run_config.yaml). Two
-  // ADDR_WIDTH counters sit on the address and data lines: they load from the
-  // bus on an access and free-run otherwise, which keeps HADDR, HWDATA and the
-  // HSIZE-derived byte selects electrically live so synthesis cannot prune the
-  // RAM leg of the fabric, and gives HRDATA a real driver -- without paying for
-  // the MEM_WORDS x DATA_WIDTH flop array the behavioural model would infer.
+  // Hardened storage: ram_ss instantiates four sram1024x8m8wm1 macros, one per
+  // byte lane, sharing an address. Single-port synchronous SRAM -- A, CEN,
+  // GWEN, WEN and D are captured on the clock edge, and Q is valid throughout
+  // the cycle that follows.
   //
-  // Not a memory: reads do not return what was written. Only the DRY_RUN
-  // configuration builds this path.
+  // That lines up with AHB with no read-latency and no read-data register of
+  // our own; the macro's own output register is the one AHB needs:
+  //
+  //   read   address phase in cycle N drives A, so Q is valid in N+1, which is
+  //          the data phase. HRDATA is Q, straight through.
+  //   write  HWDATA only exists in the data phase, so the macro is driven from
+  //          the registered address and byte strobes one cycle later instead.
+  //
+  // The single port is the only contention point, and only one sequence hits
+  // it: a read whose address phase falls in a write's data phase, where the
+  // write wants the port in the same cycle the read does. HREADYOUT below
+  // spends one wait state there. Everything else -- back-to-back reads,
+  // back-to-back writes, write after read -- runs at zero wait states.
+  //
+  // The macros have no reset. Contents are undefined out of reset, exactly as
+  // on silicon; firmware must not read RAM it has not written.
 
-  logic [ADDR_WIDTH-1:0] addr_cnt;
-  logic [ADDR_WIDTH-1:0] data_cnt;
+  logic [WORD_ADDR_WIDTH-1:0] sram_addr;
+  logic                       sram_read;
+  logic                       sram_write;
 
-  always_ff @(posedge HCLK, negedge HRESETn)
-    if (~HRESETn) begin
-      addr_cnt <= '0;
-      data_cnt <= '0;
-    end else begin
-      // HADDR whole, not the MEM_WIDTH slice word_address takes: the point is
-      // to load every address bit, including the ones a real RAM would ignore.
-      addr_cnt <= access       ? ADDR_WIDTH'(HADDR) : addr_cnt + 1'b1;
-      data_cnt <= write_enable ? ADDR_WIDTH'(HWDATA) ^ ADDR_WIDTH'(byte_select_r)
-                               : data_cnt + 1'b1;
-    end
+  assign sram_write = write_enable;
+  assign sram_read  = access & read_enable;
+  assign sram_addr  = write_enable ? word_address_r : word_address;
 
-  always_ff @(posedge HCLK, negedge HRESETn)
-    if (~HRESETn)
-      HRDATA <= '0;
-    else if (read_enable)
-      HRDATA <= DATA_WIDTH'(data_cnt ^ addr_cnt);
+  ram_ss #(
+    .ADDR_WIDTH    (WORD_ADDR_WIDTH),
+    .USE_MACRO_RAM (1)
+  ) u_ram_ss (
+    .clk       (HCLK),
+    .rst_n     (HRESETn),
+    .ram_addr  (sram_addr),
+    .ram_read  (sram_read),
+    .ram_write (sram_write),
+    .ram_wdata (HWDATA),
+    .ram_wstrb (byte_select_r),
+    .ram_rdata (HRDATA)
+  );
 
-  // The address decode is bypassed above (addr_cnt takes HADDR directly) and
-  // byte_select is consumed only through its registered copy, so both of these
-  // are dead on this path. Kept declared so the two branches share one decode.
-  logic _unused_dry_run;
-  assign _unused_dry_run = &{1'b0, byte_select, word_address, word_address_r};
+  // byte_select is consumed through its registered copy only; the unregistered
+  // copy exists so both branches share one address/strobe decode.
+  logic _unused_macro_ram;
+  assign _unused_macro_ram = &{1'b0, byte_select};
+
+  // ram_ss is four 8-bit macros wide by construction, and the macro is 1024
+  // words deep. Neither is a parameter that can flex.
+`ifndef SYNTHESIS
+  initial
+    if (DATA_WIDTH != 32 || WORD_ADDR_WIDTH != 10)
+      $fatal(1, "ahb_ram: MACRO_RAM needs DATA_WIDTH 32 and MEM_WIDTH 12, got %0d/%0d",
+             DATA_WIDTH, MEM_WIDTH);
+`endif
 
 `else
 
@@ -140,7 +167,21 @@ module ahb_ram #(
 `endif
 
   //Transfer Response
+`ifdef MACRO_RAM
+  // One wait state for a read presented while a write is still using the
+  // single SRAM port (see the MACRO_RAM branch above); zero otherwise.
+  //
+  // Deliberately a function of HSEL/HTRANS/HWRITE and not of HREADYIN: an AHB
+  // slave may decode the address phase combinationally into HREADYOUT, but
+  // ahb_conn_buff feeds our HREADYOUT straight back as our HREADYIN
+  // (m_HREADYIN = m_HREADYOUT), so any HREADYIN term here would close a
+  // combinational loop. `access` still gates on HREADYIN, so the stalled read
+  // is not issued to the macro during the wait cycle -- the write is, and the
+  // read re-presents its address phase in the cycle after.
+  assign HREADYOUT = ~(write_enable & HSEL & ~HWRITE & (HTRANS != HTRANS_IDLE));
+`else
   assign HREADYOUT = '1; // Single cycle Write & Read. Zero Wait state operations
+`endif
   assign HRESP     = '0; // Success
 
 endmodule

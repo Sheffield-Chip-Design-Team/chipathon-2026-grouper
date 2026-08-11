@@ -1,0 +1,33 @@
+CAPI=2:
+name: sharc:mem_ip:gf180mcu_4096_32w1_ram_ss:0.0.1
+description: 4 KiB macro RAM (ram_ss + SRAM wrapper) and its simulation model
+
+# The storage behind ahb_ram's MACRO_RAM branch: four
+# gf180mcu_ocd_ip_sram__sram1024x8m8wm1 instances, one per byte lane. Kept out
+# of sharc:soc_ip:grouper_soc so that the plain SoC sim, which builds ahb_ram's
+# behavioural array, does not have to carry an SRAM model it never instantiates.
+#
+# Depend on this AND set MACRO_RAM - the define is what switches ahb_ram over;
+# adding the files alone changes nothing.
+
+filesets:
+  rtl:
+    files:
+      - ram_ss.sv:                               {file_type: systemVerilogSource}
+      - ../../pd/wrappers/sram1024x8_wrapper.sv: {file_type: systemVerilogSource}
+
+  sim_model:
+    # Not for synthesis. LibreLane blackboxes the macro instead - see the
+    # MACROS block in librelane/classic/config.yaml, which points `vh` at the
+    # vendor's __blackbox_pp.v and hands the real GDS/LEF to the placer.
+    files:
+      - ../../tb/models/gf180mcu_ocd_ip_sram__sram1024x8m8wm1.v: {file_type: verilogSource}
+
+targets:
+  default:
+    description: Macro RAM with a simulation model of the SRAM.
+    filesets: [rtl, sim_model]
+
+  synth:
+    description: Macro RAM RTL only; the SRAM comes from a real library.
+    filesets: [rtl]
