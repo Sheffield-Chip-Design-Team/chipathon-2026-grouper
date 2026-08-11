@@ -192,6 +192,19 @@ RUN_POST_GPL_DESIGN_REPAIR: true
 RUN_POST_CTS_RESIZER_TIMING: true
 PL_RESIZER_SETUP_MAX_BUFFER_PCT: 40
 
+# Margins on top of the real slew/capacitance limits, i.e. how much headroom
+# repair_design demands before it buffers. LibreLane defaults both to 20 (the
+# `-slew_margin 20 -cap_margin 20` in the run log). At 20% it found 2013 slew
+# violations and answered with 5343 buffers -- +15.7% area, ~66,800um^2, which
+# is what pushed detailed placement off the cliff. 10% is still margin, just
+# not double-counted headroom.
+#
+# REVERT THESE FIRST if timing signoff comes back worse: they trade repair
+# aggressiveness for area, and the area is only needed while the design is
+# this close to the legalisation limit.
+DESIGN_REPAIR_MAX_SLEW_PCT: 10
+DESIGN_REPAIR_MAX_CAP_PCT:  10
+
 # Placement
 # The 1310x1150 `irdrop_check_d` baseline used 68% target density and a
 # relaxed fanout limit to avoid excessive buffering. ~692,000um^2 is placeable
@@ -203,8 +216,21 @@ PL_TARGET_DENSITY_PCT: 68
 MAX_FANOUT_CONSTRAINT: 16
 GRT_ALLOW_CONGESTION: true
 GRT_ADJUSTMENT: 0.2
+# Global placement keeps 2 sites of padding -- that spread is the proven
+# congestion recipe and it costs nothing at legalisation time. Detailed
+# placement gets 1, which is what unblocks DPL-0034.
+#
+# The arithmetic, from the RUN_2026-08-12_00-39-24 metrics: macro row cutting
+# leaves 649 rows / 341,814 sites = 750,350um^2 actually placeable (the
+# reported design__instance__utilization__stdcell of 51.6% divides by
+# core-minus-macros and so flatters it by 74,000um^2). 425,581um^2 of std
+# cells is 56.7% of that. The average cell is 5.46um = 9.76 sites wide, so
+# 2 sites of padding inflate it by ~20% to 68.3% -- level with
+# PL_TARGET_DENSITY_PCT, in a region already fragmented into an L plus two
+# narrow channels. 560 unlegalisable instances out of 19,873 is what that
+# looks like. One site of padding puts it at 62.5%.
 GPL_CELL_PADDING: 2
-DPL_CELL_PADDING: 2
+DPL_CELL_PADDING: 1
 
 # These delay buffers materially worsen routing congestion at this die size.
 DONT_USE_CELLS:
@@ -441,9 +467,24 @@ MACROS:
         location: [679.28, 599.76]
         orientation: S
 
+    # One Liberty per corner, matching the STA_CORNERS names the same way the
+    # top-level LIB block does. This used to be a single "*" fallback pointing
+    # at the tt lib, which handed OpenSTA typical SRAM timing for ALL three
+    # corners -- visible in the log as the tt lib being read for
+    # max_ss_125C_3v00 and min_ff_n40C_3v60, followed by
+    # "[WARNING STA-1140] library ... already exists".
+    #
+    # That is not cosmetic. The macro's hold requirement is what the flow has
+    # to close at the fast corner (tch ~1.0ns at ff, ~3.0ns at ss), and setup
+    # on the Q path is what it has to close at the slow one. Signing both off
+    # against tt understates each.
     lib:
-      "*": # default fallback -- matches every corner in STA_CORNERS
+      "*_tt_025C_3v30":
         - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__tt_025C_3v30.lib
+      "*_ss_125C_3v00":
+        - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__ss_125C_3v00.lib
+      "*_ff_n40C_3v60":
+        - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__ff_n40C_3v60.lib
 
 # This is an alternative method compared to
 # specifying the power connections in the RTL
