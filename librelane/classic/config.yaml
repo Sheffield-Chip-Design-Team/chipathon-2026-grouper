@@ -114,7 +114,7 @@ SYNTH_AUTONAME: true # human readable names
 SYNTH_STRATEGY: "AREA 0"
 SYNTH_SIZING: true
 SYNTH_ABC_DFF: true
-# SYNTH_ABC_USE_MFS3: true
+# SYNTH_ABC_USE_MFS3: true # - this breaks picorv32 synth - leave it disabled
 
 # ---------------------------------------------------------------------------
 # Floorplan: 1100 x 1500.
@@ -428,6 +428,7 @@ DIODE_ON_PORTS: in
 
 GRT_ALLOW_CONGESTION: false
 GRT_ADJUSTMENT: 0.2
+DRT_MAX_ROUTING_ITERATIONS: 10
 
 # Moved to Metal5 to relieve Metal3 congestion at 1310x1150 (see TRIAL_NOTES.md).
 RT_MAX_LAYER: Metal5
