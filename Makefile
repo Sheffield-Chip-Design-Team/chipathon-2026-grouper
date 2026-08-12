@@ -66,6 +66,29 @@ librelane-padring: ## Only create the padring
 	PDK_ROOT=${PDK_ROOT} PDK=${PDK} python3 scripts/padring.py librelane/slots/slot_${SLOT}.yaml librelane/config.yaml
 .PHONY: librelane-padring
 
+# Peripheral blocks that have real-but-uninstantiated RTL, sized against the
+# ahb_stub_slave placeholders holding their fabric slots. See
+# librelane/measure/README.md.
+GE_BLOCKS ?= spi_s spi_m qspi
+
+measure-ge: ## Synthesize each peripheral block standalone and report its gate count
+	@for b in ${GE_BLOCKS}; do \
+	  librelane librelane/measure/$$b.yaml --to Yosys.Synthesis \
+	    --pdk ${PDK} --pdk-root ${PDK_ROOT} --manual-pdk \
+	    --run-tag ge_$$b --overwrite || exit 1; \
+	  python3 scripts/report_ge.py librelane/measure/runs/ge_$$b || exit 1; \
+	done
+.PHONY: measure-ge
+
+# Defaults to the most recent classic run; override as
+# `make report-stub-ge CLASSIC_RUN_TAG=<tag>`. Deliberately not the top-level
+# RUN_TAG, which points at a librelane/runs/ directory that does not exist.
+CLASSIC_RUN_TAG ?= $(shell ls -t librelane/classic/runs 2>/dev/null | head -n 1)
+
+report-stub-ge: ## Report achieved GE of the sized stubs in a classic run
+	python3 scripts/report_ge.py librelane/classic/runs/${CLASSIC_RUN_TAG} --match ahb_stub_slave
+.PHONY: report-stub-ge
+
 sim: ## Run RTL simulation with cocotb
 	cd cocotb; PDK_ROOT=${PDK_ROOT} PDK=${PDK} SLOT=${SLOT} python3 chip_top_tb.py
 .PHONY: sim
