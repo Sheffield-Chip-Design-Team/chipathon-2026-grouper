@@ -101,12 +101,12 @@ module ahb_stub_slave #(
 
   // The register increments a lane at a time so its carry chain never gets
   // longer than one lane - a single adder across several hundred bits would
-  // become the critical path of the whole SoC at CLOCK_PERIOD 62.5. Rounding up
-  // to whole lanes quantises the achieved area to ~LANE_W * GE_PER_BIT, which
-  // is well inside the accuracy of the estimates feeding TARGET_GE.
+  // become the critical path of the whole SoC at CLOCK_PERIOD 62.5. The last
+  // lane takes whatever is left over, so TARGET_GE is honoured exactly rather
+  // than quantised up to the next whole lane.
   localparam int LANE_W    = 32;
-  localparam int NUM_LANES = (RAW_W + LANE_W - 1) / LANE_W;
-  localparam int BALLAST_W = NUM_LANES * LANE_W;
+  localparam int BALLAST_W = RAW_W;
+  localparam int NUM_LANES = (BALLAST_W + LANE_W - 1) / LANE_W;
 
   // --- Ballast datapath ------------------------------------------------------
   //
@@ -143,11 +143,21 @@ module ahb_stub_slave #(
 
   assign rotated = {ballast_q[BALLAST_W-2:0], ballast_q[BALLAST_W-1]};
 
-  always_comb begin
-    for (int l = 0; l < NUM_LANES; l++)
-      ballast_d[l*LANE_W +: LANE_W] = rotated[l*LANE_W +: LANE_W] + LANE_W'(1'b1);
-    ballast_d = ballast_d ^ stimulus;
+  // A generate loop rather than a procedural one: the final lane is narrower
+  // than the rest whenever BALLAST_W is not a multiple of LANE_W, and a
+  // part-select's width has to be a constant.
+  logic [BALLAST_W-1:0] incremented;
+
+  for (genvar l = 0; l < NUM_LANES; l++) begin : g_lane
+    localparam int LANE_LO = l * LANE_W;
+    localparam int LANE_HI = ((LANE_LO + LANE_W) > BALLAST_W) ? BALLAST_W
+                                                             : (LANE_LO + LANE_W);
+    localparam int THIS_W  = LANE_HI - LANE_LO;
+
+    assign incremented[LANE_LO +: THIS_W] = rotated[LANE_LO +: THIS_W] + THIS_W'(1'b1);
   end
+
+  assign ballast_d = incremented ^ stimulus;
 
   always_ff @(posedge HCLK, negedge HRESETn)
     if (!HRESETn) ballast_q <= '0;

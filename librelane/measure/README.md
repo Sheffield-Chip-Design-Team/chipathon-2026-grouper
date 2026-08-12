@@ -51,22 +51,26 @@ with the multipliers justified from each block's outstanding `TODO`/`FIXME`
 markers and its spec under `planning/Hardware/design/blocks/`. As instantiated
 in `periph_ss.sv` today:
 
-| Block | Multiplier | Rationale |
-|---|---|---|
-| SPI slave | 2.0× | no error response, no IRQs, no FIFOs (so `GRPR-SPIS-012` is unmet) |
-| SPI master | 1.3× | one open marker; by far the most complete of the three |
-| QSPI | 2.0× | 5 open markers, plus the `GRPR-QSPI-021` init FSM does not exist at all |
+| Block | Measured | Multiplier | `TARGET_GE` | Rationale |
+|---|---|---|---|---|
+| SPI slave | 3,483.8 µm² = 317 GE | 2.0× | 635 | no error response, no IRQs, no FIFOs (so `GRPR-SPIS-012` is unmet) |
+| SPI master | 14,402.7 µm² = 1,312 GE | 1.3× | 1,706 | one open marker; by far the most complete of the three |
+| QSPI | 18,481.4 µm² = 1,684 GE | 2.0× | 3,368 | 5 open markers, plus the `GRPR-QSPI-021` init FSM does not exist at all |
 
-`TARGET_GE` is a request, not a guarantee: the stub increments its ballast
-register 32 bits at a time so its carry chain cannot become the SoC's critical
-path, and the width rounds up to whole 32-bit lanes. Achieved area therefore
-quantises in steps of roughly 416 GE — well inside the accuracy of the estimates
-feeding the targets, but it means a 1,450 GE request lands nearer 1,700.
+**Read `reports/stat.rpt`, not `reports/post_dff.rpt`.** The latter is taken
+before `abc`, so its combinational logic is still generic gates with no area —
+it undercut `ahb_spi_m` by 40%. `report_ge.py` selects on content and prefers
+`design__instance__area` from the step's `metrics.json` when only a pre-`abc`
+stat exists; `--list` shows every report with a "fully mapped" column.
 
-Only SPI master has a stated figure to check against — `GRPR-SPIM-015`,
-1,500–2,000 GE, itself flagged "not yet confirmed by synthesis". SPI slave and
-QSPI are both "TBD" in their specs, so these runs are the first real numbers
-for them and are worth folding back into those documents.
+Only SPI master had a stated figure to check against — `GRPR-SPIM-015`,
+1,500–2,000 GE, itself flagged "not yet confirmed by synthesis". 1,706 GE lands
+inside it, so that requirement can now drop the caveat. SPI slave and QSPI are
+both "TBD" in their specs, so these are the first real numbers for them and are
+worth folding back into those documents.
+
+Full working, including the GE derivation and the multiplier reasoning, is in
+[`../classic/TRIAL_NOTES.md`](../classic/TRIAL_NOTES.md) § Session 4.
 
 ## Checking what the stubs actually came out at
 

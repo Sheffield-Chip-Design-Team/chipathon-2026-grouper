@@ -837,3 +837,127 @@ The RTL half of this work, since it constrains what the config can assume:
   edge-sampled equivalent for the cocotb flow;
   `fusesoc run --target=macro_ram sharc:soc_ip:grouper_soc_directed` runs the
   SoC test suite against it and passes.
+
+## Session 4: sizing the peripheral stubs, and measuring the blocks they stand in for
+
+Three of the eight fabric slots hold `ahb_stub_slave` rather than a real
+peripheral: QSPI and SPI master always, SPI slave under `DRY_RUN`. Until this
+session those placeholders were identical to each other -- a fixed pair of
+32-bit counters, ~64 flops -- and their serial ports were tied off at the `io_ss`
+instantiation, so pads 4-14 had their alternate-function paths constant-folded
+away. Neither the area nor the pad routing in a dry run meant anything.
+
+The stub now takes a `TARGET_GE` parameter and drives/consumes the real `io_ss`
+signals. Sizing it needed an actual number per block, which is what the rest of
+this section records.
+
+### 1. Gate equivalents in this PDK
+
+One GE is the area of one `gf180mcu_fd_sc_mcu7t5v0__nand2_1`. Derived from the
+cell table in `build.log` against the 7-track site (0.56 x 3.92 = 2.1952 um^2):
+
+| Cell | Area | Sites | GE |
+|---|---|---|---|
+| `tieh` | 8.781 um^2 | 4 | 0.80 |
+| `nand2_1` | **10.976 um^2** | **5** | **1.00** |
+| `inv_2` | 13.171 um^2 | 6 | 1.20 |
+| `nor4_1` | 21.952 um^2 | 10 | 2.00 |
+| `mux2_2` | 32.937 um^2 | 15 | 3.00 |
+| `dffq_1` | 63.660 um^2 | 29 | 5.80 |
+| `dffrnq_1` | 74.637 um^2 | 34 | 6.80 |
+
+Every one of those lands on a whole number of sites, so the 5-site figure for
+`nand2_1` is solid (its own row reads 4.99 only because the log prints
+`1.33E+04` for 1215 cells, to three significant figures).
+
+**1 GE = 10.976 um^2.** `scripts/report_ge.py` does the division.
+
+### 2. Measuring the blocks: read `stat.rpt`, never `post_dff.rpt`
+
+`librelane/measure/{spi_s,spi_m,qspi}.yaml` are synthesis-only configs for the
+three real-but-uninstantiated blocks, run with `make measure-ge` (~15s each).
+
+The Yosys synthesis step writes several stats and **they are not
+interchangeable**. `reports/post_dff.rpt` is taken after `dfflibmap` but before
+`abc`: the flops are mapped to library cells but every combinational gate is
+still a generic `$_AND_`/`$_MUX_` with no area in the liberty, so it counts
+flops and almost nothing else. For `ahb_spi_m` it reports 8,701.8 um^2 against
+the real 14,402.7 um^2 -- a 40% undercount, and it silently looks like a
+plausible answer. `reports/stat.rpt` is the post-`abc` figure and agrees exactly
+with `design__instance__area` in the step's `metrics.json`; that agreement is
+the check worth doing.
+
+`report_ge.py` now selects on content -- it prefers a stat with no generic cells
+left, and falls back to `design__instance__area` from `metrics.json` if that is
+all there is. `--list` shows every area report in a run with a "fully mapped"
+column.
+
+### 3. Measured areas and the multipliers applied
+
+`TARGET_GE` = (measured area of today's RTL) x (a multiplier for the features
+still to be built). The multiplier is a judgement call from each block's open
+`TODO`/`FIXME` markers and its spec under `planning/Hardware/design/blocks/`:
+
+| Block | Measured | Multiplier | `TARGET_GE` | Why that multiplier |
+|---|---|---|---|---|
+| `ahb_spi_s` | 3,483.8 um^2 = **317 GE** | **2.0x** | **635** | No two-cycle error response (`ahb_spi_s.sv:218`), no IRQs (`periph_ss.sv` TODO), and no FIFOs at all -- `GRPR-SPIS-012`'s 1.25 MB/s firmware-load throughput cannot be met by the current single shift register, so the FIFOs are a real addition, not a tidy-up. |
+| `ahb_spi_m` | 14,402.7 um^2 = **1,312 GE** | **1.3x** | **1,706** | One open marker (`ahb_spi_m.sv:123`, `GRPR-SPIM-005`). Already has both FIFOs, the clock divider, and the full opcode/address/dummy/data command set -- by far the most complete of the three, so most of what remains is refinement. |
+| `ahb_qspi` | 18,481.4 um^2 = **1,684 GE** | **2.0x** | **3,368** | Five open markers: arbitrary-command interface (x2), real register map, byte-lane addressing, and real `HREADYOUT` wait-state handling (it is hardwired to 1 today). On top of that the `GRPR-QSPI-021` initialisation FSM -- PSRAM QPI entry, <=1 ms -- does not exist in any form. |
+
+Total across the three slots: **5,709 GE = ~62,700 um^2**, replacing the ~2,400
+GE the three identical placeholders used to cost. That is roughly **+13% on a
+~300k um^2 core**, not the +30% first guessed from hand flop counts.
+
+### 4. `GRPR-SPIM-015` was right; the hand estimates were not
+
+The SPI master spec states 1,500-2,000 GE and flags it "not yet confirmed by
+synthesis". Measured 1,312 GE x 1.3 = 1,706 GE lands inside that range, so the
+figure is now confirmed and the requirement can drop its caveat.
+
+Worth recording because the first pass at this used hand flop counts instead,
+which came out at ~230 flops for `ahb_spi_m` against an actual ~120-135, and
+produced a `TARGET_GE` of 5,400 -- three times too large. **Hand-counting flops
+from RTL was consistently ~3x pessimistic across all three blocks.** `spi_s` and
+`qspi` have no stated GE figure at all (both "TBD" in their specs and in
+`Schematic Review.md`), so the numbers above are the first real ones for them
+and should be folded back into those documents.
+
+### 5. What the stub does with the area, and why it is shaped that way
+
+`ahb_stub_slave` turns `TARGET_GE` into a ballast register of
+`(TARGET_GE - GE_FIXED) / GE_PER_BIT` bits (13 GE/bit, 60 GE fixed -- a starting
+estimate, see below). Its next state is a rotate-left-by-one feeding an
+incrementer, with `HADDR`, `HWDATA` and `pad_in` XOR'd in.
+
+Two constraints shaped that:
+
+- **It must not be prunable.** A constant `HRDATA` leaves the write path with no
+  consumer and the read path with no driver, and the whole slot collapses to tie
+  cells. The rotate puts every bit in one feedback ring, the low bits reach
+  `HRDATA` directly, and every bus and pad input has a real endpoint.
+- **It must not become the critical path.** A single adder across 254 bits would
+  have. The increment runs 32 bits at a time; the last lane takes the remainder,
+  so `TARGET_GE` is honoured exactly rather than rounded up to a whole lane. An
+  earlier version rounded up and overshot the SPI slave target by 40%.
+
+Achieved widths are 254 / 126 / 44 bits for QSPI / SPI M / SPI S, predicting
+3,362 / 1,698 / 632 GE against targets of 3,368 / 1,706 / 635.
+
+Because the three instances sit at three different widths, **one synthesis run
+gives three points on `GE = GE_FIXED + GE_PER_BIT * BALLAST_W`** -- fit the line
+and write the fitted constants back into `ahb_stub_slave.sv`. `make
+report-stub-ge` prints the per-instance areas (`--keep-hierarchy` keeps them as
+three distinct `$paramod` modules). That calibration has not been done yet; 13
+and 60 are still the estimates.
+
+### 6. Open items
+
+- `GE_PER_BIT` / `GE_FIXED` are unfitted estimates -- see the three-point fit
+  above.
+- The pad side is now live but meaningless: the placeholders free-run, so with
+  `GPIO_ALTSEL` set the pads, including the QSPI data pads' output enables,
+  toggle continuously. `GPIO_ALTSEL` resets to 0 so firmware has to opt in, and
+  a `DRY_RUN` build is not functional silicon regardless.
+- The floorplan has not been re-run at the new area. `DIE_AREA` is unchanged at
+  1100x1500 and `PL_TARGET_DENSITY_PCT` at 68; whether +13% needs a larger die
+  is the next measurement, not a decision to take in advance.

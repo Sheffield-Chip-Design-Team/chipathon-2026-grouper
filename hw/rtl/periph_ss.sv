@@ -454,14 +454,14 @@ logic [3:0] mux_qspi_sio_oe;  // internal signal for QSPI data output enable
 
   // FIXME - replace with hw/rtl/qspi/ahb_qspi.sv, whose ports already match the
   // io_ss signals below. Until then the stub holds the slot at a representative
-  // size: 4900 GE, from the existing ahb_qspi RTL x2.0 for the features still
-  // missing (arbitrary-command interface, real register map, byte-lane
-  // addressing, wait-state handling, and the GRPR-QSPI-021 init FSM). See
-  // librelane/measure/README.md.
+  // size: 3368 GE, from `make measure-ge` (ahb_qspi synthesizes to 18,481.4
+  // um^2 = 1684 GE) x2.0 for the features still missing (arbitrary-command
+  // interface, real register map, byte-lane addressing, wait-state handling,
+  // and the GRPR-QSPI-021 init FSM). See librelane/classic/TRIAL_NOTES.md.
   ahb_stub_slave #(
     .ADDR_WIDTH (ADDR_WIDTH),
     .DATA_WIDTH (DATA_WIDTH),
-    .TARGET_GE  (4900),
+    .TARGET_GE  (3368),
     .PAD_OUT_W  (7),
     .PAD_OE_W   (4),
     .PAD_IN_W   (4)
@@ -492,14 +492,15 @@ logic [3:0] mux_qspi_sio_oe;  // internal signal for QSPI data output enable
   // FIXME - replace with hw/rtl/spi_m/ahb_spi_m.sv, whose pad ports are named
   // SPI_MOSI/SPI_SCK/SPI_CS_N/SPI_MISO and will need mapping onto the io_ss
   // names below. Until then the stub holds the slot at a representative size:
-  // 5400 GE, from the existing ahb_spi_m RTL x1.3 for the one remaining open
-  // item (GRPR-SPIM-005). Note that contradicts GRPR-SPIM-015's 1,500-2,000 GE
-  // estimate, which the spec itself flags as unconfirmed by synthesis - see
-  // librelane/measure/README.md.
+  // 1706 GE, from `make measure-ge` (ahb_spi_m synthesizes to 14,402.7 um^2 =
+  // 1312 GE) x1.3 for the one remaining open item (GRPR-SPIM-005). That lands
+  // inside GRPR-SPIM-015's 1,500-2,000 GE estimate, which the spec flagged as
+  // unconfirmed by synthesis - it is now confirmed. See
+  // librelane/classic/TRIAL_NOTES.md.
   ahb_stub_slave #(
     .ADDR_WIDTH (ADDR_WIDTH),
     .DATA_WIDTH (DATA_WIDTH),
-    .TARGET_GE  (5400),
+    .TARGET_GE  (1706),
     .PAD_OUT_W  (3),
     .PAD_IN_W   (1)
   ) u_spi_m_stub (
@@ -533,13 +534,14 @@ logic [3:0] mux_qspi_sio_oe;  // internal signal for QSPI data output enable
   // with the same placeholder the not-yet-implemented peripherals use, so the
   // interconnect still sees eight slaves.
   //
-  // Sized at 1450 GE: the existing ahb_spi_s RTL x2.0 for what it still has to
-  // grow (two-cycle error response, IRQs, and the FIFOs that GRPR-SPIS-012's
-  // 1.25 MB/s firmware load needs). See librelane/measure/README.md.
+  // Sized at 635 GE, from `make measure-ge` (ahb_spi_s synthesizes to 3,483.8
+  // um^2 = 317 GE) x2.0 for what it still has to grow (two-cycle error
+  // response, IRQs, and the FIFOs that GRPR-SPIS-012's 1.25 MB/s firmware load
+  // needs). See librelane/classic/TRIAL_NOTES.md.
   ahb_stub_slave #(
     .ADDR_WIDTH (ADDR_WIDTH),
     .DATA_WIDTH (DATA_WIDTH),
-    .TARGET_GE  (1450),
+    .TARGET_GE  (635),
     .PAD_OUT_W  (1),
     .PAD_IN_W   (3)
   ) u_spi_s_stub (
