@@ -15,28 +15,38 @@ meta:
     # Why is this checker broken?
     # Probably submodules???????
     # OpenROAD.CheckMacroInstances: null
+
     # Disable KLayout DRC
     #KLayout.DRC: null
     #Checker.KLayoutDRC: null
+
     # Disable KLayout antenna check
     #KLayout.Antenna: null
     #Checker.KLayoutAntenna: null
+
     # Disable KLayout density check
     #KLayout.Density: null
     #Checker.KLayoutDensity: null
+
     # Save time during development
     # Enable for sign-off
     #OpenROAD.IRDropReport: null
+
     #Magic.DRC: null
     #Checker.MagicDRC: null
+
     #KLayout.XOR: null
     #Netgen.LVS: null
     #Checker.LVS: null
 
+
+#---------------------------------------------------------------------------
+# Read in RTL + Set Paramaters
+#---------------------------------------------------------------------------
+
 DESIGN_NAME: grouper_soc_chip_core
 
 VERILOG_FILES:
-# GrouperSoC RTL (same order as the fusesoc `rtl` fileset in grouper_soc.core)
 - dir::../../hw/rtl/ahb3lite/ahb3lite_pkg.sv
 - dir::../../hw/rtl/common/clk_div.sv
 - dir::../../hw/rtl/common/clk_gate.sv
@@ -74,9 +84,6 @@ VERILOG_FILES:
 
 VERILOG_INCLUDE_DIRS:
 # Supplies code.vmem -- the boot stub built by sw/scripts/build_rom_boot.sh.
-# ahb_rom.sv includes `PROG_FILE_VMEM, which defaults to "code.vmem", so
-# pointing the include path at sw/dry_run is what selects the boot stub over
-# the full firmware image in sw/.
 - dir::../../sw/dry_run
 
 VERILOG_DEFINES:
@@ -86,354 +93,37 @@ VERILOG_DEFINES:
 # Storage for ahb_ram is four hardened sram1024x8m8wm1 macros (via ram_ss)
 # rather than a behavioural array. This is what puts
 # u_ram_ss.gen_macro_ram.gen_sram[*].u_wrapper.u_sram_macro in the netlist for
-# the MACROS block at the bottom of this file to place; without it the flow
-# fails in OpenROAD.CheckMacroInstances with nothing to place.
+# the MACROS block at the bottom of this file to place
 - MACRO_RAM
 # Build the ROM contents from code.vmem (continuous assigns) rather than
 # $readmemh, which has no synthesisable equivalent - standard cells have no
 # initial-value mechanism, so this is what actually produces a mask ROM.
 - ROM_INIT_CONST
 
-# Enable plugin for better SystemVerilog support
+#---------------------------------------------------------------------------
+# Elaboration + Synthesis
+#---------------------------------------------------------------------------
 
+# Enable plugin for better SystemVerilog support
 USE_SLANG: true
 SLANG_ARGUMENTS: ['--keep-hierarchy']
-
 # SYNTH_HIERARCHY_MODE: keep
+SYNTH_HIERARCHY_MODE: deferred_flatten
+
 SYNTH_AUTONAME: true # human readable names
+SYNTH_STRATEGY: "AREA 0"
 SYNTH_SIZING: true
 SYNTH_ABC_DFF: true
-# SYNTH_ABC_USE_MFS3: true
-SYNTH_STRATEGY: "DELAY 2"
+SYNTH_ABC_USE_MFS3: true
 
 # ---------------------------------------------------------------------------
 # Floorplan: 1100 x 1500.
-#
-# Was 1000x1500, which legalised at post-GPL but failed at post-CTS
-# (DPL-0036): 341,814 sites = 750,350um^2 of rows against ~492,000um^2 of
-# cells after repair, before CTS and post-CTS hold repair had added theirs.
-# The extra 100um of width is ~160,000um^2 more rows, taking post-repair
-# occupancy from 66% to ~54%.
-#
-# The die grew EASTWARD and the macros did not move. That is deliberate:
-# LibreLane insets the core by 6.72um (12 sites) in x and 15.68um (4 rows) in
-# y, so the core's lower-left stays at 6.72 15.68 and only the far corner
-# moves, to 1093.28 1484.32. Every PDN strap position is measured from that
-# origin, so the strap lattice, its 0.14 grid phase and all four SRAM power
-# taps are untouched by the change -- re-verified, byte for byte. Moving the
-# macros instead would have required re-deriving the lot.
-# ---------------------------------------------------------------------------
+#----------------------------------------------------------------------------
+
 FP_SIZING: absolute
 DIE_AREA: [0.0, 0.0, 1100, 1500]
 
-# ---------------------------------------------------------------------------
-# I/O pins: north and west edges only (librelane/classic/pin_order.cfg).
-#
-# The four SRAMs occupy the bottom ~1116um of the die (see MACROS), leaving a
-# 303um strip down the west side, a 359um band across the top and -- since the
-# die went to 1100 wide -- a 103um strip down the east side. Pins stay on north
-# and west: south is macro wall, and the east strip is a 103um column whose
-# cells are better served by the top band than by pins that would have to squeeze
-# past the macros. Revisit if east-side logic ends up starved.
-#
-# Split: the GPIO data path (in/out/oe/ie, 160 pins) on north, the pad-config
-# buses (cs/sl/pu/pd) plus clk, rst_n and the input-only pads (165 pins) on
-# west. Odb.CustomIOPlacement errors on any design pin the cfg does not match
-# (ERRORS_ON_UNMATCHED_IO defaults to unmatched_design), so the regexes there
-# must cover every port of grouper_soc_chip_core.
-# ---------------------------------------------------------------------------
-IO_PIN_ORDER_CFG: dir::pin_order.cfg
-
-# Slightly smaller file sizes
-# PRIMARY_GDSII_STREAMOUT_TOOL: magic
-
-# SDC files
-PNR_SDC_FILE:     dir::grouper_chip_core.sdc
-SIGNOFF_SDC_FILE: dir::grouper_chip_core.sdc
-FALLBACK_SDC:     dir::grouper_chip_core.sdc
-
-# Power / ground nets
-VDD_NETS:
-  - VDD
-GND_NETS:
-  - VSS
-
-# Clock -- direct port on this macro, no I/O pad in this flow
-CLOCK_PORT: clk
-CLOCK_PERIOD: 62.5 # 16MHz
-
-# Routing / ESD
-DIODE_ON_PORTS: in
-
-# Moved to Metal5 to relieve Metal3 congestion at 1310x1150 (see TRIAL_NOTES.md).
-RT_MAX_LAYER: Metal5
-
-CTS_OBSTRUCTION_AWARE: true
-CTS_DELAY_BUFFER_DERATE_PCT: 100
-CTS_BALANCE_LEVELS: true
-CTS_CLK_MAX_WIRE_LENGTH: 0
-CTS_DISTANCE_BETWEEN_BUFFERS: 0
-CTS_SINK_CLUSTERING_SIZE: 20
-CTS_SINK_CLUSTERING_MAX_DIAMETER: 60
-CTS_APPLY_NDR: none
-
-# Cell names in this library are clkbuf_<N>, not clkbuf_x<N>.
-# The "X12" in the datasheet title is the drive-strength description,
-# not part of the cell name. Give CTS more than one size to pick from.
-CTS_CLK_BUFFERS:
-  - "gf180mcu_fd_sc_mcu7t5v0__clkbuf_4"
-  - "gf180mcu_fd_sc_mcu7t5v0__clkbuf_8"
-  - "gf180mcu_fd_sc_mcu7t5v0__clkbuf_12"
-  - "gf180mcu_fd_sc_mcu7t5v0__clkbuf_16"
-
-# Fix hold violations.
-#
-# LibreLane's default for both is 0.1. 0.6/0.5 is 5-6x that, and every extra
-# 0.1ns of margin is delay cells the post-CTS and post-GRT repair passes have
-# to insert and then legalise -- which is where DPL-0036 came from at
-# rsz_timing_postcts.tcl. 0.3/0.25 is still 3x the default.
-#
-# Note this got harder, not easier, with the SRAM Liberty fix above: hold
-# repair at the macro interface (A[9:0], D/WEN x4 lanes, CEN, GWEN) is now
-# working against the real ff-corner constraints instead of typical ones, so
-# some of the new growth is repair the earlier runs simply were not doing.
-#
-# These are the first things to raise again if signoff reports hold
-# violations -- hold is not something to be casual about, and the right
-# response to a hold failure is more margin plus more die, not less margin.
-PL_RESIZER_HOLD_SLACK_MARGIN: 0.3
-GRT_RESIZER_HOLD_SLACK_MARGIN: 0.25
-
-# Pre-routing setup repair (fixes timing before route guides exist, unlike
-# the RUN_POST_GRT_* flags which are gated off by default and hung on this
-# design's tighter density -- see TRIAL_NOTES.md). Modeled on the adjacent
-# trouper repo's RUN_POST_GPL_DESIGN_REPAIR / GRT_RESIZER_SETUP_MAX_BUFFER_PCT.
-RUN_POST_GPL_DESIGN_REPAIR: true
-RUN_POST_CTS_RESIZER_TIMING: true
-PL_RESIZER_SETUP_MAX_BUFFER_PCT: 40
-
-# Margins on top of the real slew/capacitance limits, i.e. how much headroom
-# repair_design demands before it buffers. LibreLane defaults both to 20 (the
-# `-slew_margin 20 -cap_margin 20` in the run log). At 20% it found 2013 slew
-# violations and answered with 5343 buffers -- +15.7% area, ~66,800um^2, which
-# is what pushed detailed placement off the cliff. 10% is still margin, just
-# not double-counted headroom.
-#
-# REVERT THESE FIRST if timing signoff comes back worse: they trade repair
-# aggressiveness for area, and the area is only needed while the design is
-# this close to the legalisation limit.
-DESIGN_REPAIR_MAX_SLEW_PCT: 10
-DESIGN_REPAIR_MAX_CAP_PCT:  10
-
-# Placement
-#
-# Back to 68 after 62 was measured worse, not better. The theory for lowering
-# it was that spreading cells leaves more uniform whitespace for late
-# insertions; what actually happened is that spreading lengthened the nets:
-#
-#   PL_TARGET_DENSITY_PCT   antenna violations   DPL-0036 instances
-#   68                      117                  5
-#   62                      157                  24
-#
-# More wire is more antenna area, which is more diodes to insert and legalise.
-# The diode pressure scales with wirelength, so the density knob works against
-# this failure rather than for it. Do not re-try lowering it without a reason
-# that explains those two rows.
-#
-# Floor if it is ever lowered: GPL-0302 compares the target against
-# utilisation WITH GPL_CELL_PADDING applied -- 425,581um^2 of cells in
-# 974,111um^2 of free area is 43.7%, inflated to 52.6% by the 2 sites of
-# padding -- so anything under ~56 errors out.
-PL_TARGET_DENSITY_PCT: 68
-MAX_FANOUT_CONSTRAINT: 16
-GRT_ALLOW_CONGESTION: true
-GRT_ADJUSTMENT: 0.2
-# Global placement keeps 2 sites of padding -- that spread is the proven
-# congestion recipe and it costs nothing at legalisation time. Detailed
-# placement gets 1, which is what unblocks DPL-0034.
-#
-# The arithmetic, from the RUN_2026-08-12_00-39-24 metrics: macro row cutting
-# leaves 649 rows / 341,814 sites = 750,350um^2 actually placeable (the
-# reported design__instance__utilization__stdcell of 51.6% divides by
-# core-minus-macros and so flatters it by 74,000um^2). 425,581um^2 of std
-# cells is 56.7% of that. The average cell is 5.46um = 9.76 sites wide, so
-# 2 sites of padding inflate it by ~20% to 68.3% -- level with
-# PL_TARGET_DENSITY_PCT, in a region already fragmented into an L plus two
-# narrow channels. 560 unlegalisable instances out of 19,873 is what that
-# looks like. One site of padding puts it at 62.5%.
-GPL_CELL_PADDING: 2
-DPL_CELL_PADDING: 0
-
-# These delay buffers materially worsen routing congestion at this die size.
-DONT_USE_CELLS:
-  - gf180mcu_fd_sc_mcu7t5v0__dlyb_1
-  - gf180mcu_fd_sc_mcu7t5v0__dlyb_2
-  - gf180mcu_fd_sc_mcu7t5v0__dlyb_4
-
-# Fix antenna violations after DRT
-DRT_ANTENNA_REPAIR_ITERS: 10
-DRT_ANTENNA_REPAIR_MARGIN: 10 # %
-PL_MAX_DISPLACEMENT_X: 800
-PL_MAX_DISPLACEMENT_Y: 500
-
-# ---------------------------------------------------------------------------
-# PDN
-#
-# The SRAM obstructs Metal1/Metal2/Metal3 across its whole interior and exposes
-# VDD/VSS only on a ~3um Metal3 perimeter frame. Metal4 is unobstructed, so it
-# is the only layer that can carry power over the macros.
-# ---------------------------------------------------------------------------
-
-PDN_MULTILAYER: true
-PDN_ENABLE_RAILS: true
-PDN_RAIL_LAYER:       Metal1    # gf180mcu std cells expose VDD/VSS on Metal1
-PDN_VERTICAL_LAYER:   Metal4    # carries over the SRAMs
-# General mesh horizontal layer moved off Metal3 to relieve routing
-# congestion there (see pdn_cfg.tcl). SRAM taps stay on Metal3 regardless --
-# that's hardcoded in pdn_cfg.tcl, not driven by this variable. Metal5 is
-# normally reserved for a hierarchical parent's core ring; using it for our
-# own mesh here is a real ownership question, not yet cleared -- see
-# TRIAL_NOTES.md.
-PDN_HORIZONTAL_LAYER: Metal5
-
-
-# ---------------------------------------------------------------------------
-# Straps
-#
-# Three independent constraints set these numbers.
-#
-# 1. ROUTING-GRID ALIGNMENT (this is the DRC one). Every width, pitch and
-#    spacing is a whole number of routing tracks: 0.56um on Metal2/3/4,
-#    0.90um on Metal5 (DEF: "TRACKS X 560 DO 1964 STEP 1120 LAYER Metal2" at
-#    2000 DBU/um). The old 180um pitch was 321.43 Metal2 tracks, so
-#    consecutive stripe columns drifted 0.4um out of phase with the routing
-#    grid and two of them landed 0.08um short of Metal2 minimum spacing
-#    (0.28um) to the nearest usable track -- permanently DRC-illegal, which is
-#    what made detailed routing plateau instead of converge (four "Metal
-#    Spacing" violations against VDD/VSS on Metal2, both at a stripe edge).
-#    See TRIAL_NOTES.md.
-#
-# 2. STRIPE PHASE. pdngen treats PDN_VOFFSET as the offset from the core's
-#    lower-left to the *centre* of the first stripe, and cuts the stripe at
-#    centre +/- width/2 (OpenROAD src/pdn/src/straps.cpp, Straps::makeStraps).
-#    So a stripe's left edge is core_llx + PDN_VOFFSET - PDN_VWIDTH/2 =
-#    6.72 + 14.98 - 2.52 = 19.18, and because the pitch is a whole number of
-#    tracks every other column shares that edge phase: 19.18 mod 0.56 = 0.14.
-#    At 0.14 the track on one side of the stripe sits exactly 0.28um (Metal2
-#    minimum spacing) away -- legal and usable; at 0.00 both neighbouring
-#    tracks would be 0.14um away, i.e. illegal to route on. Re-derive this
-#    number if PDN_VWIDTH or PDN_VPITCH changes.
-#
-# 3. SRAM TAPPING. gf180mcu_ocd_ip_sram__sram1024x8m8wm1 obstructs
-#    Metal1-Metal3 over its interior (LEF OBS: 3.0 3.0 .. 298.3 512.81) and
-#    exposes VDD/VSS on Metal3 only in the 3um frame outside that box, so the
-#    Metal4 straps are the SRAM's only power path. The two vertical edge bands
-#    of the frame are 298.3um apart and carry both nets, so a stripe lattice
-#    whose HALF period divides 298.3 an ODD number of times puts opposite nets
-#    on the two bands of every macro. 298.3/5 = 59.66 -> 59.92 (107 tracks),
-#    hence PDN_VPITCH 119.84 and PDN_VSPACING 119.84/2 - 5.04. With the macro
-#    x-coordinates in MACROS below this lands a full-height VSS stripe on each
-#    macro's west band and a VDD stripe on its east band: ~580-620um^2 of
-#    Metal3/Metal4 overlap per net per macro, versus 0um^2 of VSS for the
-#    right-hand column at the old 180um pitch. THE MACRO X-COORDINATES AND
-#    THESE THREE NUMBERS ARE ONE UNIT -- changing either alone silently floats
-#    an SRAM rail. Re-check with scripts in TRIAL_NOTES.md or
-#    `check_power_grid -net VSS`.
-#
-# Metal5 (horizontal) never touches the macros, so PDN_HPITCH only has to obey
-# constraint 1: 360 = 400 x 0.90, width 6 x 0.90, offset 15 x 0.90.
-# ---------------------------------------------------------------------------
-PDN_VWIDTH:    5.04      # 9 x 0.56  (Metal2/Metal4 track pitch)
-PDN_HWIDTH:    5.4       # 6 x 0.90  (Metal5 track pitch)
-PDN_VPITCH:    119.84    # 214 x 0.56; 2 x 59.92, and 5 x 59.92 ~= 298.3
-PDN_HPITCH:    360       # 400 x 0.90; no SRAM constraint, so relaxed
-PDN_VSPACING:  54.88     # 119.84/2 - 5.04 = 98 x 0.56
-PDN_HSPACING:  174.6     # (360 - 2*5.4) / 2 = 194 x 0.90
-PDN_VOFFSET:   14.98     # stripe centre; puts the left edge at 19.18 (see 2)
-PDN_HOFFSET:   13.5      # 15 x 0.90
-PDN_EXTEND_TO: boundary
-
-PDN_ENABLE_PINS:     true    # Metal3/Metal4 pins for the parent to grab
-PDN_CORE_RING:       false   # hierarchical integration; coordinate Metal5 use with parent
-PDN_HORIZONTAL_HALO: 10
-PDN_VERTICAL_HALO:   10
-
-PDN_CFG: dir::/pdn_cfg.tcl
-
-# ---------------------------------------------------------------------------
-# Corners
-#
-# gf180mcu_fd_sc_mcu7t5v0 is characterized at 3v30 as well as 5v00 -- the
-# "5v0" in the library name is the device flavour, not a mandatory rail.
-# The SRAM is 3.3V only, so the whole macro signs off at 3.3V.
-# ---------------------------------------------------------------------------
-DEFAULT_CORNER: nom_tt_025C_3v30
-STA_CORNERS:
-  - nom_tt_025C_3v30
-  - min_ff_n40C_3v60
-  - max_ss_125C_3v00
-
-LIB:
-  "*_tt_025C_3v30":
-    - /foss/pdks/gf180mcuD/libs.ref/gf180mcu_fd_sc_mcu7t5v0/lib/gf180mcu_fd_sc_mcu7t5v0__tt_025C_3v30.lib
-  "*_ss_125C_3v00":
-    - /foss/pdks/gf180mcuD/libs.ref/gf180mcu_fd_sc_mcu7t5v0/lib/gf180mcu_fd_sc_mcu7t5v0__ss_125C_3v00.lib
-  "*_ff_n40C_3v60":
-    - /foss/pdks/gf180mcuD/libs.ref/gf180mcu_fd_sc_mcu7t5v0/lib/gf180mcu_fd_sc_mcu7t5v0__ff_n40C_3v60.lib
-
-# Due to OpenROAD bug
-# https://github.com/The-OpenROAD-Project/OpenROAD/issues/8229
-#PL_TIME_DRIVEN: False
-#PL_ROUTABILITY_DRIVEN: False
-
-# Do not error on magic DRC violations
-# Note: Passing magic DRC is not required for the submission.
-# However, it is recommended to fix or carefully review all violations.
-ERROR_ON_MAGIC_DRC: False
-
-# Prevent false positive DRC errors in I/O cells
-MAGIC_GDS_FLATGLOB:
-# For contacts
-- "*_CDNS_*"
-# Foundry provided SRAMs
-- "*$$*"
-- "M1_N*"
-- "M1_P*"
-- "M2_M1*"
-- "M3_M2*"
-- "nmos_5p0*"
-- "nmos_1p2*"
-- "pmos_5p0*"
-- "pmos_1p2*"
-- "via1_*"
-- "ypass_gate*"
-- "G_ring_*"
-# These additional cells must be flattened to get rid of 3.3V devices
-# (DUALGATE drawn into high-level cells)
-- "dcap_103*"
-- "din_*"
-- "mux821_*"
-- "rdummy_*"
-- "pmoscap_*"
-- "xdec_*"
-- "ypredec*"
-- "xpredec*"
-- "prexdec_*"
-- "xdec8_*"
-- "xdec16_*"
-- "xdec32_*"
-- "sa_*"
-
-# Since we cannot meet the minimum density limit on Metal2,
-# ignore active metal on previous and subsequent layers
-# (DM.5_DM.7 and DM.4_DM.6). Dummy metal is moved to active
-# metal during the precheck.
-KLAYOUT_FILLER_OPTIONS:
-  Metal2_ignore_active: true
-
-# Because we have multiple power pads for one power domain
-MAGIC_EXT_UNIQUE: notopports
-
+# RAM Macro Placement
 MACROS:
   gf180mcu_ocd_ip_sram__sram1024x8m8wm1:
     gds:
@@ -504,22 +194,12 @@ MACROS:
         location: [679.28, 599.76]
         orientation: S
 
-    # One Liberty per corner, matching the STA_CORNERS names the same way the
-    # top-level LIB block does. This used to be a single "*" fallback pointing
-    # at the tt lib, which handed OpenSTA typical SRAM timing for ALL three
-    # corners -- visible in the log as the tt lib being read for
-    # max_ss_125C_3v00 and min_ff_n40C_3v60, followed by
-    # "[WARNING STA-1140] library ... already exists".
-    #
-    # That is not cosmetic. The macro's hold requirement is what the flow has
-    # to close at the fast corner (tch ~1.0ns at ff, ~3.0ns at ss), and setup
-    # on the Q path is what it has to close at the slow one. Signing both off
-    # against tt understates each.
+    # One Liberty per corner, matching the STA_CORNERS names 
     lib:
       "*_tt_025C_3v30":
         - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__tt_025C_3v30.lib
-      "*_ss_125C_3v00":
-        - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__ss_125C_3v00.lib
+      # "*_ss_125C_3v00":
+      #   - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__ss_125C_3v00.lib
       "*_ff_n40C_3v60":
         - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__ff_n40C_3v60.lib
 
@@ -554,3 +234,284 @@ FP_MACRO_VERTICAL_HALO: 10
 # Derived from the MACROS coordinates -- move them and this must move too.
 FP_OBSTRUCTIONS:
   - [621.06, 15.68, 679.28, 1125.57]
+
+# I/O pins: north and west edges only
+IO_PIN_ORDER_CFG: dir::pin_order.cfg
+
+#---------------------------------------------------------------------------
+# Constraints
+#---------------------------------------------------------------------------
+
+# SDC files
+PNR_SDC_FILE:     dir::grouper_chip_core.sdc
+SIGNOFF_SDC_FILE: dir::grouper_chip_core.sdc
+FALLBACK_SDC:     dir::grouper_chip_core.sdc
+
+# ---------------------------------------------------------------------------
+# PDN
+# ---------------------------------------------------------------------------
+
+# The SRAM obstructs Metal1/Metal2/Metal3 across its whole interior and exposes
+# VDD/VSS only on a ~3um Metal3 perimeter frame. Metal4 is unobstructed, so it
+# is the only layer that can carry power over the macros.
+
+# Power / ground nets
+VDD_NETS:
+  - VDD
+GND_NETS:
+  - VSS
+
+PDN_MULTILAYER:       true
+PDN_ENABLE_RAILS:     true
+PDN_RAIL_LAYER:       Metal1    # gf180mcu std cells expose VDD/VSS on Metal1
+PDN_VERTICAL_LAYER:   Metal4    # carries over the SRAMs
+PDN_HORIZONTAL_LAYER: Metal5
+
+# ---------------------------------------------------------------------------
+# Straps
+#
+# Three independent constraints set these numbers.
+#
+# 1. ROUTING-GRID ALIGNMENT (this is the DRC one). Every width, pitch and
+#    spacing is a whole number of routing tracks: 0.56um on Metal2/3/4,
+#    0.90um on Metal5 (DEF: "TRACKS X 560 DO 1964 STEP 1120 LAYER Metal2" at
+#    2000 DBU/um). The old 180um pitch was 321.43 Metal2 tracks, so
+#    consecutive stripe columns drifted 0.4um out of phase with the routing
+#    grid and two of them landed 0.08um short of Metal2 minimum spacing
+#    (0.28um) to the nearest usable track -- permanently DRC-illegal, which is
+#    what made detailed routing plateau instead of converge (four "Metal
+#    Spacing" violations against VDD/VSS on Metal2, both at a stripe edge).
+#    See TRIAL_NOTES.md.
+#
+# 2. STRIPE PHASE. pdngen treats PDN_VOFFSET as the offset from the core's
+#    lower-left to the *centre* of the first stripe, and cuts the stripe at
+#    centre +/- width/2 (OpenROAD src/pdn/src/straps.cpp, Straps::makeStraps).
+#    So a stripe's left edge is core_llx + PDN_VOFFSET - PDN_VWIDTH/2 =
+#    6.72 + 14.98 - 2.52 = 19.18, and because the pitch is a whole number of
+#    tracks every other column shares that edge phase: 19.18 mod 0.56 = 0.14.
+#    At 0.14 the track on one side of the stripe sits exactly 0.28um (Metal2
+#    minimum spacing) away -- legal and usable; at 0.00 both neighbouring
+#    tracks would be 0.14um away, i.e. illegal to route on. Re-derive this
+#    number if PDN_VWIDTH or PDN_VPITCH changes.
+#
+# 3. SRAM TAPPING. gf180mcu_ocd_ip_sram__sram1024x8m8wm1 obstructs
+#    Metal1-Metal3 over its interior (LEF OBS: 3.0 3.0 .. 298.3 512.81) and
+#    exposes VDD/VSS on Metal3 only in the 3um frame outside that box, so the
+#    Metal4 straps are the SRAM's only power path. The two vertical edge bands
+#    of the frame are 298.3um apart and carry both nets, so a stripe lattice
+#    whose HALF period divides 298.3 an ODD number of times puts opposite nets
+#    on the two bands of every macro. 298.3/5 = 59.66 -> 59.92 (107 tracks),
+#    hence PDN_VPITCH 119.84 and PDN_VSPACING 119.84/2 - 5.04. With the macro
+#    x-coordinates in MACROS below this lands a full-height VSS stripe on each
+#    macro's west band and a VDD stripe on its east band: ~580-620um^2 of
+#    Metal3/Metal4 overlap per net per macro, versus 0um^2 of VSS for the
+#    right-hand column at the old 180um pitch. THE MACRO X-COORDINATES AND
+#    THESE THREE NUMBERS ARE ONE UNIT -- changing either alone silently floats
+#    an SRAM rail. Re-check with scripts in TRIAL_NOTES.md or
+#    `check_power_grid -net VSS`.
+#
+# Metal5 (horizontal) never touches the macros, so PDN_HPITCH only has to obey
+# constraint 1: 360 = 400 x 0.90, width 6 x 0.90, offset 15 x 0.90.
+# ---------------------------------------------------------------------------
+PDN_VWIDTH:    5.04      # 9 x 0.56  (Metal2/Metal4 track pitch)
+PDN_HWIDTH:    5.4       # 6 x 0.90  (Metal5 track pitch)
+PDN_VPITCH:    119.84    # 214 x 0.56; 2 x 59.92, and 5 x 59.92 ~= 298.3
+PDN_HPITCH:    360       # 400 x 0.90; no SRAM constraint, so relaxed
+PDN_VSPACING:  54.88     # 119.84/2 - 5.04 = 98 x 0.56
+PDN_HSPACING:  174.6     # (360 - 2*5.4) / 2 = 194 x 0.90
+PDN_VOFFSET:   14.98     # stripe centre; puts the left edge at 19.18 (see 2)
+PDN_HOFFSET:   13.5      # 15 x 0.90
+PDN_EXTEND_TO: boundary
+
+PDN_ENABLE_PINS:     true    # Metal3/Metal4 pins for the parent to grab
+PDN_CORE_RING:       false   # hierarchical integration; coordinate Metal5 use with parent
+PDN_HORIZONTAL_HALO: 10
+PDN_VERTICAL_HALO:   10
+
+PDN_CFG: dir::/pdn_cfg.tcl
+
+# ---------------------------------------------------------------------------
+# PLACEMENT
+# ---------------------------------------------------------------------------
+
+#   PL_TARGET_DENSITY_PCT   antenna violations   DPL-0036 instances
+#   68                      117                  5
+#   62                      157                  24
+#
+# More wire is more antenna area, which is more diodes to insert and legalise.
+# The diode pressure scales with wirelength, so the density knob works against
+# this failure rather than for it. Do not re-try lowering it without a reason
+# that explains those two rows.
+#
+# Floor if it is ever lowered: GPL-0302 compares the target against
+# utilisation WITH GPL_CELL_PADDING applied -- 425,581um^2 of cells in
+# 974,111um^2 of free area is 43.7%, inflated to 52.6% by the 2 sites of
+# padding -- so anything under ~56 errors out.
+
+# Global placement keeps 2 sites of padding -- that spread is the proven
+# congestion recipe and it costs nothing at legalisation time. Detailed
+# placement is at 0: 1 cleared DPL-0034 at global placement but still failed
+# post-CTS, and 0 is what got the flow through to detailed routing.
+#
+# Note the tension now that routing is the blocker: padding is a congestion
+# lever (Session 2 used 2), so raising it would help DRT and hurt
+# legalisation. If AREA 0 synthesis shrinks the design enough, 1 is worth
+# retrying -- but only with the post-CTS step watched.
+#
+# The arithmetic, from the RUN_2026-08-12_00-39-24 metrics: macro row cutting
+# leaves 649 rows / 341,814 sites = 750,350um^2 actually placeable (the
+# reported design__instance__utilization__stdcell of 51.6% divides by
+# core-minus-macros and so flatters it by 74,000um^2). 425,581um^2 of std
+# cells is 56.7% of that. The average cell is 5.46um = 9.76 sites wide, so
+# 2 sites of padding inflate it by ~20% to 68.3% -- level with
+# PL_TARGET_DENSITY_PCT, in a region already fragmented into an L plus two
+# narrow channels. 560 unlegalisable instances out of 19,873 is what that
+# looks like. One site of padding puts it at 62.5%.
+
+PL_TARGET_DENSITY_PCT: 68
+MAX_FANOUT_CONSTRAINT: 16
+GPL_CELL_PADDING: 2
+DPL_CELL_PADDING: 0
+
+# These delay buffers materially worsen routing congestion at this die size.
+DONT_USE_CELLS:
+  - gf180mcu_fd_sc_mcu7t5v0__dlyb_1
+  - gf180mcu_fd_sc_mcu7t5v0__dlyb_2
+  - gf180mcu_fd_sc_mcu7t5v0__dlyb_4
+
+# ---------------------------------------------------------------------------
+# CTS
+# ---------------------------------------------------------------------------
+
+# Clock -- direct port on this macro, no I/O pad in this flow
+CLOCK_PORT: clk
+CLOCK_PERIOD: 62.5 # 16MHz
+
+CTS_OBSTRUCTION_AWARE: true
+CTS_DELAY_BUFFER_DERATE_PCT: 100
+CTS_BALANCE_LEVELS: true
+CTS_CLK_MAX_WIRE_LENGTH: 0
+CTS_DISTANCE_BETWEEN_BUFFERS: 0
+CTS_SINK_CLUSTERING_SIZE: 20
+CTS_SINK_CLUSTERING_MAX_DIAMETER: 60
+CTS_APPLY_NDR: none
+
+CTS_CLK_BUFFERS:
+  - "gf180mcu_fd_sc_mcu7t5v0__clkbuf_4"
+  - "gf180mcu_fd_sc_mcu7t5v0__clkbuf_8"
+  - "gf180mcu_fd_sc_mcu7t5v0__clkbuf_12"
+  - "gf180mcu_fd_sc_mcu7t5v0__clkbuf_16"
+
+PL_RESIZER_HOLD_SLACK_MARGIN: 0.3
+GRT_RESIZER_HOLD_SLACK_MARGIN: 0.25
+
+# Pre-routing setup repair (fixes timing before route guides exist, unlike
+# the RUN_POST_GRT_* flags which are gated off by default and hung on this
+# design's tighter density -- see TRIAL_NOTES.md). Modeled on the adjacent
+# trouper repo's RUN_POST_GPL_DESIGN_REPAIR / GRT_RESIZER_SETUP_MAX_BUFFER_PCT.
+RUN_POST_GPL_DESIGN_REPAIR: true
+RUN_POST_CTS_RESIZER_TIMING: true
+PL_RESIZER_SETUP_MAX_BUFFER_PCT: 40
+
+# REVERT THESE FIRST if timing signoff comes back worse: they trade repair
+# aggressiveness for area, and the area is only needed while the design is
+# this close to the legalisation limit.
+DESIGN_REPAIR_MAX_SLEW_PCT: 10
+DESIGN_REPAIR_MAX_CAP_PCT:  10
+
+# Routing / ESD
+DIODE_ON_PORTS: in
+
+# ---------------------------------------------------------------------------
+# Route
+# ---------------------------------------------------------------------------
+
+GRT_ALLOW_CONGESTION: true
+GRT_ADJUSTMENT: 0.2
+
+# Moved to Metal5 to relieve Metal3 congestion at 1310x1150 (see TRIAL_NOTES.md).
+RT_MAX_LAYER: Metal5
+
+PL_MAX_DISPLACEMENT_X: 800
+PL_MAX_DISPLACEMENT_Y: 500
+
+# Fix antenna violations after DRT
+DRT_ANTENNA_REPAIR_ITERS: 10
+DRT_ANTENNA_REPAIR_MARGIN: 10 # %
+
+# ---------------------------------------------------------------------------
+# STA Lib Setup
+# ---------------------------------------------------------------------------
+# gf180mcu_fd_sc_mcu7t5v0 is characterized at 3v30 as well as 5v00 -- the
+# "5v0" in the library name is the device flavour, not a mandatory rail.
+# The SRAM is 3.3V only, so the whole macro signs off at 3.3V.#
+
+DEFAULT_CORNER: nom_tt_025C_3v30
+STA_CORNERS:
+  - nom_tt_025C_3v30
+  - min_ff_n40C_3v60
+  # - max_ss_125C_3v00
+
+LIB:
+  "*_tt_025C_3v30":
+    - /foss/pdks/gf180mcuD/libs.ref/gf180mcu_fd_sc_mcu7t5v0/lib/gf180mcu_fd_sc_mcu7t5v0__tt_025C_3v30.lib
+  "*_ss_125C_3v00":
+    - /foss/pdks/gf180mcuD/libs.ref/gf180mcu_fd_sc_mcu7t5v0/lib/gf180mcu_fd_sc_mcu7t5v0__ss_125C_3v00.lib
+  "*_ff_n40C_3v60":
+    - /foss/pdks/gf180mcuD/libs.ref/gf180mcu_fd_sc_mcu7t5v0/lib/gf180mcu_fd_sc_mcu7t5v0__ff_n40C_3v60.lib
+
+# ---------------------------------------------------------------------------
+# DRC / LVS / Antenna
+# ---------------------------------------------------------------------------
+
+# Do not error on magic DRC violations
+# Note: Passing magic DRC is not required for the submission.
+# However, it is recommended to fix or carefully review all violations.
+ERROR_ON_MAGIC_DRC: False
+
+# Prevent false positive DRC errors in I/O cells
+MAGIC_GDS_FLATGLOB:
+# For contacts
+- "*_CDNS_*"
+# Foundry provided SRAMs
+- "*$$*"
+- "M1_N*"
+- "M1_P*"
+- "M2_M1*"
+- "M3_M2*"
+- "nmos_5p0*"
+- "nmos_1p2*"
+- "pmos_5p0*"
+- "pmos_1p2*"
+- "via1_*"
+- "ypass_gate*"
+- "G_ring_*"
+# These additional cells must be flattened to get rid of 3.3V devices
+# (DUALGATE drawn into high-level cells)
+- "dcap_103*"
+- "din_*"
+- "mux821_*"
+- "rdummy_*"
+- "pmoscap_*"
+- "xdec_*"
+- "ypredec*"
+- "xpredec*"
+- "prexdec_*"
+- "xdec8_*"
+- "xdec16_*"
+- "xdec32_*"
+- "sa_*"
+
+# Since we cannot meet the minimum density limit on Metal2,
+# ignore active metal on previous and subsequent layers
+# (DM.5_DM.7 and DM.4_DM.6). Dummy metal is moved to active
+# metal during the precheck.
+KLAYOUT_FILLER_OPTIONS:
+  Metal2_ignore_active: true
+
+# Because we have multiple power pads for one power domain
+MAGIC_EXT_UNIQUE: notopports
+
+
+# Slightly smaller file sizes
+# PRIMARY_GDSII_STREAMOUT_TOOL: klayout
