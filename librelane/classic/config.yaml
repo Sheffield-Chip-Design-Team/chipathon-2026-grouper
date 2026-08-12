@@ -426,7 +426,7 @@ DIODE_ON_PORTS: in
 # Route
 # ---------------------------------------------------------------------------
 
-GRT_ALLOW_CONGESTION: true
+GRT_ALLOW_CONGESTION: false
 GRT_ADJUSTMENT: 0.2
 
 # Moved to Metal5 to relieve Metal3 congestion at 1310x1150 (see TRIAL_NOTES.md).
@@ -437,7 +437,7 @@ PL_MAX_DISPLACEMENT_Y: 500
 
 # Fix antenna violations after DRT
 DRT_ANTENNA_REPAIR_ITERS: 10
-DRT_ANTENNA_REPAIR_MARGIN: 10 # %
+DRT_ANTENNA_REPAIR_MARGIN: 10 
 
 # ---------------------------------------------------------------------------
 # STA Lib Setup

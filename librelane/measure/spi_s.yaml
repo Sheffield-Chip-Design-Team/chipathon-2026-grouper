@@ -1,0 +1,20 @@
+# Synthesis-only area measurement for the SPI slave block.
+#
+# Not a hardening config: no floorplan, no PDN, never taped out. Its only job
+# is to produce a "Chip area for top module" line so the block's gate count can
+# be read out. Run with `make measure-ge`; see README.md in this directory.
+
+DESIGN_NAME: ahb_spi_s
+
+VERILOG_FILES:
+- dir::../../hw/rtl/ahb3lite/ahb3lite_pkg.sv
+- dir::../../hw/rtl/spi_s/ahb_spi_s.sv
+
+USE_SLANG: true
+
+# Match librelane/classic/config.yaml so the numbers are comparable to what the
+# block will cost once it is instantiated in the SoC.
+CLOCK_PORT: HCLK
+CLOCK_PERIOD: 62.5          # 16 MHz
+SYNTH_STRATEGY: "AREA 0"
+MAX_FANOUT_CONSTRAINT: 16
