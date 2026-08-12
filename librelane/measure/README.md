@@ -9,9 +9,21 @@ These are **not** hardening configs — no floorplan, no PDN, no SDC of their ow
 never taped out. Each one runs to `Yosys.Synthesis` and stops (~15 s).
 
 ```bash
-make measure-ge                   # all three blocks, prints a GE table each
-make measure-ge GE_BLOCKS=qspi    # just one
+make measure-ge                   # synthesize all three, then print one summary
+make measure-ge GE_BLOCKS=qspi    # just one block
+make report-ge                    # reprint the summary, no resynthesis
 ```
+
+`measure-ge` runs every block's synthesis first and prints the summary once at
+the end — a LibreLane run buries a few hundred lines of its own output between
+blocks. Each summary is also kept at
+`runs/RUN_<timestamp>/summary`, so successive measurements can be diffed against
+each other. Per-block artifacts stay in `runs/ge_<block>/`, and `runs/` is
+gitignored.
+
+The multiplied column in the summary is the `TARGET_GE` to set in
+[`periph_ss.sv`](../../hw/rtl/periph_ss.sv); the multipliers themselves live in
+the `Makefile` as `GE_MULT_<block>`.
 
 ## Gate equivalents
 

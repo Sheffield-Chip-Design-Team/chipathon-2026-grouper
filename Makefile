@@ -71,14 +71,41 @@ librelane-padring: ## Only create the padring
 # librelane/measure/README.md.
 GE_BLOCKS ?= spi_s spi_m qspi
 
+# Multiplier applied to each block's measured area to allow for the features it
+# still has to grow. Rationale per block in librelane/measure/README.md.
+GE_MULT_spi_s = 2.0
+GE_MULT_spi_m = 1.3
+GE_MULT_qspi  = 2.0
+
+# Synthesis first, then every report together - a LibreLane run buries a few
+# hundred lines of its own output between blocks.
 measure-ge: ## Synthesize each peripheral block standalone and report its gate count
 	@for b in ${GE_BLOCKS}; do \
 	  librelane librelane/measure/$$b.yaml --to Yosys.Synthesis \
 	    --pdk ${PDK} --pdk-root ${PDK_ROOT} --manual-pdk \
 	    --run-tag ge_$$b --overwrite || exit 1; \
-	  python3 scripts/report_ge.py librelane/measure/runs/ge_$$b || exit 1; \
 	done
+	@$(MAKE) --no-print-directory report-ge
 .PHONY: measure-ge
+
+# Each summary is kept, in its own LibreLane-style timestamped run directory.
+# Simply-expanded so every use inside one invocation gets the same timestamp.
+GE_SUMMARY_TAG := RUN_$(shell date +%Y-%m-%d_%H-%M-%S)
+GE_SUMMARY_DIR := librelane/measure/runs/$(GE_SUMMARY_TAG)
+
+report-ge: ## Reprint the GE summary for the last measure-ge runs (no resynthesis)
+	@mkdir -p $(GE_SUMMARY_DIR)
+	@{ \
+	  echo "=================== gate-equivalent summary ==================="; \
+	  echo "$(GE_SUMMARY_TAG)"; \
+	  echo "The multiplied column is the TARGET_GE to set in hw/rtl/periph_ss.sv."; \
+	  echo ""; \
+	  $(foreach b,$(GE_BLOCKS),python3 scripts/report_ge.py librelane/measure/runs/ge_$(b) \
+	     $(if $(GE_MULT_$(b)),--multiplier $(GE_MULT_$(b))) || exit 1; echo "";) \
+	} > $(GE_SUMMARY_DIR)/summary
+	@cat $(GE_SUMMARY_DIR)/summary
+	@echo "summary written to $(GE_SUMMARY_DIR)/summary"
+.PHONY: report-ge
 
 # Defaults to the most recent classic run; override as
 # `make report-stub-ge CLASSIC_RUN_TAG=<tag>`. Deliberately not the top-level
