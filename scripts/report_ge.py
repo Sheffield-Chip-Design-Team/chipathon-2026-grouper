@@ -33,34 +33,56 @@ AREA_RE = re.compile(r"^\s*Chip area for (top )?module '(.+)':\s*([0-9.eE+-]+)\s
 PARAM_VAL_RE = re.compile(r"^s?(\d+)'([01]+)$")
 
 
-def find_yosys_log(target: Path) -> Path:
-    """Locate the log holding Yosys' area report inside a run directory.
+# Yosys' own generic cell names, e.g. $_AND_, $_DFF_P_, $_MUX_. Their presence
+# in a stat means the netlist is only partly mapped to the standard cell
+# library, so its area is an undercount.
+GENERIC_CELL_RE = re.compile(r"\$_[A-Z0-9]+_")
 
-    A run has several Yosys steps (jsonheader, synthesis, ...) and only the
-    synthesis one runs `stat -liberty`, so select on content rather than on the
-    step name or number.
-    """
-    if target.is_file():
-        return target
 
-    logs = sorted(
+def area_reports(target: Path):
+    """Every file under `target` that carries a Yosys area report."""
+    files = sorted(
         p
         for pat in ("*.log", "*.rpt", "*.txt")
         for p in target.rglob(pat)
     )
-    candidates = [p for p in logs if "Chip area for" in _read(p)]
+    return [(p, _read(p)) for p in files if "Chip area for" in _read(p)]
+
+
+def rank(entry):
+    """Sort key picking the most complete area report.
+
+    A synthesis step emits several stats. `reports/post_dff.rpt` is taken after
+    dfflibmap but before abc, so its combinational logic is still generic gates
+    contributing no area - it undercounts badly (flops only). Prefer a stat with
+    no generic cells left, then one that names a top module, then the one
+    written last.
+    """
+    path, text = entry
+    return (
+        not GENERIC_CELL_RE.search(text),
+        "Chip area for top module" in text,
+        path.stat().st_mtime,
+    )
+
+
+def find_yosys_log(target: Path):
+    """Pick the most complete Yosys area report in a run directory.
+
+    Returns (path, fully_mapped).
+    """
+    if target.is_file():
+        return target, not GENERIC_CELL_RE.search(_read(target))
+
+    candidates = area_reports(target)
     if not candidates:
         raise FileNotFoundError(
             f"no file under {target} contains a 'Chip area for' line "
-            f"(searched {len(logs)} log/report file(s)) - did synthesis run?"
+            f"- did synthesis run?"
         )
 
-    # If several steps report area, the synthesis one is authoritative;
-    # otherwise take the latest step that has numbers.
-    for p in candidates:
-        if "synthesis" in str(p).lower():
-            return p
-    return candidates[-1]
+    best = max(candidates, key=rank)
+    return best[0], not GENERIC_CELL_RE.search(best[1])
 
 
 def _read(path: Path) -> str:
@@ -110,19 +132,30 @@ def parse_log(text: str):
     return [(raw, area, is_top) for (raw, is_top), area in seen.items()]
 
 
+# Total standard cell area of the design, as LibreLane names it. This is the
+# post-synthesis mapped area - the number a `--to Yosys.Synthesis` run exists to
+# produce - and it is whole-design only, never per-module.
+AREA_METRIC_KEYS = ("design__instance__area", "design__instance__area__total")
+
+
 def parse_metrics(run_dir: Path):
-    """Fallback: the run's own metrics, if the log has moved or been pruned."""
-    for name in ("metrics.json", "final_metrics.json"):
-        for path in run_dir.rglob(name):
-            try:
-                data = json.loads(path.read_text())
-            except (OSError, json.JSONDecodeError):
-                continue
-            area = data.get("design__instance__area__total") or data.get(
-                "design__instance__area"
-            )
-            if area:
-                return [(str(data.get("design__name", "top")), float(area), True)], path
+    """Read the design's total cell area from a run's metrics.
+
+    A run carries one metrics file per step, so prefer the run-level
+    final_metrics.json and otherwise the highest-numbered step - the last one to
+    have touched the area.
+    """
+    paths = sorted(run_dir.rglob("final_metrics.json")) + sorted(
+        run_dir.rglob("metrics.json"), reverse=True
+    )
+    for path in paths:
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        area = next((data[k] for k in AREA_METRIC_KEYS if data.get(k)), None)
+        if area:
+            return [(str(data.get("design__name", "top")), float(area), True)], path
     return [], None
 
 
@@ -135,16 +168,62 @@ def main() -> int:
         type=float,
         help="also show area x MULT, for sizing a stub against unbuilt features",
     )
+    ap.add_argument(
+        "--report",
+        type=Path,
+        help="read this file instead of auto-selecting one from the run",
+    )
+    ap.add_argument(
+        "--list",
+        action="store_true",
+        help="list every area report in the run, best first, and exit",
+    )
     args = ap.parse_args()
 
     if not args.run.exists():
         print(f"error: {args.run} does not exist", file=sys.stderr)
         return 1
 
+    if args.list:
+        found = area_reports(args.run) if args.run.is_dir() else []
+        if not found:
+            print(f"no area reports under {args.run}", file=sys.stderr)
+            return 1
+        w = max(len("Report"), max(len(str(p)) for p, _ in found))
+        header = f"{'Report':<{w}}  {'Top area (um^2)':>15}  Fully mapped"
+        print(header)
+        print("-" * len(header))
+        for path, text in sorted(found, key=rank, reverse=True):
+            tops = [a for _, a, is_top in parse_log(text) if is_top]
+            area = f"{max(tops):,.1f}" if tops else "-"
+            mapped = "no (undercounts)" if GENERIC_CELL_RE.search(text) else "yes"
+            print(f"{str(path):<{w}}  {area:>15}  {mapped}")
+        return 0
+
+    if args.report:
+        args.run = args.report
+
     try:
-        log = find_yosys_log(args.run)
-        rows = parse_log(_read(log))
-        source = log
+        log, fully_mapped = find_yosys_log(args.run)
+        rows, source = parse_log(_read(log)), log
+
+        # A stat taken before abc (LibreLane's reports/post_dff.rpt) counts
+        # flops but almost no combinational logic. The step's own metrics carry
+        # the real post-synthesis total, so prefer them when that is all we
+        # have - but only for the whole-design number, since they are not
+        # per-module.
+        if not fully_mapped and not args.match and args.run.is_dir():
+            metric_rows, metric_path = parse_metrics(args.run)
+            if metric_rows:
+                rows, source = metric_rows, metric_path
+            else:
+                print(
+                    f"warning: {log} still contains unmapped generic cells, so "
+                    f"its area counts flops but little combinational logic, and "
+                    f"no metrics.json was found to replace it. Run with --list "
+                    f"to see what else is available.",
+                    file=sys.stderr,
+                )
     except FileNotFoundError as exc:
         rows, source = parse_metrics(args.run) if args.run.is_dir() else ([], None)
         if not rows:
