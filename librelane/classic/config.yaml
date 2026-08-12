@@ -227,19 +227,24 @@ DESIGN_REPAIR_MAX_CAP_PCT:  10
 
 # Placement
 #
-# 62, down from the 68 of the 1310x1150 `irdrop_check_d` baseline. This is a
-# *distribution* control, not an area one: global placement pushes bin
-# densities toward it, so a lower number spreads the same cells into more
-# uniform whitespace. That is what the late insertions need -- CTS buffers,
-# repair buffers and especially antenna diodes, which have to land next to a
-# specific pin and failed to at 68 (DPL-0036 in antenna_repair.tcl, 5
-# instances with nowhere to shuffle).
+# Back to 68 after 62 was measured worse, not better. The theory for lowering
+# it was that spreading cells leaves more uniform whitespace for late
+# insertions; what actually happened is that spreading lengthened the nets:
 #
-# The floor is set by GPL-0302, which compares the target against utilisation
-# WITH GPL_CELL_PADDING applied: 425,581um^2 of cells in 974,111um^2 of free
-# area is 43.7%, inflated to 52.6% by the 2 sites of padding. 62 leaves 9
-# points of headroom; do not go below ~56 without recomputing this.
-PL_TARGET_DENSITY_PCT: 62
+#   PL_TARGET_DENSITY_PCT   antenna violations   DPL-0036 instances
+#   68                      117                  5
+#   62                      157                  24
+#
+# More wire is more antenna area, which is more diodes to insert and legalise.
+# The diode pressure scales with wirelength, so the density knob works against
+# this failure rather than for it. Do not re-try lowering it without a reason
+# that explains those two rows.
+#
+# Floor if it is ever lowered: GPL-0302 compares the target against
+# utilisation WITH GPL_CELL_PADDING applied -- 425,581um^2 of cells in
+# 974,111um^2 of free area is 43.7%, inflated to 52.6% by the 2 sites of
+# padding -- so anything under ~56 errors out.
+PL_TARGET_DENSITY_PCT: 68
 MAX_FANOUT_CONSTRAINT: 16
 GRT_ALLOW_CONGESTION: true
 GRT_ADJUSTMENT: 0.2
@@ -527,3 +532,25 @@ PDN_MACRO_CONNECTIONS:
 # Workaround for: https://github.com/The-OpenROAD-Project/OpenROAD/issues/8868
 FP_MACRO_HORIZONTAL_HALO: 10
 FP_MACRO_VERTICAL_HALO: 10
+
+# ---------------------------------------------------------------------------
+# Keep-out over the channel between the two macro columns.
+#
+# The 58.22um gap between the columns leaves, after the 10um halos, rows only
+# 38.22um long -- 68 sites, walled by SRAM on both sides. A cell there has
+# essentially nowhere to shuffle, which is what detailed placement needs to do
+# when antenna repair drops a diode next to a pin: DPL-0036, and the failing
+# instances were repair buffers (wire*, load_slew*), the cells most likely to
+# be sitting in leftover slivers.
+#
+# FP_OBSTRUCTIONS stops sites being generated there at all, so nothing is ever
+# placed somewhere it cannot later be legalised. Routing over the area is
+# unaffected. Cost is ~42,400um^2, about 4.7% of placeable area, and it is the
+# least useful 4.7% in the design.
+#
+# Rectangle is the column gap over the full height of the macro block:
+#   x  621.06 (left column right edge) .. 679.28 (right column left edge)
+#   y   15.68 (core floor)             .. 1125.57 (top macro + halo)
+# Derived from the MACROS coordinates -- move them and this must move too.
+FP_OBSTRUCTIONS:
+  - [621.06, 15.68, 679.28, 1125.57]
