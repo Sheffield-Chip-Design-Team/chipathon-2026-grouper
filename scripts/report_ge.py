@@ -34,26 +34,33 @@ PARAM_VAL_RE = re.compile(r"^s?(\d+)'([01]+)$")
 
 
 def find_yosys_log(target: Path) -> Path:
-    """Locate the Yosys synthesis log inside a run directory."""
+    """Locate the log holding Yosys' area report inside a run directory.
+
+    A run has several Yosys steps (jsonheader, synthesis, ...) and only the
+    synthesis one runs `stat -liberty`, so select on content rather than on the
+    step name or number.
+    """
     if target.is_file():
         return target
 
-    candidates = [
+    logs = sorted(
         p
-        for p in target.rglob("*.log")
-        if "yosys" in str(p.relative_to(target)).lower()
-    ]
+        for pat in ("*.log", "*.rpt", "*.txt")
+        for p in target.rglob(pat)
+    )
+    candidates = [p for p in logs if "Chip area for" in _read(p)]
     if not candidates:
-        # Some flows keep a single top-level log; fall back to any log that
-        # actually contains the lines we care about.
-        candidates = [
-            p for p in target.rglob("*.log") if "Chip area for" in _read(p)
-        ]
-    if not candidates:
-        raise FileNotFoundError(f"no Yosys log with area data under {target}")
+        raise FileNotFoundError(
+            f"no file under {target} contains a 'Chip area for' line "
+            f"(searched {len(logs)} log/report file(s)) - did synthesis run?"
+        )
 
-    # Synthesis is the first Yosys step, so prefer the earliest-numbered dir.
-    return sorted(candidates)[0]
+    # If several steps report area, the synthesis one is authoritative;
+    # otherwise take the latest step that has numbers.
+    for p in candidates:
+        if "synthesis" in str(p).lower():
+            return p
+    return candidates[-1]
 
 
 def _read(path: Path) -> str:
@@ -115,8 +122,8 @@ def parse_metrics(run_dir: Path):
                 "design__instance__area"
             )
             if area:
-                return [(str(data.get("design__name", "top")), float(area), True)]
-    return []
+                return [(str(data.get("design__name", "top")), float(area), True)], path
+    return [], None
 
 
 def main() -> int:
@@ -139,8 +146,7 @@ def main() -> int:
         rows = parse_log(_read(log))
         source = log
     except FileNotFoundError as exc:
-        rows = parse_metrics(args.run) if args.run.is_dir() else []
-        source = f"{args.run}/metrics.json"
+        rows, source = parse_metrics(args.run) if args.run.is_dir() else ([], None)
         if not rows:
             print(f"error: {exc}", file=sys.stderr)
             return 1
