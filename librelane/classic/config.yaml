@@ -114,7 +114,7 @@ SYNTH_AUTONAME: true # human readable names
 SYNTH_STRATEGY: "AREA 0"
 SYNTH_SIZING: true
 SYNTH_ABC_DFF: true
-SYNTH_ABC_USE_MFS3: true
+# SYNTH_ABC_USE_MFS3: true
 
 # ---------------------------------------------------------------------------
 # Floorplan: 1100 x 1500.
