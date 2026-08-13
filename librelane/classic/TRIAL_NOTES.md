@@ -572,6 +572,28 @@ converges to, given some run-to-run nondeterminism from thread scheduling)
 or investigate a real Tcl-based ECO to reroute just that one net's bad
 segment, rather than another blind global config-variable adjustment.
 
+### 9. 1330x1200 full-flow retry completes cleanly at the scheduler level
+
+On 2026-07-25, job **3589** (`full-signoff-1330x1200`) reran the current
+1310x1150 baseline with only this command-line override:
+
+```
+-c 'DIE_AREA=0 0 1330 1200'
+```
+
+It ran on `gaming-pc` with 22 CPUs and 12 GiB RAM, used the independent tag
+`full_signoff_1330x1200`, and completed in **41:03** with scheduler exit code
+**0**. The live `openroad ... drt.tcl` process confirmed that detailed routing
+was reached; the scheduler's log endpoint was stale at Yosys/ABC, so log-tail
+position must not be used alone to classify a run as stalled.
+
+The flow emitted non-fatal signoff warnings: setup violations at
+`max_ss_125C_3v00`, and max-slew/max-cap violations at the nominal, slow, and
+fast corners. KLayout DRC was skipped because `KLAYOUT_DRC_RUNSET` was unset.
+No scheduler error or nonzero exit code was reported. This establishes
+1330x1200 as a successfully completed larger-area flow, but it is not yet a
+timing-clean signoff result.
+
 ### Current state (uncommitted, mid-experiment) as of this note
 
 - `librelane/classic/config.yaml`: **baseline is now the proven 1310x1150
@@ -1090,3 +1112,154 @@ disturbs every stripe, so it was not taken.
   `meta.substituting_steps` (`Checker.TrDRC: null`) rather than looking for a
   variable.
 - Both fixes are untested. One DRT run tests them together.
+
+## Session 6: PnR closes -- the delay-cell / fanout trap, and a landscape floorplan
+
+Entry state: job 4315 reached step 74/78 with clean routing and power but failed
+signoff on `194 LVS errors` and `Setup violations ... nom_tt_025C_3v30`
+(WNS -4.4189ns, TNS -38.1715ns over 35 reg-to-reg endpoints). Exit state: setup
+TNS 0 with +18.9ns of slack, route DRC 0, hold 0, power grid 0, antennas 6. The
+only remaining deferred error is LVS, and that is RTL, not PD.
+
+### 1. The setup failure was a fanout tree built out of delay cells
+
+Not a floorplan or congestion problem. Two compounding causes:
+
+**(a) `u_grouper_soc_top.rst_n_sync` has 996 loads.** 232 nets exceed fanout 16;
+114 exceed 32. With `MAX_FANOUT_CONSTRAINT: 16`, `repair_design` must build a
+tree at least log16(996) = 2.5 levels deep, and it built about five. The worst
+setup path in 4315 *was* that tree: it starts at `u_rst_resync_sync._1_/Q` and
+runs through `fanout897 -> fanout895 -> fanout831 -> fanout828 -> fanout821`.
+
+**(b) Every level of it was a delay cell.** gf180mcu_fd_sc_mcu7t5v0 has twelve:
+`dlya/dlyb/dlyc/dlyd` x `_1/_2/_4`. They are functionally buffers (Z = I), so the
+resizer treats them as buffer candidates and picks on area -- which
+`SYNTH_STRATEGY: "AREA 0"` rewards. The config banned only `dlyb_*`, leaving nine
+others available. Result: **794 `dlyd_1`**, the most-used cell in the design,
+more than every real buffer combined (buf_1 329 + buf_4 304 + buf_2 52 + buf_8 16
+= 701).
+
+They are catastrophic as buffers. Two cells on the *same path at the same load*,
+from 4315's own `53-openroad-stapostpnr/nom_tt_025C_3v30/max.rpt`:
+
+| cell | fanout | load | delay | out slew |
+|---|---|---|---|---|
+| `load_slew822` buf_4 | 12 | 0.113pF | 0.667ns | 0.700ns |
+| `fanout828` dlyd_1 | 11 | 0.141pF | **5.151ns** | **3.299ns** |
+
+7.7x the delay, 4.7x the output slew. Seven of them contributed ~35ns to the worst
+path; the actual logic on it (nand3 -> nor4 -> or2) contributed 2.6ns.
+
+### 2. `dlyc` was doing legitimate work -- do not ban the family wholesale
+
+The resizer uses the families for two different jobs, and only one is abuse:
+
+- **`dlyc_1` x67 = hold repair.** Legitimate. Delay per unit area is what a delay
+  cell is *for*.
+- **`dlyd_1` x794 = max-fanout/slew repair.** Abuse. That is a drive-strength
+  problem and a delay cell is the worst available answer to it.
+
+Banning all twelve forces hold repair onto `clkbuf_1` chains: **229 cells to do
+what 68 did** (3.4x), and hold margin fell 0.8966 -> 0.8004ns (nom_tt) and
+0.3677 -> 0.3431ns (min_ff). Still passing, but a bad trade made for no reason.
+
+Banning `dlya`/`dlyb`/`dlyd` and keeping `dlyc_*` avoids it. **No migration was
+observed** -- `dlyc_1` came in at 86 with 87 hold cells, i.e. still only what hold
+repair needs. Watch that number: if it runs to the hundreds, fanout repair has
+moved onto `dlyc` and the full twelve-cell ban is the fallback. Check with:
+
+    grep -oE "gf180mcu_fd_sc_mcu7t5v0__dly[a-z]_[0-9]+" <run>/*detailedrouting/*.def | sort | uniq -c
+
+### 3. Two independent levers -- the cell ban is not the whole story
+
+Relaxing `MAX_FANOUT_CONSTRAINT` 16 -> 32 fixes the timing **on its own**, with
+delay cells still fully available (job 4330: -4.42 -> +11.24ns, TNS 0, DRC 0, and
+the best hold margin of any run at 0.9824). It only drops `dlyd_1` 794 -> 358
+though, so the trap stays armed for future changes. Both levers together is best.
+32 relaxes rather than removes the constraint -- 114 nets still exceed it.
+
+### 4. Results
+
+All variants below have route DRC 0, power grid 0/0, setup TNS 0, hold 0
+violations, Magic DRC 2 (die-edge Metal3), and LVS as the sole deferred error.
+
+| job | variant | setup WNS | hold WNS | ant | cells | wirelength |
+|---|---|---|---|---|---|---|
+| 4315 | baseline (dlyb only, fo16) | **-4.4189** | 0.8966 | 8 | 25,480 | 1,218,788 |
+| 4330 | fanout 32 only | +11.2420 | **0.9824** | 7 | **25,373** | 1,170,127 |
+| **4331** | **keep dlyc + fanout 32** | **+18.8648** | 0.8263 | **6** | 25,379 | **1,146,800** |
+| 4326 | ban all 12 + GRT 0.45 | **+20.8839** | 0.8616 | 6 | 25,630 | 1,192,559 |
+| 4325 | landscape, ban all 12 | +11.4295 | 0.8838 | 14 | 25,403 | 1,315,595 |
+
+**Recommended: `config_1330x1370_keepdlyc_fanout32.yaml` (job 4331).** Lowest
+wirelength of any run (6% under baseline), tied-best antennas, no hold-cell
+inflation, both root causes addressed.
+
+`GRT_ADJUSTMENT: 0.45` (job 4326) is a third lever, worth knowing but not in the
+recommendation: at `0.3` the extra buffers left DRT oscillating 1<->2 for 45
+iterations on a Metal2 short in the 25.7um east sliver
+(`gpio_out[14]` vs `VSS` at x=1315.02). 0.45 gave `4245 1149 921 4 1 1 0` --
+seven iterations, clean -- and recovered hold margin, but cost wirelength.
+
+### 5. Landscape 1650x1100 works, and is the only variant with Magic DRC 0
+
+Same silicon as portrait 1330x1370 (1,815,000 vs 1,822,100um^2) and the row of 4
+survives the reshape -- it needs 1265.2um against a 1636.3um core, where a
+*portrait* 1100x1650 would give 1086.4um and force a 2x2 rebuild. Only `DIE_AREA`
+changes; macro coordinates, PDN lattice, halos and pin order are identical.
+
+Placeable area comes out level: the height lost off the top band (827,600 ->
+582,700um^2) is returned by a new 345um east strip (185,100um^2), and measured
+utilisation landed within 0.002 of portrait. It clears the 2 die-edge Metal3
+violations portrait has, but costs 10% more wirelength and more antennas (14 vs
+6). Config: `config_1650x1100_row4.yaml` / `config_1650x1100_nodly.yaml`.
+
+**Mid-PnR STA is not predictive here.** Landscape led portrait at every
+pre-route checkpoint (+4.81 vs +3.24ns at step 34, +2.52 vs +1.24ns at step 41)
+and still signed off worse (-6.23 vs -4.42ns, TNS -288.7 vs -38.2). Estimated
+parasitics did not see the 13% extra routed wirelength. Trust the global-route
+wirelength at step 37 over the mid-PnR slack.
+
+### 6. Two corrections to earlier sessions' notes
+
+- **The PDN comment's constraint 3 was wrong.** It claimed the SRAM exposes
+  VDD/VSS on Metal3 only in two vertical edge bands 298.3um apart, and derived
+  `PDN_VPITCH 119.84` from needing to hit both. The LEF actually has **239 VDD
+  and 195 VSS Metal3 tabs distributed around the whole perimeter** (x 0..301.3,
+  y 0..515.81). Any on-grid Metal4 lattice crossing a macro taps both nets --
+  which is why all four macros pass `check_power_grid` at four *different* strap
+  phases (22.4, 163.4, 124.0, 84.7 mod 180.32). Macro x is free apart from the
+  0.56um site grid. What still matters is drift across the row: 179.2 walks
+  -5.6um over 7 periods, steps off the 3um tabs and gives 28,227 VSS violations;
+  180.32 drifts +2.24um and holds.
+- **Runtime is a diagnostic, not a workload.** A healthy full flow to step 74/78
+  is **8-9 minutes on 20 cores** (jobs 4313/4315/4317 = 8.0/8.0/9.2 min). The
+  multi-hour runs earlier were failures burning time: 4290 spent 49 min because
+  the off-grid PDN produced unfixable violations and DRT ran to its iteration
+  cap; 4296 spent 121 min grinding in Magic before the autoname stack-smash. A
+  run over ~15 min means something is broken. Read the trend from
+  `grep -hoE "Number of violations = [0-9]+" <run>/*detailedrouting/*.log`:
+  converged runs fall off a cliff, plateaus flatten at a small nonzero number.
+
+### 7. Open items
+
+- **LVS (195 errors, 176 unmatched pins) is the only thing left, and it is RTL.**
+  `io_ss` exposes 40 bidir slots but only 16 are wired, so `bidir_in[16..39]` --
+  24 nets -- have no layout geometry and Netgen reports them unmatched. Either
+  tie them off in RTL or waive via the commented hooks already in `config.yaml`
+  (`#Netgen.LVS: null`, `#Checker.LVS: null`). No PD setting reaches this.
+- **`rst_n_sync` at 996 loads is an RTL-side observation.** No PD setting makes
+  that net cheap; the tool must build a tree of some depth. Pipelining reset
+  distribution would stop the reset network being the critical path at all.
+- **`SYNTH_ABC_USE_MFS3: true` crashes yosys-abc** on picorv32: assertion
+  `pCut[i] == pCut0[k]` in `Abc_TtExpand` (utilTruth.h:2257), "ABC failed with
+  status 86". Left commented out. It was enabled deliberately, so this needs
+  flagging rather than silently reverting.
+- **Max slew reports 5,366-6,015 violations at nom_tt but only ~108-440 at
+  min_ff.** `MAX_TRANSITION_CONSTRAINT` is 3ns and the buffers measure ~1.1ns, so
+  this is very likely the *library's* own `default_max_transition` being tighter
+  than the SDC's. It is a warning, not a deferred error, and did not move
+  materially across variants -- but it is unconfirmed and worth a look before
+  real signoff.
+- Magic DRC 2 (Metal3 spacing at the die edge, x 0.0-0.84) persists in every
+  portrait variant and is absent in landscape.
