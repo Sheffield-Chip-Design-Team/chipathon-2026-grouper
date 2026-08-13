@@ -1212,7 +1212,15 @@ Placeable area comes out level: the height lost off the top band (827,600 ->
 582,700um^2) is returned by a new 345um east strip (185,100um^2), and measured
 utilisation landed within 0.002 of portrait. It clears the 2 die-edge Metal3
 violations portrait has, but costs 10% more wirelength and more antennas (14 vs
-6). Config: `config_1650x1100_row4.yaml` / `config_1650x1100_nodly.yaml`.
+6). Config: `config_1650x1100_nodly.yaml` (job 4325).
+
+**That config is one recipe behind the portrait recommendation.** It still carries
+the blanket twelve-cell ban and `MAX_FANOUT_CONSTRAINT: 16`, because it was run
+before section 3 established that keeping `dlyc` and relaxing fanout to 32 is the
+better combination. It is committed as-is because those are the settings its
+numbers were measured with. If the 1650x1100 slot turns out to be the real
+constraint, port the section 4 recipe across -- ban `dlya`/`dlyb`/`dlyd` only, set
+`MAX_FANOUT_CONSTRAINT: 32` -- and re-measure before trusting it.
 
 **Mid-PnR STA is not predictive here.** Landscape led portrait at every
 pre-route checkpoint (+4.81 vs +3.24ns at step 34, +2.52 vs +1.24ns at step 41)
