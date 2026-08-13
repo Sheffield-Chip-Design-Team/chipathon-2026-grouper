@@ -180,9 +180,13 @@ if { $::env(PDN_MULTILAYER) == 1 } {
     # Metal4. Using them here would put every Metal3 rung edge off-grid, which
     # is the exact defect that produced the Metal2 spacing violations at the
     # old 180um pitch (see the Straps note in config.yaml). All four numbers
-    # below are 0.56um multiples, and the offset is the same 14.98 used for
-    # PDN_VOFFSET, so the rung edges land on the same 0.14 residue:
+    # below are 0.56um multiples, and the offset puts the rung edges on the same
+    # 0.14 residue the vertical straps use:
     #   core_lly + 14.98 - 5.04/2 = 15.68 + 12.46 = 28.14 ; 28.14 % 0.56 = 0.14
+    #
+    # This 14.98 is a Y offset measured from core_lly and is NOT coupled to
+    # PDN_VOFFSET, which is an X offset for the vertical straps and is now 4.34.
+    # They shared a value historically; do not "resync" them.
     set pdn_rung_layer "Metal3"
     set pdn_rung_width 5.04                  ;#   9 x 0.56, matches PDN_VWIDTH
     set pdn_rung_pitch 299.04                ;# 534 x 0.56

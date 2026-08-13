@@ -138,11 +138,11 @@ MACROS:
       # 2 x 2 block in the bottom of the 1100x1500 die. A row of 4 does not
       # fit: 4*301.3 + 3*20 = 1265.2um against a 1086.56um core.
       #
-      #     x      319.76        621.06   679.28        980.58   1093.28 (core)
+      #     x      309.12        610.42   668.64        969.94   1093.28 (core)
       #            +--------------+  gap  +--------------+          |
       #   1115.57  |   sram[2]    | 58.22 |   sram[3]    |  east    |
       #    599.76  +--------------+       +--------------+  strip   |
-      #                    row channel 60.43um (10 std cell rows)  102.70
+      #                    row channel 60.43um (10 std cell rows)  113.34
       #    539.33  +--------------+       +--------------+          |
       #     23.52  |   sram[0]    |       |   sram[1]    |          |
       #            +--------------+       +--------------+          |
@@ -152,17 +152,26 @@ MACROS:
       # strip west of the block, a 359um band across the top, a 103um strip
       # east of it, and 9 rows in the column gap.
       #
-      # x: 319.76 and 679.28 are both multiples of the 0.56um site width, and
+      # x: 309.12 and 668.64 are both multiples of the 0.56um site width, and
       #    their 359.52um spacing is 6 x the 59.92um PDN half-period, which is
       #    what puts a VSS strap on each macro's west power band and a VDD
       #    strap on its east one -- see constraint 3 in the PDN section. These
-      #    are not free parameters, and they are why the macros stayed put
-      #    when the die went from 1000 to 1100 wide: the strap lattice is
-      #    measured from the core's left edge, which did not move. Shifting
-      #    the block east would have to move in whole 59.92um half-periods.
-      #    The 112.70um now east of the block is 102.70um of rows after the
-      #    halo -- a real 183-site-wide placeable column, not a stranded
-      #    sliver.
+      #    are not free parameters. Only the macros' phase RELATIVE to the
+      #    strap lattice matters, so they must move whenever PDN_VOFFSET does,
+      #    by the same amount, and otherwise only in whole 59.92um half-periods.
+      #
+      #    Both columns moved 10.64um west (from 319.76 / 679.28) when
+      #    PDN_VOFFSET went 14.98 -> 4.34 to fit a 19th strap -- constraint 4 in
+      #    the PDN section. Verified after the move: col0 west band 309.12
+      #    catches VSS at 310.66 and its east band 607.42 catches VDD at 610.26;
+      #    col1 west band 668.64 catches VSS at 670.18 and its east band 966.94
+      #    catches VDD at 969.78. Re-check with `check_power_grid -net VDD` /
+      #    `-net VSS` after ANY change to either number.
+      #
+      #    The 123.34um now east of the block is 113.34um of rows after the
+      #    halo -- a real 202-site-wide placeable column, not a stranded sliver,
+      #    and it now carries two real straps instead of one plus an improvised
+      #    one (TRIAL_NOTES.md Session 5 section 7).
       # y: 23.52 = 6 rows. With FP_MACRO_VERTICAL_HALO=10 the cut starts at
       #    13.52, below the 15.68 core floor, so no orphan rows survive under
       #    the macros either. 599.76 = 153 rows leaves a 60.43um channel, wide
@@ -182,16 +191,16 @@ MACROS:
       # match anything. Confirm against the netlist after a synthesis run:
       #   grep -o '[^ ]*u_sram_macro' <run>/*-yosys-synthesis/*.nl.v | sort -u
       "u_grouper_soc_top.u_grouper_soc_dig_ss.u_periph_ss.u_ram.u_ram_ss.gen_macro_ram.gen_sram[0].u_wrapper.u_sram_macro":
-        location: [319.76, 23.52]
+        location: [309.12, 23.52]
         orientation: S
       "u_grouper_soc_top.u_grouper_soc_dig_ss.u_periph_ss.u_ram.u_ram_ss.gen_macro_ram.gen_sram[1].u_wrapper.u_sram_macro":
-        location: [679.28, 23.52]
+        location: [668.64, 23.52]
         orientation: S
       "u_grouper_soc_top.u_grouper_soc_dig_ss.u_periph_ss.u_ram.u_ram_ss.gen_macro_ram.gen_sram[2].u_wrapper.u_sram_macro":
-        location: [319.76, 599.76]
+        location: [309.12, 599.76]
         orientation: S
       "u_grouper_soc_top.u_grouper_soc_dig_ss.u_periph_ss.u_ram.u_ram_ss.gen_macro_ram.gen_sram[3].u_wrapper.u_sram_macro":
-        location: [679.28, 599.76]
+        location: [668.64, 599.76]
         orientation: S
 
     # One Liberty per corner, matching the STA_CORNERS names 
@@ -229,11 +238,11 @@ FP_MACRO_VERTICAL_HALO: 10
 # least useful 4.7% in the design.
 #
 # Rectangle is the column gap over the full height of the macro block:
-#   x  621.06 (left column right edge) .. 679.28 (right column left edge)
+#   x  610.42 (left column right edge) .. 668.64 (right column left edge)
 #   y   15.68 (core floor)             .. 1125.57 (top macro + halo)
 # Derived from the MACROS coordinates -- move them and this must move too.
 FP_OBSTRUCTIONS:
-  - [621.06, 15.68, 679.28, 1125.57]
+  - [610.42, 15.68, 668.64, 1125.57]
 
 # I/O pins: north, south and west edges; east is left clear of the SRAM column.
 #
@@ -293,12 +302,28 @@ PDN_HORIZONTAL_LAYER: Metal5
 #    lower-left to the *centre* of the first stripe, and cuts the stripe at
 #    centre +/- width/2 (OpenROAD src/pdn/src/straps.cpp, Straps::makeStraps).
 #    So a stripe's left edge is core_llx + PDN_VOFFSET - PDN_VWIDTH/2 =
-#    6.72 + 14.98 - 2.52 = 19.18, and because the pitch is a whole number of
-#    tracks every other column shares that edge phase: 19.18 mod 0.56 = 0.14.
+#    6.72 + 4.34 - 2.52 = 8.54, and because the pitch is a whole number of
+#    tracks every other column shares that edge phase: 8.54 mod 0.56 = 0.14.
 #    At 0.14 the track on one side of the stripe sits exactly 0.28um (Metal2
 #    minimum spacing) away -- legal and usable; at 0.00 both neighbouring
 #    tracks would be 0.14um away, i.e. illegal to route on. Re-derive this
-#    number if PDN_VWIDTH or PDN_VPITCH changes.
+#    number if PDN_VWIDTH or PDN_VPITCH changes. PDN_VOFFSET must keep
+#    residue 0.42 mod 0.56 for the left edge to land on 0.14.
+#
+# 4. FITTING THE LAST STRAP. Straps run while centre + PDN_VWIDTH/2 <= core_urx
+#    (1093.28). At the old PDN_VOFFSET 14.98 the lattice was 21.70 + n*59.92 and
+#    stopped at n=17 (1040.34), leaving 50.42um of core east of it with no
+#    strap -- the standard-cell strip east of the SRAM column. pdngen covered
+#    for that gap by improvising a VDD strap at x~1016 whose Metal2 and Metal4
+#    halves were 0.56um apart instead of coincident (TRIAL_NOTES.md Session 5
+#    section 7). Dropping the offset to 4.34 shifts the lattice 10.64um west and
+#    fits a 19th strap at 1089.62, so the east strip gets two real straps and
+#    pdngen has nothing to improvise. Margins are tight but legal: 1.82um of
+#    core west of the first stripe, 1.14um east of the last.
+#
+#    THE LATTICE MOVED, SO THE MACROS MOVED WITH IT -- both by exactly 10.64um.
+#    Constraint 3 depends only on the macros' phase relative to the lattice, so
+#    shifting both preserves it; shifting either alone does not. See MACROS.
 #
 # 3. SRAM TAPPING. gf180mcu_ocd_ip_sram__sram1024x8m8wm1 obstructs
 #    Metal1-Metal3 over its interior (LEF OBS: 3.0 3.0 .. 298.3 512.81) and
@@ -325,7 +350,7 @@ PDN_VPITCH:    119.84    # 214 x 0.56; 2 x 59.92, and 5 x 59.92 ~= 298.3
 PDN_HPITCH:    360       # 400 x 0.90; no SRAM constraint, so relaxed
 PDN_VSPACING:  54.88     # 119.84/2 - 5.04 = 98 x 0.56
 PDN_HSPACING:  174.6     # (360 - 2*5.4) / 2 = 194 x 0.90
-PDN_VOFFSET:   14.98     # stripe centre; puts the left edge at 19.18 (see 2)
+PDN_VOFFSET:   4.34      # stripe centre; puts the left edge at 8.54 (see 2 and 4)
 PDN_HOFFSET:   13.5      # 15 x 0.90
 PDN_EXTEND_TO: boundary
 

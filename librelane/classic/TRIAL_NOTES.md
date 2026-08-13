@@ -1089,4 +1089,115 @@ disturbs every stripe, so it was not taken.
   get characterisation numbers past a routing-DRC plateau, disable the step in
   `meta.substituting_steps` (`Checker.TrDRC: null`) rather than looking for a
   variable.
-- Both fixes are untested. One DRT run tests them together.
+
+### 7. OPEN: an off-lattice VDD strap pair with Metal2/Metal4 misaligned by one track
+
+Spotted in the GDS as "two stripes too close together" on the right, and
+confirmed from the post-PDN DEF. Dumping every vertical Metal2/Metal4 strap with
+its net gives a flawless ladder at `21.70 + n x 59.92`, alternating VDD/VSS, from
+21.70 to 980.42 (VDD) and 1040.34 (VSS) -- and then this:
+
+```
+VSS  Metal2  x=1040.34  y=   0.00..1500.00     <- correct: coincident, full height
+VSS  Metal4  x=1040.34  y=   0.00..1500.00
+
+VDD  Metal4  x=1016.68  y=  15.38..1229.34     <- wrong on three counts
+VDD  Metal2  x=1016.12  y=  19.30.. 553.02
+VDD  Metal2  x=1016.12  y= 583.78..1133.18
+```
+
+1. **x is off-lattice.** 1016 is not `21.70 + n x 59.92`; the ladder goes 980.42
+   then 1040.34 with nothing between.
+2. **Metal2 and Metal4 are 0.56um apart** -- exactly one Metal2 track -- where
+   this file requires them coincident ("same pitch, offset and spacing"). Every
+   other strap pair in the design is exactly coincident; compare VSS at 1040.34.
+3. **Neither reaches the boundary**, unlike every lattice strap (0.00..1500.00).
+
+Parallel, same-direction, non-coincident Metal2/Metal4 is precisely the
+configuration the "why the Metal3 rungs exist" note above describes as having no
+well-defined via intersection -- the one that produced degenerate 0.01um slivers
+and 1524 `PSM-0069` violations when the Metal3 mesh was removed.
+
+**Do not fix by deleting one of them.** `via1_2_10080_1200` sits at x=1016.12, so
+the Metal2 strap carries real Metal1 rail vias for the standard-cell strip east
+of the SRAMs (x = 990.64 .. 1093.12, i.e. right macro edge + 10um halo out to
+core_urx). The lattice cannot serve that strip: the next position after 1040.34
+is 1100.26, outside core_urx. Something -- pdngen improvising, most likely -- is
+covering for that gap, and removing it blind would float VDD for those rows.
+
+Next step is `check_power_grid -net VDD` / `-net VSS` on this run's DB
+(`--last-run --flow OpenInOpenROAD`). If VDD reports disconnected nodes in that
+column it is the sliver failure and blocks tapeout; if it passes, the straps are
+electrically sound and this is a robustness fix to make deliberately, probably by
+choosing a die width whose core is a whole number of 59.92um strap positions so
+the eastern strip gets a real lattice strap instead of an improvised one.
+
+Note the current 1100x1500 die leaves 52.78um of core east of the last strap
+against 14.98um west of the first -- the asymmetry that creates the gap.
+### 6. Outcome: both fixes hold, flow completes to GDS
+
+Applied together, the two fixes cleared the plateau and the classic flow ran all
+the way through `Magic.StreamOut` for the first time on this die.
+
+**This was not a bypass.** `Checker.TrDRC` was left enabled -- it is absent from
+`meta.substituting_steps`, and it has no `ERROR_ON_*` override (see the note in
+Session 2 where 16 Metal2 violations hard-failed the flow). Reaching streamout
+therefore means detailed routing genuinely converged rather than the check being
+skipped. The `Checker.TrDRC: null` escape hatch considered above was not needed
+and has not been added.
+
+Two other changes landed in the same window and are worth separating from the
+DRC work when attributing the improvement:
+
+- `SYNTH_ABC_USE_MFS3` was removed (commit `229a262`). It had been uncommented
+  in `4eb7f89` alongside the `deferred_flatten` switch, and was crashing ABC in
+  `Abc_TtExpand` (`utilTruth.h:2257`, assertion `pCut[i] == pCut0[k]`) while
+  mapping picorv32 -- the known `&mfs` assertion family, YosysHQ/yosys#1962.
+  LibreLane flags the option experimental. `deferred_flatten` was kept.
+- `DRT_ANTENNA_REPAIR_ITERS` cut to 10, to reach a DRC verdict sooner.
+
+### 8. Fix for section 7: shift the strap lattice west to fit a 19th strap
+
+Root cause of the improvised strap was floorplan arithmetic, not the PDN recipe.
+The core is 6.72..1093.28 = 1086.56um, which is 18.13 strap half-periods, so the
+lattice ran out at n=17 (1040.34) leaving 50.42um of core -- the whole
+standard-cell strip east of the SRAM column -- with no strap of its own.
+
+The obvious move, shrinking the core to a whole 18 x 59.92 = 1078.56um, is the
+wrong lever: it costs 7.84um of core and still yields 18 straps. Straps run while
+`centre + PDN_VWIDTH/2 <= core_urx`, so the 19th at 1100.26 missed by only
+7.14um. Dropping the offset gains it outright:
+
+| | before | after |
+|---|---|---|
+| `PDN_VOFFSET` | 14.98 | **4.34** |
+| first / last strap centre | 21.70 / 1040.34 | 11.06 / **1089.62** |
+| straps | 18 | **19** |
+| core margin W / E | 12.46 / 50.42 | 1.82 / 1.14 |
+| straps over the east strip | 1 | **2** |
+| macro columns x | 319.76 / 679.28 | **309.12 / 668.64** |
+| `FP_OBSTRUCTIONS` x | 621.06 .. 679.28 | **610.42 .. 668.64** |
+
+`PDN_VOFFSET` must keep residue 0.42 mod 0.56 so the stripe's left edge lands on
+the legal 0.14 phase (constraint 2). In the legal window [2.52, 5.32] that gives
+2.66 / 3.22 / 3.78 / 4.34 / 4.90; 4.34 balances the two margins best.
+
+**The macros moved 10.64um west with the lattice.** Constraint 3 depends only on
+the macros' phase *relative* to the straps, so moving both by the same amount
+preserves it -- moving either alone is what "silently floats an SRAM rail" means.
+Re-derived after the move: col0 west band 309.12 catches VSS at 310.66 and east
+band 607.42 catches VDD at 610.26; col1 west band 668.64 catches VSS at 670.18
+and east band 966.94 catches VDD at 969.78. Correct parity on all four.
+
+Side benefit: the east strip grows from 102.70 to 113.34um of placeable rows.
+
+**Verified only arithmetically.** The next run must confirm with
+`check_power_grid -net VDD` / `-net VSS` before anything else is trusted, and it
+should be run on its own rather than bundled with other changes, so a broken SRAM
+tap is unambiguous. Also confirm the improvised strap at x~1016 is gone -- the
+whole point of the change -- by re-running the vertical-strap dump from section
+7, which should now show a clean 19-entry alternating ladder and nothing else.
+
+`pdn_rung_offset` in pdn_cfg.tcl stays at 14.98. It is a Y offset from core_lly
+for the horizontal rungs and was never coupled to `PDN_VOFFSET`; they merely
+shared a value. Comment added there to stop anyone resyncing them.
