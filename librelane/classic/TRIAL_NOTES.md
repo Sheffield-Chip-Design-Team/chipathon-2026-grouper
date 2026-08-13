@@ -961,3 +961,132 @@ and 60 are still the estimates.
 - The floorplan has not been re-run at the new area. `DIE_AREA` is unchanged at
   1100x1500 and `PL_TARGET_DENSITY_PCT` at 68; whether +13% needs a larger die
   is the next measurement, not a decision to take in advance.
+
+## Session 5: getting DRC detail out of a run that never returns, and two root causes
+
+Detailed routing plateaued again -- 21 violations that did not move across an
+entire stubborn-tiles iteration. Most of this session was spent learning how to
+*see* the violations at all; once visible, both root causes fell out in minutes.
+
+### 1. `DRT_OPT_ITERS` does not bound the phase that eats the wall clock
+
+Two different iteration counters appear in the DRT log and they are easy to
+conflate:
+
+- `DRT-0199` -- optimization (search-and-repair) iterations. **This** is what
+  `DRT_OPT_ITERS` caps, via `-droute_end_iter`.
+- `DRT-0195` -- *stubborn tiles* iterations, a separate loop that runs after the
+  optimization iterations finish if violations remain. It clusters the residual
+  DRVs into regions and re-routes each with many different cost-weight
+  configurations. **No exposed cap in this LibreLane version.**
+
+A run sat at `Start 21st stubborn tiles iteration` reporting a flat 35
+violations from 10% through 80% of tiles. Lowering `DRT_OPT_ITERS` had no effect
+because that phase was already over. A violation count that does not move within
+a single stubborn-tiles iteration is a converged fixed point, not slow progress
+-- there is nothing to wait for.
+
+Also worth separating: "21" in one log line was an *iteration index*, and 35 was
+the violation count. Read `DRT-0195`/`DRT-0199` lines carefully before treating
+a number as a DRC total.
+
+### 2. `DRT_SAVE_DRC_REPORT_ITERS` is how you get violations out of a run that never finishes
+
+`-output_drc` is only passed when `detailed_route` **returns**
+(`scripts/openroad/drt.tcl:17`), so a killed or still-grinding DRT leaves no
+marker file and `Checker.TrDRC` never runs. The knob that fixes this:
+
+```
+-c 'DRT_SAVE_DRC_REPORT_ITERS=1'   # -> -drc_report_iter_step 1 (drt.tcl:82)
+```
+
+Writes a DRC report every N iterations, so the markers are readable while the
+run is still going -- read one, kill the job. `DRT_SAVE_SNAPSHOTS` implies
+`-drc_report_iter_step 1` (drt.tcl:78) but also writes full snapshots, so it is
+the heavier way to get the same thing. Do not leave it at 1 permanently.
+
+Run it as a second, concurrent job rather than cancelling the first: a distinct
+`--run-tag` is full isolation (`runs/<tag>/`), `-i <first run>/*-globalrouting/
+state_out.json` is a read-only reseed that skips synthesis through CTS, and
+`-c 'DRT_THREADS=N'` matters because `DRT_THREADS` otherwise defaults to the
+whole process limit (`steps/openroad.py:2001`) and both jobs fight for every
+core. **Never combine `--last-run` with `--overwrite` while a run is live** --
+it resolves to the running job's own directory.
+
+### 3. Root cause A: orphan Metal3 rung fragments, off the routing-grid phase
+
+17 of the 21 violations shared an identical x range -- `1013.4600 - 1013.6000`,
+Metal2, VDD against a signal net, at 17 different y from 83 to 1128. One defect,
+not 17. The gap is 0.14um where Metal2 minimum spacing is 0.28um.
+
+The offending geometry, found by dumping every x coordinate in the DEF's
+`SPECIALNETS` section and looking for 1013.60:
+
+```
+NEW Metal3 10080 + SHAPE STRIPE ( 2027200 1855560 ) ( 2200000 1855560 )
+                                  ^ x=1013.60        ^ x=1100.00 = die edge
+```
+
+Four Metal3 rung fragments (y spaced by exactly `pdn_rung_pitch` 299.04),
+each running from x=1013.60 to the **die** boundary -- past `core_urx` 1093.12.
+`-extend_to_boundary` created them after the SRAM Metal3 obstruction trimmed the
+main rung bodies.
+
+**1013.60 = 1810 x 0.56 exactly, residue 0.00.** Constraint 1 in config.yaml
+already spells out why that is fatal: at residue 0.14 the neighbouring track
+sits exactly 0.28um away and is usable; **at 0.00 both neighbouring tracks are
+0.14um away and are illegal to route on**. The router was being handed a shape
+it could not legally route beside, which is exactly why the count plateaus
+rather than converging.
+
+**The gap in the original reasoning:** pdn_cfg.tcl grid-checks the rungs' *Y*
+edges (`core_lly + 14.98 - 5.04/2 = 28.14 ; 28.14 % 0.56 = 0.14`), which is the
+right dimension for a horizontal stripe's own spacing. Nothing constrained their
+*X* endpoints -- those come from `-extend_to_boundary` and from wherever the
+SRAM trim happens to cut. **Both dimensions of a stripe need grid phase checked,
+not just the one its own spacing rule uses.**
+
+Fix: drop `{*}$arg_list` from the rung `add_pdn_stripe` only. The rungs exist
+solely to give Metal2-Metal4 a real perpendicular crossing inside the core; they
+carry no current and gain nothing from reaching the boundary. This does not
+touch `PDN_VWIDTH/VPITCH/VOFFSET`, so constraint 3 (SRAM tapping) is unaffected
+-- but still re-run `check_power_grid -net VDD` / `-net VSS`.
+
+**Unresolved:** the rungs sit at 4 discrete y in that x range, but the
+violations are at 17. The Metal2 shapes are presumably the via enclosures
+stacking down off the fragment ends (`add_pdn_connect Metal2 Metal3`), since a
+`SPECIALNETS` grep found no Metal2 power geometry anywhere near x=1013.5. Not
+confirmed. Removing the fragments removes their vias too, so the fix stands
+either way, but do not assume all 17 clear.
+
+### 4. Root cause B: north-edge pins colliding with the PDN at the die edge
+
+The remaining 4 entries are 2 sites reported twice each, both at
+y = 1499.26 - 1500.00 -- the north die edge, `DIE_AREA` being 1500 tall:
+
+| Site | x | = VSS stripe right edge |
+|---|---|---|
+| `bidir_out[6]` <-> VSS | 323.82 | 318.78 + 5.04 |
+| `net1363` <-> VSS | 1042.86 | 1037.82 + 5.04 |
+
+Both exactly on a VSS stripe's right edge. `PDN_EXTEND_TO: boundary` runs the
+stripes to y=1500 and `bidir_out\[\d+\]` was assigned to the north edge in
+pin_order.cfg, so pin escape routing and stripe ends compete for the same
+sliver. Fix: moved `bidir_out` to the south edge, which was empty. The
+alternative -- dropping `PDN_EXTEND_TO: boundary` -- is more general but
+disturbs every stripe, so it was not taken.
+
+### 5. Notes
+
+- Neither root cause is related to the Session 4 stub sizing. The only violation
+  carrying a real instance name is `u_cpu.genblk2.pcpi_div.quotient[13]`, and
+  both causes are PDN/pin geometry that predates it. 21 violations against a
+  historical best of 30 says the +13% core area did not hurt routability.
+- `FP_OBSTRUCTIONS` is not a lever for routing DRCs. It blocks placement sites
+  only -- routing over the area is unaffected, as the comment at its definition
+  in config.yaml already records.
+- `Checker.TrDRC` has no `ERROR_ON_*` override, unlike `ERROR_ON_MAGIC_DRC`. To
+  get characterisation numbers past a routing-DRC plateau, disable the step in
+  `meta.substituting_steps` (`Checker.TrDRC: null`) rather than looking for a
+  variable.
+- Both fixes are untested. One DRT run tests them together.

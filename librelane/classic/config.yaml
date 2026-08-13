@@ -235,7 +235,13 @@ FP_MACRO_VERTICAL_HALO: 10
 FP_OBSTRUCTIONS:
   - [621.06, 15.68, 679.28, 1125.57]
 
-# I/O pins: north and west edges only
+# I/O pins: north, south and west edges; east is left clear of the SRAM column.
+#
+# bidir_out was on the north edge until it collided with the PDN there: with
+# PDN_EXTEND_TO boundary the VSS stripes run to y=1500 (the die edge), and pin
+# escape routing shorted to them at the stripe right edges - x=323.82 and
+# x=1042.86, both exactly a VSS stripe's 318.78/1037.82 + PDN_VWIDTH. Moved to
+# the south edge, which was empty. See TRIAL_NOTES.md Session 5.
 IO_PIN_ORDER_CFG: dir::pin_order.cfg
 
 #---------------------------------------------------------------------------

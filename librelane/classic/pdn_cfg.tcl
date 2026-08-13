@@ -188,6 +188,27 @@ if { $::env(PDN_MULTILAYER) == 1 } {
     set pdn_rung_pitch 299.04                ;# 534 x 0.56
     set pdn_rung_offset 14.98                ;# stripe centre, as PDN_VOFFSET
     set pdn_rung_spacing [expr {$pdn_rung_pitch / 2 - $pdn_rung_width}] ;# 258 x 0.56
+    #
+    # NOTE: deliberately NO {*}$arg_list here, i.e. no -extend_to_boundary.
+    #
+    # The grid-alignment reasoning above constrains the rungs' Y edges, which is
+    # the dimension a horizontal stripe's own spacing depends on. Nothing
+    # constrains their X endpoints -- those come from -extend_to_boundary and
+    # from wherever the SRAM Metal3 obstruction happens to trim them. With
+    # -extend_to_boundary set, the trimmed rungs left orphan fragments running
+    # from x=1013.60 out to the die edge at x=1100.00, past core_urx (1093.12):
+    #
+    #   NEW Metal3 10080 + SHAPE STRIPE ( 2027200 1855560 ) ( 2200000 1855560 )
+    #
+    # 1013.60 is 1810 x 0.56 exactly -- residue 0.00, the phase constraint 1 in
+    # config.yaml calls out as illegal ("both neighbouring tracks would be
+    # 0.14um away"). Signal nets on the track immediately west sat 0.14um from
+    # the via enclosures stacking down off those ends, giving 17 permanently
+    # unroutable Metal2 spacing violations and the detailed-routing plateau.
+    #
+    # These rungs exist only to give Metal2-Metal4 a real perpendicular
+    # crossing inside the core (see the note above); they carry no current and
+    # gain nothing from reaching the die boundary. See TRIAL_NOTES.md Session 5.
     add_pdn_stripe \
         -grid stdcell_grid \
         -layer $pdn_rung_layer \
@@ -195,8 +216,7 @@ if { $::env(PDN_MULTILAYER) == 1 } {
         -pitch $pdn_rung_pitch \
         -offset $pdn_rung_offset \
         -spacing $pdn_rung_spacing \
-        -starts_with POWER \
-        {*}$arg_list
+        -starts_with POWER
 
     # Metal4-Metal5: adjacent, single Via4. The top of the general mesh.
     add_pdn_connect \
