@@ -5,6 +5,62 @@ to run trials on the homelab-sge cluster, a PDN-bugfix regression check, a
 clock frequency change, an important gotcha about stale timing metrics
 mid-flow, and an in-progress area-reduction experiment.
 
+## Current best result — job 4340, `config_1650x1100_keepdlyc_fanout32.yaml`
+
+**This is the working copy. Everything below is the investigation that produced
+it, in chronological order; this block is the answer.** Last measured
+2026-08-13, on the RTL at commit `ad80921` (sized peripheral stubs).
+
+    librelane config_1650x1100_keepdlyc_fanout32.yaml \
+        --pdk gf180mcuD --scl gf180mcu_fd_sc_mcu7t5v0
+
+| | |
+|---|---|
+| die / core | 1650 x 1100 (1,815,000um^2) / 1,744,710um^2 |
+| SRAM | 4 x `sram1024x8m8wm1`, row of 4 at x0=22.4 y=200, orientation S |
+| clock | 62.5ns (16 MHz), `CLOCK_PERIOD` in the config |
+| **route DRC** | **0** |
+| **Magic DRC** | **0** (the portrait floorplan has 2 die-edge Metal3) |
+| **setup** | **TNS 0**, WNS **+12.077ns** (nom_tt), +33.233 (min_ff) |
+| **hold** | **TNS 0**, WNS **+0.289ns** (min_ff), +0.686 (nom_tt) |
+| power grid | 0 violations, worst IR drop 1.78mV on VDD |
+| antennas | 10 nets / 12 pins, 97 diodes + 117 antenna cells |
+| wirelength | 1,341,347um |
+| utilisation | 0.690 |
+| clock skew | +0.705ns setup / -0.666ns hold (min_ff) |
+| power | 49.6mW total (34.4 internal, 15.2 switching, 4.1uW leakage) |
+| runtime | 8:01 on 8 CPUs |
+
+Instances: 58,022 total = 4 macros + 26,007 std cells + 32,011 fill. Of the std
+cells, 2,755 sequential, 11,544 multi-input combinational, 1,190 timing-repair
+buffers, 1,083 inverters, 609 clock buffers, 428 buffers, 341 tie, 212 clock
+inverters, 117 antenna, 6,908 taps, 820 endcaps.
+Area 1,670,820um^2 = 621,654 macro + 582,575 std cell + 466,590 fill.
+
+**Deferred / known-not-clean:**
+
+- **LVS: 179 errors, 171 unmatched pins.** `io_ss` exposes 40 bidir slots and
+  only 16 are wired, so `bidir_in[16..39]` have no layout geometry. This is RTL,
+  not PD, and it is the sole reason the flow exits 2. Fix in RTL or waive via
+  the commented `#Netgen.LVS: null` / `#Checker.LVS: null` hooks in the config.
+- **Max slew 3,555 / max cap 163 violations at nom_tt.** Almost certainly the
+  library's own `default_max_transition` being tighter than the SDC's 3ns --
+  see Session 6 open items. Warnings, not deferred errors, but unconfirmed.
+- Max fanout violations: 0.
+
+**Health checks worth repeating on any new run:**
+
+- `dlyc_1` is 92 against 93 hold buffers -- i.e. still only what hold repair
+  needs. If it runs to the hundreds, fanout repair has migrated onto `dlyc` and
+  the full twelve-cell delay ban is the fallback (Session 6.2).
+- Runtime 8-9 min is healthy. Over ~15 min means broken, not busy -- read the
+  DRT trend, not the clock (Session 6.6).
+
+**Settled, do not re-litigate without a run** (both alternatives measured and
+both lost -- Session 7): the macro row stays at x0=22.4, y=200, orientation S.
+Centring it costs +5.6% wirelength and 20 route DRCs; corner placement strands
+the S edge and half the W edge.
+
 ## Running trials on homelab-sge
 
 The repo lives on NFS at `/srv/eda/designs/timothyjabez/chipathon-2026-grouper`
