@@ -1282,3 +1282,163 @@ wirelength at step 37 over the mid-PnR slack.
   real signoff.
 - Magic DRC 2 (Metal3 spacing at the die edge, x 0.0-0.84) persists in every
   portrait variant and is absent in landscape.
+
+## Session 7: the sized peripherals land, and centring the macro row is refuted
+
+Two jobs, submitted together on the same RTL, differing only in the four macro
+x-coordinates. **4340 (floorplan untouched) closes clean. 4341 (macro row
+centred) fails, and fails on the very metric it was built to improve.**
+
+| | 4334 landscape (old stubs) | **4340 baseline** | 4341 centred |
+|---|---|---|---|
+| route DRC | 0 | **0** | 20 |
+| Magic DRC | 0 | **0** | 52 |
+| antennas | 9 | 10 | 20 |
+| wirelength | 1,306,990 | **1,341,347** | 1,416,706 |
+| setup WNS / TNS | +13.351 / 0 | **+12.077 / 0** | +9.224 / 0 |
+| hold WNS | 0.244 | 0.289 | 0.368 |
+| utilisation | 0.666 | 0.690 | 0.688 |
+| runtime | ~8 min | **8:01** | 24:06 |
+
+Both exit 2 on the same deferred LVS as every run since Session 6.
+
+### 1. What the sized peripherals cost
+
+The Session 4 stubs were sized but had never been placed. At synthesis, against
+4334 on identical settings:
+
+| | 4334 | 4340 | delta |
+|---|---|---|---|
+| cells | 15,275 | 16,120 | +845 |
+| flops | 2,523 | 2,755 | **+232** |
+| area | 412,860 um^2 | 446,699 um^2 | **+33,839 (+3,083 GE)** |
+
+**+232 flops is exact.** The ballast widths are 254 + 126 + 44 = 424 bits
+against the three old placeholders at 64 flops each = 192, and 424 - 192 = 232.
+`TARGET_GE` produces precisely the registers it is asked for.
+
+Area came in at +3,083 GE against a predicted +3,309 (5,709 new minus ~2,400
+old), so `GE_PER_BIT: 13` / `GE_FIXED: 60` are running ~7% rich. Still unfitted.
+
+Through PnR that becomes **+2.6% wirelength and -1.27ns of setup slack**, with
+routing, DRC and timing all still closing. Utilisation moves 0.666 -> 0.690,
+i.e. just past `PL_TARGET_DENSITY_PCT: 68`. It placed, legalised and routed at
+that number, but the margin that absorbed these two experiments is now spent.
+
+Note what is NOT on the die: these are placeholders carrying growth multipliers,
+not the blocks. Substituting today's real `ahb_qspi` / `ahb_spi_m` / `ahb_spi_s`
+would SHRINK the design by ~2,396 GE (~26,300 um^2). The floorplan is sized for
+the finished peripherals; every intermediate state is smaller.
+
+### 2. Centring the macro row: the prediction was backwards
+
+Hypothesis: the row of 4 needs 1265.2um of a 1636.3um core, 4334 parks all
+371.1um of slack in one east strip, so the 44-row band below the macros can only
+reach the 90-row band above via the far east of the die or via Metal4/Metal5
+over the macros. Splitting the slack into two ~176um corridors should halve that
+detour and buy wirelength.
+
+**It cost 5.6% wirelength instead (1,341,347 -> 1,416,706).** Even ignoring the
+DRC failure, the hypothesis is refuted on its own terms: two 176um corridors
+route LONGER than one 345um strip.
+
+The DRC data shows why. All 20 DRT violations are Metal2 spacing, signal against
+`VDD`, inside a 5.3um column at **x 1509.06 - 1514.38** -- in the east corridor,
+which centring narrowed from 345um to 176um. The nets are almost entirely the
+new peripherals: `u_qspi_stub._0257_/_0258_/_0262_/_0265_/_0269_`,
+`spi_m_HRDATA[17]`, `qpsi_HRDATA[21]`, `u_interconnect.slot_HRDATA[63]`,
+`u_interconnect._0004_`, `u_uart._008_`.
+
+So the placer did not spread across the two corridors -- it packed the 3,368 GE
+QSPI stub and its bus into the east one, exactly as it had into the wide strip
+before. The detour never halved; the channel just got tighter, and the routing
+collided with the PDN stripe there. **Making a region narrower does not make the
+placer use the other one.**
+
+Magic's 52 and DRT's 20 are the same failure, not two: `drc.magic.rpt` reports
+one violation type, `Metal2 spacing < 56 (M2.2a)`, at the same x~1514, with
+Magic's own "COUNT: 52 ... should be divided by 3 or 4" note on shape counting.
+
+The plateau signature was textbook -- flat at 20 for ~30 of 51 iterations, 24
+minutes against a healthy 8. These configs have no `DRC_OPT_ITERS`; the
+"quicker fail" commit put it in `config.yaml` only. Worth porting across, since
+this is the second session to burn a run on a flat DRT trend.
+
+`config_1650x1100_centred.yaml` is kept rather than deleted. A config that
+records why centring fails is worth more than its absence, and its header
+carries the full derivation.
+
+### 3. Corner placement was considered and rejected without a run
+
+Pushing the row into the bottom-left corner (y 200 -> 15.68) is geometrically
+attractive: placeable area rises 1,056,100 -> 1,068,900um^2 because the bottom
+halo falls off the die edge instead of eating rows, the isolated 44-row band
+folds into one connected L, and orientation stays S.
+
+It dies on pin adjacency. With x0 = 22.4 and a 10um halo, the placeable sliver
+west of the row is **6.72 .. 12.4 = 5.68um**, about ten sites. That is harmless
+today because the macro band only spans y 190..725.81, so west pins escape into
+the bands above and below. In the corner the band below is gone, so:
+
+- the entire **S edge** loses adjacent rows over x 22.4..1287.6 (79% of it), and
+- the **lower half of the W edge**, y 15.68..541.49, loses them against that
+  5.68um sliver.
+
+`pin_order_row4.cfg` puts `bidir_ie`/`bidir_cs` on S and six input/bidir control
+groups on W. Session 3 measured antennas 8 -> 23 for exactly this -- pins
+crammed onto edges without adjacent rows -- and 4340 is carrying 10.
+
+The 2x2-in-a-corner variant fails on geometry: 2 x 515.81 = 1031.62 in a 1066.24
+core leaves 34.6um, so the channel between macro rows is sliver territory after
+halos, and the pin rows sit on horizontal edges -- one row would have to escape
+into it.
+
+### 4. Standing conclusion on the macro row
+
+**Leave it at x0=22.4, y=200, orientation S.** Both attempts to improve on those
+coordinates have now been measured and both lost. The 371um of slack belongs in
+one contiguous east strip, and y=200 is what keeps all four die edges supplied
+with rows.
+
+The wider lesson, and the reason this section is long: **this floorplan resists
+reasoning from first principles.** The centring argument was carefully derived
+from layer availability, region areas and detour distances, and it was simply
+wrong. Session 6 recorded the same shape of error about mid-PnR STA not
+predicting signoff. Treat any further macro move as needing a run, not an
+argument -- they cost 8 minutes.
+
+### 5. `DRY_RUN` covers less than it used to
+
+Checked while reviewing what the runs actually build. `DRY_RUN` now gates
+exactly two things:
+
+- `ahb_rom.sv:19` -- `MEM_WIDTH` 14 -> 6, a 64B boot ROM for `rom_boot.S`.
+- `periph_ss.sv:531` -- the **SPI slave** slot swaps `ahb_spi_s` for the stub.
+  It is the only peripheral with an `else` branch, because it is the only one of
+  the three whose real block is wired in.
+
+It does **not** gate the QSPI and SPI master slots: `u_qspi_stub` and
+`u_spi_m_stub` (`periph_ss.sv:459`, `:498`) have no `ifdef` at all, so a
+non-`DRY_RUN` build -- simulation included -- gets the ballast stub too. The
+real RTL exists at `hw/rtl/qspi/ahb_qspi.sv` and `hw/rtl/spi_m/ahb_spi_m.sv`
+and is instantiated nowhere. Nor does it gate the RAM any more; `MACRO_RAM`
+builds the real macros, which is why there are macros to place at all.
+
+Swapping the real blocks in is therefore not flag-gated -- it is an edit to
+`periph_ss.sv`. QSPI's ports already match the `io_ss` signals; SPI master needs
+`SPI_MOSI`/`SPI_SCK`/`SPI_CS_N`/`SPI_MISO` mapped onto them.
+
+### 6. Open items
+
+- **LVS unchanged at 179 errors / 171 unmatched pins.** `bidir_in[16..39]`.
+  Still RTL, still the only thing between this flow and a clean signoff.
+- **Utilisation 0.690 against a 0.68 target.** Fine as measured; no headroom
+  left for the next thing that grows.
+- `DRC_OPT_ITERS` is missing from every landscape/portrait variant config.
+- `GE_PER_BIT` / `GE_FIXED` still unfitted, now known to be ~7% rich.
+- `GRT_ADJUSTMENT: 0.45` on the 4340 floorplan is untried. Session 6 showed it
+  clearing a Metal2 east-sliver plateau at a wirelength cost; whether it helps a
+  floorplan that already routes clean is the open question.
+- Portrait 1330x1370 has NOT been re-run with the sized peripherals. It led
+  landscape on wirelength by 14% before them (1,146,800 vs 1,306,990). If the
+  slot choice reopens, portrait needs its own run before any comparison.
