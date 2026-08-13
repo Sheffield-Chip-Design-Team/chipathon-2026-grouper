@@ -1212,15 +1212,26 @@ Placeable area comes out level: the height lost off the top band (827,600 ->
 582,700um^2) is returned by a new 345um east strip (185,100um^2), and measured
 utilisation landed within 0.002 of portrait. It clears the 2 die-edge Metal3
 violations portrait has, but costs 10% more wirelength and more antennas (14 vs
-6). Config: `config_1650x1100_nodly.yaml` (job 4325).
+6). Config: `config_1650x1100_keepdlyc_fanout32.yaml` (job 4334).
 
-**That config is one recipe behind the portrait recommendation.** It still carries
-the blanket twelve-cell ban and `MAX_FANOUT_CONSTRAINT: 16`, because it was run
-before section 3 established that keeping `dlyc` and relaxing fanout to 32 is the
-better combination. It is committed as-is because those are the settings its
-numbers were measured with. If the 1650x1100 slot turns out to be the real
-constraint, port the section 4 recipe across -- ban `dlya`/`dlyb`/`dlyd` only, set
-`MAX_FANOUT_CONSTRAINT: 32` -- and re-measure before trusting it.
+The section 4 recipe was ported across and re-measured, and it improves landscape
+on every axis: setup +11.4295 -> **+13.3513ns**, antennas 14 -> **9**, cells
+25,403 -> **25,137** (fewest of any run in this session), wirelength 1,315,595 ->
+1,306,990, Magic DRC still 0. `dlyc_1` held at 89 with 90 hold cells, so there is
+no migration on the longer-wire floorplan either.
+
+With both floorplans finally on the same recipe the comparison is fair:
+
+| | portrait 1330x1370 (4331) | landscape 1650x1100 (4334) |
+|---|---|---|
+| setup WNS | **+18.8648** | +13.3513 |
+| antennas | **6** | 9 |
+| wirelength | **1,146,800** | 1,306,990 (+14%) |
+| Magic DRC | 2 (die edge) | **0** |
+| cells | 25,379 | **25,137** |
+
+Portrait remains the recommendation; landscape is the answer if the slot demands
+it or if the 2 die-edge Metal3 violations matter more than the wirelength.
 
 **Mid-PnR STA is not predictive here.** Landscape led portrait at every
 pre-route checkpoint (+4.81 vs +3.24ns at step 34, +2.52 vs +1.24ns at step 41)
