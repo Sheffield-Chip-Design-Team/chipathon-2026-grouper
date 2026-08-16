@@ -18,6 +18,9 @@ from pathlib import Path
 
 from report_target import (
     COVERAGE_SCOPES,
+    FAILED,
+    GROUPS,
+    _test_record,
     parse_cocotb_results,
     parse_exit_code,
     parse_log_grep,
@@ -85,6 +88,13 @@ def main():
     ap.add_argument("--coverage-scope", default="full", choices=COVERAGE_SCOPES,
                      help="full = report every coverage category, line = only line (rest N/A), "
                           "none = no coverage at all (all categories N/A)")
+    ap.add_argument("--group", default="directed_tb", choices=GROUPS,
+                     help="Reporting group this target belongs to in the aggregated CSV/summary")
+    ap.add_argument("--fail-ok", default="false",
+                     help="'true' if this target's failures don't block CI - recorded in the "
+                          "metrics so the summary can mark them known/non-blocking. Takes a "
+                          "string, not a flag, so the workflow can pass matrix.fail_ok straight "
+                          "through.")
     ap.add_argument("--out-dir", required=True, type=Path)
     args = ap.parse_args()
 
@@ -106,6 +116,7 @@ def main():
         if not results_xml.is_file():
             tests = [{
                 "name": "results_xml_present", "classname": None, "passed": False,
+                "skipped": False,
                 "sim_time_ns": None, "wall_time_s": None,
                 "error_msg": f"{results_xml} not found (build likely failed before cocotb ran)",
             }]
@@ -116,7 +127,10 @@ def main():
     else:
         tests = parse_exit_code(exit_code)
 
-    return write_metrics(args.name, args.kind, tests, coverage_dat, args.coverage_scope, args.out_dir)
+    return write_metrics(
+        args.name, args.kind, tests, coverage_dat, args.coverage_scope, args.out_dir,
+        group=args.group, fail_ok=args.fail_ok.strip().lower() == "true",
+    )
 
 
 if __name__ == "__main__":

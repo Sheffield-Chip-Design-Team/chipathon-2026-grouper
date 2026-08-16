@@ -18,6 +18,7 @@ targets:
         - -Wno-TIMESCALEMOD
         - --sv
         - --trace
+        - --coverage
       run_options:
         - --trace
     filesets: [rtl]

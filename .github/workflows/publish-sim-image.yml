@@ -6,6 +6,7 @@ on:
     paths:
       - .github/docker/sim/**
       - .github/verilator-version
+      - .github/riscv-toolchain-version
       - .github/workflows/publish-sim-image.yml
   workflow_dispatch:
 
@@ -21,7 +22,16 @@ jobs:
 
       - id: version
         run: |
-          echo "version=$(cat .github/verilator-version)" >> "$GITHUB_OUTPUT"
+          verilator_version="$(cat .github/verilator-version)"
+          riscv_version="$(cat .github/riscv-toolchain-version)"
+          echo "verilator=$verilator_version" >> "$GITHUB_OUTPUT"
+          echo "riscv=$riscv_version" >> "$GITHUB_OUTPUT"
+          # The tag covers BOTH pinned tools, so bumping either one publishes a
+          # new image and sim-ci.yml (which composes the identical tag) picks it
+          # up. Tagging on the Verilator version alone used to mean a change to
+          # anything else in the image - the RISC-V toolchain, say - silently
+          # reused the old tag and CI kept pulling a stale image.
+          echo "tag=${verilator_version}-riscv${riscv_version}" >> "$GITHUB_OUTPUT"
           # ghcr.io requires a lowercase path; github.repository preserves case
           # (e.g. Sheffield-Chip-Design-Team/... ), so lowercase it ourselves.
           echo "image=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')/sim-verilator" >> "$GITHUB_OUTPUT"
@@ -38,8 +48,9 @@ jobs:
         with:
           context: .github/docker/sim
           build-args: |
-            VERILATOR_VERSION=${{ steps.version.outputs.version }}
+            VERILATOR_VERSION=${{ steps.version.outputs.verilator }}
+            RISCV_TOOLCHAIN_VERSION=${{ steps.version.outputs.riscv }}
           push: true
           tags: |
-            ${{ steps.version.outputs.image }}:${{ steps.version.outputs.version }}
+            ${{ steps.version.outputs.image }}:${{ steps.version.outputs.tag }}
             ${{ steps.version.outputs.image }}:latest

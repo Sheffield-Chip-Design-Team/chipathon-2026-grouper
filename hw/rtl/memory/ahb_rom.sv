@@ -16,7 +16,16 @@
 module ahb_rom #(
   parameter int  ADDR_WIDTH = 32,
   parameter int  DATA_WIDTH = 32,
+`ifdef DRY_RUN
+  // 16 words / 64 B, enough for the boot stub in sw/dry_run/rom_boot.S: the
+  // reset vector at 0x00 and the IRQ vector at 0x10 (PROGADDR_RESET /
+  // PROGADDR_IRQ in cpu_ss.sv). The ROM window in ahb_interconnect_ss.sv is
+  // 8 KiB, so the contents alias every 64 B - harmless, both vectors live in
+  // the first block.
+  parameter int  MEM_WIDTH = 6,
+`else
   parameter int  MEM_WIDTH = 14,
+`endif
   localparam int BYTE_ADDR_WIDTH = $clog2(DATA_WIDTH/8),
   localparam int WORD_ADDR_WIDTH = MEM_WIDTH - BYTE_ADDR_WIDTH,
   localparam int MEM_WORDS = 2**WORD_ADDR_WIDTH

@@ -24,7 +24,7 @@
 //   with ENABLE_TRACE (cpu_ss ENABLE_TRACE, driven by the CPU_TRACE define).
 //   Records are written raw - one hex value per line - to TRACE_FILE, which is
 //   the format picorv32's showtrace.py expects:
-//     fusesoc_libraries/picorv32/showtrace.py cpu.trace sw/build/firmware.elf
+//     ip/picorv32/showtrace.py cpu.trace sw/build/firmware.elf
 //   Capture starts at time 0 when TRACE_AUTOSTART is set, and can be windowed
 //   from firmware around a region of interest with debug_trace() (sw/src/debug).
 

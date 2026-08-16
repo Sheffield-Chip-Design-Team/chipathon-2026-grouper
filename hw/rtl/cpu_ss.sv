@@ -72,14 +72,14 @@ module cpu_ss #(
   picorv32 #(
 	  .ENABLE_COUNTERS      (1),
 	  .ENABLE_COUNTERS64    (1),
-	  .ENABLE_REGS_16_31    (1),
+	  .ENABLE_REGS_16_31    (0),  // RV32E: x0-x15 only
 	  .ENABLE_REGS_DUALPORT (1),
 	  .LATCHED_MEM_RDATA    (0),
 	  .TWO_STAGE_SHIFT      (1),
 	  .BARREL_SHIFTER       (0),
 	  .TWO_CYCLE_COMPARE    (0),
 	  .TWO_CYCLE_ALU        (0),
-	  .COMPRESSED_ISA       (0),
+	  .COMPRESSED_ISA       (1),  // RV32*C
 	  .CATCH_MISALIGN       (1),
 	  .CATCH_ILLINSN        (1),
 	  .ENABLE_PCPI          (0),

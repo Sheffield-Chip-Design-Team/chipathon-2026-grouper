@@ -4,6 +4,10 @@
 // Size of each addressable location : 8 bits
 // Supported transfer sizes : Word, Halfword, Byte
 // Alignment of base address : Word aligned
+//
+// Under `DRY_RUN the memory array is replaced by counters on the address and
+// data lines - a placeholder for the hardened SRAM macros. See the comment on
+// that branch below.
 
 module ahb_ram #(
   parameter int ADDR_WIDTH = 32,
@@ -40,9 +44,6 @@ module ahb_ram #(
 
   import ahb3lite_pkg::*;
 
-  // Memory Array  
-  logic [DATA_WIDTH-1:0] memory [0:MEM_WORDS-1];
-
   logic                       access;
   logic                       read_enable;
   logic                       write_enable;
@@ -69,6 +70,51 @@ module ahb_ram #(
       byte_select_r   <= byte_select;
     end
 
+`ifdef DRY_RUN
+
+  // Placeholder for the hardened gf180mcu_ocd_ip_sram macros, which are out of
+  // scope for the dry run (see librelane/classic/dry_run_config.yaml). Two
+  // ADDR_WIDTH counters sit on the address and data lines: they load from the
+  // bus on an access and free-run otherwise, which keeps HADDR, HWDATA and the
+  // HSIZE-derived byte selects electrically live so synthesis cannot prune the
+  // RAM leg of the fabric, and gives HRDATA a real driver -- without paying for
+  // the MEM_WORDS x DATA_WIDTH flop array the behavioural model would infer.
+  //
+  // Not a memory: reads do not return what was written. Only the DRY_RUN
+  // configuration builds this path.
+
+  logic [ADDR_WIDTH-1:0] addr_cnt;
+  logic [ADDR_WIDTH-1:0] data_cnt;
+
+  always_ff @(posedge HCLK, negedge HRESETn)
+    if (~HRESETn) begin
+      addr_cnt <= '0;
+      data_cnt <= '0;
+    end else begin
+      // HADDR whole, not the MEM_WIDTH slice word_address takes: the point is
+      // to load every address bit, including the ones a real RAM would ignore.
+      addr_cnt <= access       ? ADDR_WIDTH'(HADDR) : addr_cnt + 1'b1;
+      data_cnt <= write_enable ? ADDR_WIDTH'(HWDATA) ^ ADDR_WIDTH'(byte_select_r)
+                               : data_cnt + 1'b1;
+    end
+
+  always_ff @(posedge HCLK, negedge HRESETn)
+    if (~HRESETn)
+      HRDATA <= '0;
+    else if (read_enable)
+      HRDATA <= DATA_WIDTH'(data_cnt ^ addr_cnt);
+
+  // The address decode is bypassed above (addr_cnt takes HADDR directly) and
+  // byte_select is consumed only through its registered copy, so both of these
+  // are dead on this path. Kept declared so the two branches share one decode.
+  logic _unused_dry_run;
+  assign _unused_dry_run = &{1'b0, byte_select, word_address, word_address_r};
+
+`else
+
+  // Memory Array
+  logic [DATA_WIDTH-1:0] memory [0:MEM_WORDS-1];
+
   // Write Port
   always_ff @(posedge HCLK)
     if (write_enable)
@@ -89,6 +135,8 @@ module ahb_ram #(
       HRDATA <= 'x;
 `else
       HRDATA <= memory[word_address];
+`endif
+
 `endif
 
   //Transfer Response
