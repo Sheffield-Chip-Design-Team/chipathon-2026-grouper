@@ -68,6 +68,15 @@ PAD_MASK = (1 << NUM_GPIO) - 1
 IN_PADS = 0x00FF                      # testbench drives these
 OUT_PADS = 0xFF00                     # firmware drives these
 
+# QSPI alternate-function pad assignment.
+QSPI_SCK   = 8
+QSPI_CE_N0 = 9
+QSPI_CE_N1 = 10
+QSPI_SIO0  = 11
+QSPI_SIO1  = 12
+QSPI_SIO2  = 13
+QSPI_SIO3  = 14
+
 # Must match GPIO_ECHO_COUNT in sw/tests/test_gpio.c.
 GPIO_ECHO_COUNT = 64
 
@@ -328,6 +337,113 @@ async def uart_rx_send_str(dut, text):
     for char in text:
         await uart_rx_send(dut, char)
 
+
+# --------------------------------------------------------------------------
+# QSPI
+# --------------------------------------------------------------------------
+
+def pad_out(dut, pin):
+    return (int(dut.gpio_out.value) >> pin) & 1
+
+
+def pad_oe(dut, pin):
+    return (int(dut.gpio_oe.value) >> pin) & 1
+
+
+async def wait_qspi_select(dut):
+    """Wait until PSRAM CE# is asserted and QSPI owns the pads."""
+
+    while True:
+        await RisingEdge(dut.clk)
+        await Timer(1, unit="ps")
+
+        if (
+            pad_oe(dut, QSPI_SCK)
+            and pad_oe(dut, QSPI_CE_N0)
+            and pad_out(dut, QSPI_CE_N0) == 0
+        ):
+            return
+
+
+async def wait_qspi_deselect(dut):
+    """Wait until PSRAM CE# returns high."""
+
+    while True:
+        await RisingEdge(dut.clk)
+        await Timer(1, unit="ps")
+
+        if pad_out(dut, QSPI_CE_N0) == 1:
+            return
+
+
+async def wait_qspi_rising_edge(dut):
+    """Detect one rising QSPI SCK edge using the SoC clock."""
+
+    previous = pad_out(dut, QSPI_SCK)
+
+    while True:
+        await RisingEdge(dut.clk)
+        await Timer(1, unit="ps")
+
+        current = pad_out(dut, QSPI_SCK)
+
+        if previous == 0 and current == 1:
+            return
+
+        previous = current
+
+
+async def capture_single_spi_byte(dut):
+    """Capture one MSB-first byte transmitted on SIO0 in SPI mode 0."""
+
+    await wait_qspi_select(dut)
+
+    value = 0
+
+    for _ in range(8):
+        await wait_qspi_rising_edge(dut)
+
+        assert pad_oe(dut, QSPI_SIO0) == 1
+
+        value = (
+            (value << 1)
+            | pad_out(dut, QSPI_SIO0)
+        )
+
+    await wait_qspi_deselect(dut)
+
+    return value
+
+
+async def capture_quad_transaction(dut, groups=10):
+    """Capture MSB-first 4-bit groups from SIO[3:0]."""
+
+    await wait_qspi_select(dut)
+
+    values = []
+
+    for _ in range(groups):
+        await wait_qspi_rising_edge(dut)
+
+        sio_oe = (
+            int(dut.gpio_oe.value)
+            >> QSPI_SIO0
+        ) & 0xF
+
+        assert sio_oe == 0xF
+
+        nibble = (
+            int(dut.gpio_out.value)
+            >> QSPI_SIO0
+        ) & 0xF
+
+        values.append(nibble)
+
+    await wait_qspi_deselect(dut)
+
+    return values
+
+
 # --------------------------------------------------------------------------
 # Bring-up
 # --------------------------------------------------------------------------
@@ -385,7 +501,7 @@ async def expect_test_result(uart, name):
 # Firmware that needs the testbench to do something - drive a console, stream
 # GPIO - has its own test below. Everything else only has to run to completion.
 FW_TEST = os.environ.get("FW_TEST", "")
-DRIVEN_FW = ("uart_echo", "gpio")
+DRIVEN_FW = ("uart_echo", "gpio", "qspi")
 
 
 def soc_test(**kwargs):
@@ -514,3 +630,48 @@ async def test_gpio_patterns(dut):
 
     await uart.wait_for("GPIO_ECHO_DONE")
     await expect_test_result(uart, "gpio")
+
+
+@soc_test(skip=FW_TEST != "qspi")
+async def test_qspi(dut):
+    """Verify CPU-driven QSPI traffic reaches the external pads."""
+
+    _, uart = await bring_up(dut)
+
+    # First transaction from test_qspi.c:
+    # bare 0x35 command in single-bit SPI mode.
+    opcode = await capture_single_spi_byte(dut)
+
+    log.info(
+        "QSPI single-bit command: 0x%02x",
+        opcode,
+    )
+
+    assert opcode == 0x35
+
+    # Second transaction:
+    # A5 + 123456 + C3 in quad mode.
+    groups = await capture_quad_transaction(
+        dut,
+        groups=10,
+    )
+
+    log.info(
+        "QSPI quad groups: %s",
+        " ".join(f"{x:x}" for x in groups),
+    )
+
+    expected = [
+        0xA, 0x5,              # opcode A5
+        0x1, 0x2, 0x3,
+        0x4, 0x5, 0x6,        # address 123456
+        0xC, 0x3,              # data C3
+    ]
+
+    assert groups == expected, (
+        f"QSPI transaction mismatch: "
+        f"got {groups}, expected {expected}"
+    )
+
+    await uart.wait_for("QSPI_TRANSACTION_DONE")
+    await expect_test_result(uart, "qspi")
