@@ -177,7 +177,7 @@ fi
 # ENABLE_REGS_16_31=0) plus M and C. Building rv32i* here would emit x16-x31,
 # which the CPU does not have.
 MARCH="-march=rv32emc -mabi=ilp32e"
-INCS="-I$SRC_DIR -I$SRC_DIR/lib -I$SRC_DIR/uart -I$SRC_DIR/debug -I$SRC_DIR/spi_m -I$SRC_DIR/gpio -I$TESTS_DIR"
+INCS="-I$SRC_DIR -I$SRC_DIR/lib -I$SRC_DIR/uart -I$SRC_DIR/debug -I$SRC_DIR/spi_m -I$SRC_DIR/gpio -I$SRC_DIR/qspi -I$TESTS_DIR"
 
 # -fno-builtin is load-bearing, not decorative: sw/src/lib defines printf,
 # memcpy and other libc-reserved names, and without it GCC would rewrite calls
@@ -206,6 +206,7 @@ SOURCES=(
     "$SRC_DIR/debug/debug.c"
     "$SRC_DIR/uart/uart.c"
     "$SRC_DIR/spi_m/spi_m.c"
+    "$SRC_DIR/qspi/qspi.c"
     "$SRC_DIR/lib/gio.c"
     "$SRC_DIR/lib/gstr.c"
     "$SRC_DIR/lib/gtest.c"

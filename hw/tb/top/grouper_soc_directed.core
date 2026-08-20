@@ -62,6 +62,7 @@ targets:
         - -Wno-fatal
         - --sv
         - --trace
+        - --coverage
       run_options:
         - --trace
     toplevel: grouper_soc_top

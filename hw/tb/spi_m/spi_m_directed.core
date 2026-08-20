@@ -1,0 +1,25 @@
+CAPI=2:
+
+name: sharc:comms_ip:ahb_spi_m_directed:0.0.1
+description: Simple directed cocotb testbench for ahb_spi_m (cocotb + Verilator)
+
+filesets:
+  rtl:
+    depend:
+      - sharc:comms_ip:ahb_spi_m:0.0.1
+
+targets:
+  default:
+    flow: sim
+    flow_options:
+      tool: verilator
+      cocotb_module: hw.tb.spi_s.test_spi_m
+      verilator_options:
+        - -Wno-TIMESCALEMOD
+        - --sv
+        - --trace
+        - --coverage
+      run_options:
+        - --trace
+    filesets: [rtl]
+    toplevel: ahb_spi_m

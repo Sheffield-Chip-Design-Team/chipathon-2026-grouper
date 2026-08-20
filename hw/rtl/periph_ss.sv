@@ -452,39 +452,36 @@ logic [3:0] mux_qspi_sio_oe;  // internal signal for QSPI data output enable
 
   //--- QSPI -----------------------------------------------------------------------------
 
-  // FIXME - replace with hw/rtl/qspi/ahb_qspi.sv, whose ports already match the
-  // io_ss signals below. Until then the stub holds the slot at a representative
-  // size: 3368 GE, from `make measure-ge` (ahb_qspi synthesizes to 18,481.4
-  // um^2 = 1684 GE) x2.0 for the features still missing (arbitrary-command
-  // interface, real register map, byte-lane addressing, wait-state handling,
-  // and the GRPR-QSPI-021 init FSM). See librelane/classic/TRIAL_NOTES.md.
-  ahb_stub_slave #(
-    .ADDR_WIDTH (ADDR_WIDTH),
-    .DATA_WIDTH (DATA_WIDTH),
-    .TARGET_GE  (3368),
-    .PAD_OUT_W  (7),
-    .PAD_OE_W   (4),
-    .PAD_IN_W   (4)
-  ) u_qspi_stub (
-    .HCLK         (HCLK),
-    .HRESETn      (HRESETn),
-    .HADDR        (qpsi_HADDR),
-    .HBURST       (qpsi_HBURST),
-    .HMASTLOCK    (qpsi_HMASTLOCK),
-    .HPROT        (qpsi_HPROT),
-    .HSIZE        (qpsi_HSIZE),
-    .HTRANS       (qpsi_HTRANS),
-    .HWDATA       (qpsi_HWDATA),
-    .HWRITE       (qpsi_HWRITE),
-    .HRDATA       (qpsi_HRDATA),
-    .HREADYOUT    (qpsi_HREADYOUT),
-    .HRESP        (qpsi_HRESP),
-    .HREADYIN     (qpsi_HREADYIN),
-    .HSEL         (qpsi_HSEL),
+  ahb_qspi #(
+    .ADDR_WIDTH (12),
+    .DATA_WIDTH (DATA_WIDTH)
+  ) u_qspi (
+    .HCLK        (HCLK),
+    .HRESETn     (HRESETn),
 
-    .pad_in       (mux_qspi_sio_i),
-    .pad_out      ({mux_qspi_sio_o, mux_qspi_ce_n_o, mux_qspi_sck_o}),
-    .pad_oe       (mux_qspi_sio_oe)
+    .HADDR       (qpsi_HADDR[11:0]),
+    .HBURST      (qpsi_HBURST),
+    .HMASTLOCK   (qpsi_HMASTLOCK),
+    .HPROT       (qpsi_HPROT),
+    .HSIZE       (qpsi_HSIZE),
+    .HTRANS      (qpsi_HTRANS),
+    .HWDATA      (qpsi_HWDATA),
+    .HWRITE      (qpsi_HWRITE),
+
+    .HRDATA      (qpsi_HRDATA),
+    .HREADYOUT   (qpsi_HREADYOUT),
+    .HRESP       (qpsi_HRESP),
+
+    .HREADYIN    (qpsi_HREADYIN),
+    .HSEL        (qpsi_HSEL),
+
+    .qspi_sck_o  (mux_qspi_sck_o),
+    .qspi_ce_n_o (mux_qspi_ce_n_o),
+    .qspi_sio_i  (mux_qspi_sio_i),
+    .qspi_sio_o  (mux_qspi_sio_o),
+    .qspi_sio_oe (mux_qspi_sio_oe),
+
+    .irq         ()
   );
 
   //--- SPI Master ------------------------------------------------------------------------

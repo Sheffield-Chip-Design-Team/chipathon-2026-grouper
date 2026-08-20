@@ -5,7 +5,7 @@
 
 **Note on dating:** this document is written as a rolling plan anchored to 4 July. It is being compiled on 14 July — ten days (end of Week 2) into the six-week window — so Weeks 1–2 below reflect what has actually landed (per git history and the current LibreLane checkpoint), and Weeks 3–6 are the forward plan. This supersedes the stale schedule in [Gantt.md](Gantt.md), whose milestones (Phase 2 close 30 Jun, design review 1 Jul, FPGA validation 10 Aug, GDS freeze 1 Sep) no longer match reality — a 1 Sep tapeout target does not fit a 15 Aug deadline, and physical-design work is now well ahead of where that Gantt assumed.
 
-**Sources used:** [Grouper SoC Specification](Hardware/design/Grouper%20SoC%20Specification.md), [Schematic Review](Hardware/Schematic%20Review.md), the 5 block docs under `Hardware/design/blocks/`, the verification plans under `Hardware/verification/`, `Hardware/verification/Grouper SoC Verification Plan.md`, `Software/Bootloader.md`, and the actual RTL/git history in `hw/rtl/` — not the older contaminated planning files (see the Spec's own "Why this document replaces most of the old planning folder" note).
+**Sources used:** [Grouper SoC Specification](hardware/design/Grouper%20SoC%20Specification.md), [Schematic Review](hardware/Schematic%20Review.md), the 5 block docs under `hardware/design/blocks/`, the verification plans under `hardware/verification/`, `hardware/verification/Grouper SoC Verification Plan.md`, `software/Bootloader.md`, and the actual RTL/git history in `hw/rtl/` — not the older contaminated planning files (see the Spec's own "Why this document replaces most of the old planning folder" note).
 
 ---
 
@@ -23,7 +23,7 @@
 - UART (owner: Sam) is the only one of the 5 target peripherals actually implemented and wired into `periph_ss` — full register map, FIFOs, break/framing detection, RX synchronizer.
 - SPI Master (Thiri), SPI Slave (Safaa), and QSPI (Tristan) are still at "RTL design starting" per the Schematic Review — **no RTL committed for any of the three yet.**
 - GPIO Mux has no owner assigned and is pre-RTL, pre-detailed-requirements (still just the "2-stage synchroniser on each input" bullet plus inferred pin-routing role).
-- Bootloader (`Software/Bootloader.md`) is an empty stub — no content beyond "TODO."
+- Bootloader (`software/Bootloader.md`) is an empty stub — no content beyond "TODO."
 
 ### Verification
 - Block-level DV is real and active for UART only: pyUVM/cocotb AHB3-Lite + UART UVCs, register model, sequences, randomization, coverage, functional bugfixes (13–14 Jul commits).

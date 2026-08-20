@@ -2,10 +2,6 @@ CAPI=2:
 name: sharc:soc_ip:grouper_soc:0.0.1
 description: RISC-V 32IM SoC with UART, SPI and GPIO (RTL only, no testbench)
 
-# Testbenches live in their own cores, next to the files they drive:
-#   sharc:soc_ip:grouper_soc_tb        hw/tb/top/grouper_soc_tb.core
-#   sharc:soc_ip:grouper_soc_directed  hw/tb/top/grouper_soc_directed.core
-
 parameters:
   DEBUG_PERIPH:
     datatype: bool
@@ -60,6 +56,7 @@ filesets:
       - sharc:comms_ip:ahb_uart:0.0.1
       - sharc:comms_ip:ahb_spi_s:0.0.1
       - sharc:comms_ip:ahb_gpio_ctrl:0.0.1
+      - sharc:comms_ip:ahb_qspi:0.0.1
 
     files:
       - hw/rtl/verilator_waivers.vlt:                     {file_type: vlt}

@@ -1,8 +1,12 @@
 # Simulation CI target list, consumed by .github/workflows/sim-ci.yml's load-config job.
-# Every entry must set all of these keys (fail_ok/coverage_scope included) so the
+# Every entry must set all of these keys (fail_ok/coverage_scope/fw_test included) so the
 # matrix entries GitHub Actions builds via fromJson() have a uniform shape.
 #
 #   name:            short label used for the metrics/artifact/job name
+#   group:           lint | directed_tb | pyuvm - which section of the aggregated
+#                       metrics.csv/summary.md this target's row lands in. Groups are
+#                       emitted in that order (see report_target.GROUPS), targets
+#                       sorted by name within a group.
 #   core:            FuseSoC CAPI2 VLNV, e.g. sharc:comms_ip:ahb_uart
 #   fusesoc_target:  target within that core's .core file
 #   kind:            cocotb | log-grep | exit-code (see .github/scripts/ci/report_target.py)
@@ -14,9 +18,30 @@
 #                       fsm_state/fsm_arc); line = report only line coverage, the rest
 #                       recorded as "N/A"; none = no coverage at all, everything "N/A"
 #                       (use for targets with no coverage.dat, e.g. a lint-only target)
+#   fw_test:         value of FW_TEST for the run, naming a firmware top level in
+#                       sw/tests (see sw/scripts/build_fw.sh --list). "" for every
+#                       target that isn't a top-level software test - build_fw.sh
+#                       then uses the default sw/src/main.c. Anything with a
+#                       build_fw pre_build hook needs the RISC-V toolchain in the
+#                       container image (.github/docker/sim/Dockerfile).
 
 targets:
+  # --- Lint ----------------------------------------------------------------
+  # Cheap, and catches an unelaboratable block before any of the slow legs run.
+
+  - name: grouper_soc_lint
+    group: lint
+    core: sharc:soc_ip:grouper_soc
+    fusesoc_target: lint
+    kind: exit-code
+    fusesoc_args: "--build"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: none
+    fw_test: ""
+
   - name: ahb_uart_lint
+    group: lint
     core: sharc:comms_ip:ahb_uart
     fusesoc_target: lint
     kind: exit-code
@@ -24,8 +49,56 @@ targets:
     success_pattern: ""
     fail_ok: false
     coverage_scope: none
+    fw_test: ""
+
+  - name: ahb_gpio_ctrl_lint
+    group: lint
+    core: sharc:comms_ip:ahb_gpio_ctrl
+    fusesoc_target: lint
+    kind: exit-code
+    fusesoc_args: "--build"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: none
+    fw_test: ""
+
+  - name: ahb_qspi_lint
+    group: lint
+    core: sharc:comms_ip:ahb_qspi
+    fusesoc_target: lint
+    kind: exit-code
+    fusesoc_args: "--build"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: none
+    fw_test: ""
+
+  - name: ahb_spi_m_lint
+    group: lint
+    core: sharc:comms_ip:ahb_spi_m
+    fusesoc_target: lint
+    kind: exit-code
+    fusesoc_args: "--build"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: none
+    fw_test: ""
+
+  - name: ahb_spi_s_lint
+    group: lint
+    core: sharc:comms_ip:ahb_spi_s
+    fusesoc_target: lint
+    kind: exit-code
+    fusesoc_args: "--build"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: none
+    fw_test: ""
+
+  # --- Peripheral block-level directed tests -------------------------------------------
 
   - name: ahb_uart_directed
+    group: directed_tb
     core: sharc:comms_ip:ahb_uart_directed
     fusesoc_target: default
     kind: cocotb
@@ -33,9 +106,11 @@ targets:
     success_pattern: ""
     fail_ok: false
     coverage_scope: full
+    fw_test: ""
 
   - name: ahb_uart_mdv
-    core: sharc:comms_ip:ahb_uart_pyuvm 
+    group: pyuvm
+    core: sharc:comms_ip:ahb_uart_pyuvm
     fusesoc_target: default
     kind: cocotb
     fusesoc_args: ""
@@ -44,12 +119,131 @@ targets:
     # these yet. Flip to false once that RTL bug is fixed.
     fail_ok: true
     coverage_scope: full
+    fw_test: ""
 
+  - name: ahb_gpio_ctrl_directed
+    group: directed_tb
+    core: sharc:comms_ip:ahb_gpio_ctrl_directed
+    fusesoc_target: default
+    kind: cocotb
+    fusesoc_args: ""
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: ""
+
+  - name: ahb_qspi_directed
+    group: directed_tb
+    core: sharc:comms_ip:ahb_qspi_directed
+    fusesoc_target: default
+    kind: cocotb
+    fusesoc_args: ""
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: ""
+
+  - name: ahb_spi_s_directed
+    group: directed_tb
+    core: sharc:comms_ip:ahb_spi_s_directed
+    fusesoc_target: default
+    kind: cocotb
+    fusesoc_args: ""
+    success_pattern: ""
+    fail_ok: true
+    coverage_scope: full
+    fw_test: ""
+
+  # --- Top level -----------------------------------------------------------
+  #
+  # Everything below builds firmware through sw/scripts/build_fw.sh, so all of
+  # it needs the RISC-V toolchain in the image.
+
+  # The SystemVerilog testbench, running the default sw/src/main.c.
+  #
+  # NOTE: the core is grouper_soc_tb, not grouper_soc - grouper_soc is RTL-only
+  # and has no tb_top target, so this entry could never have resolved before.
+  #
+  # The trace variant on this core is called tb_top_trace, not trace (that name
+  # only exists on grouper_soc_directed). Like grouper_soc_directed's trace
+  # target it implies DEBUG_PERIPH=true, CPU_TRACE=true and debug firmware -
+  # so this leg exercises a 9-slave fabric, not the 8-slave one that tapes out.
+  # Switch to tb_top for a run that matches the shipping configuration.
   - name: grouper_soc_tb_top
-    core: sharc:soc_ip:grouper_soc
-    fusesoc_target: tb_top
+    group: directed_tb
+    core: sharc:soc_ip:grouper_soc_tb
+    fusesoc_target: tb_top_trace
     kind: log-grep
     fusesoc_args: "--no-export"
     success_pattern: "Bye!"
     fail_ok: false
     coverage_scope: full
+    fw_test: ""
+
+  # --- Top-level software tests --------------------------------------------
+  #
+  # One leg per firmware top level in sw/tests. hw/tb/top/test_soc.py reads
+  # FW_TEST and selects which of its cocotb tests apply: the generic
+  # test_firmware_runs (assert the g_test harness prints TEST_RESULT: PASS) for
+  # most, and a dedicated stimulus-driving test for uart_echo and gpio.
+  #
+  # sw/tests/test_busfault_repro.c is deliberately absent: its own header calls
+  # it a scratch repro for the stdlib_str bus error, not a regression test.
+
+  - name: sw_fibonnaci
+    group: directed_tb
+    core: sharc:soc_ip:grouper_soc_directed
+    fusesoc_target: trace
+    kind: cocotb
+    fusesoc_args: "--no-export"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: "fibonnaci"
+
+  - name: sw_stdlib_fmt
+    group: directed_tb
+    core: sharc:soc_ip:grouper_soc_directed
+    fusesoc_target: trace
+    kind: cocotb
+    fusesoc_args: "--no-export"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: "stdlib_fmt"
+
+  # Known bus error at the second memmove in test_mem() - the defect
+  # sw/tests/test_busfault_repro.c was written to narrow down. Tracked here so
+  # the fix is visible in the metrics, but not blocking until it lands.
+  - name: sw_stdlib_str
+    group: directed_tb
+    core: sharc:soc_ip:grouper_soc_directed
+    fusesoc_target: trace
+    kind: cocotb
+    fusesoc_args: "--no-export"
+    success_pattern: ""
+    fail_ok: true
+    coverage_scope: full
+    fw_test: "stdlib_str"
+
+  - name: sw_uart_echo
+    group: directed_tb
+    core: sharc:soc_ip:grouper_soc_directed
+    fusesoc_target: trace
+    kind: cocotb
+    fusesoc_args: "--no-export"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: "uart_echo"
+
+  - name: sw_gpio
+    group: directed_tb
+    core: sharc:soc_ip:grouper_soc_directed
+    fusesoc_target: trace
+    kind: cocotb
+    fusesoc_args: "--no-export"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: "gpio"
