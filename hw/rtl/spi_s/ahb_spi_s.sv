@@ -47,6 +47,23 @@ module ahb_spi_s #(
   localparam bit [1:0] ADDR_TXDATA = 2'b10;
   localparam bit [1:0] ADDR_RXDATA = 2'b11;
 
+  // SPI command codes
+  localparam logic [7:0] SPI_WRITE  = 8'h02;
+  localparam logic [7:0] SPI_READ   = 8'h03;
+  localparam logic [7:0] FAST_WRITE = 8'h0A;
+  localparam logic [7:0] FAST_READ  = 8'h0B;
+
+  // SPI command FSM states
+  typedef enum logic [2:0] {
+    FSM_IDLE,
+    FSM_COMMAND,
+    FSM_ADDRESS,
+    FSM_READ_DATA,
+    FSM_WRITE_DATA
+  } spi_state_t;
+
+  spi_state_t spi_state;
+
   // Control registers
   logic ctrl_enable;
   logic ctrl_soft_reset;
@@ -67,6 +84,15 @@ module ahb_spi_s #(
   // SPI transmit shift register and bit counter
   logic [SPI_S_DATA_W-1:0] tx_shift;
   logic [2:0]              tx_bit_count;
+
+  // Received SPI byte
+  logic [SPI_S_DATA_W-1:0] received_byte;
+
+  // SPI command and address
+  logic [SPI_S_DATA_W-1:0] spi_command;
+  logic [23:0]             spi_address;
+  logic [23:0]             address_shift;
+  logic [4:0]              address_bit_count;
 
   // SPI clock edge detection
   logic spi_sck_d;
@@ -128,20 +154,30 @@ module ahb_spi_s #(
       ctrl_enable     <= 1'b0;
       ctrl_soft_reset <= 1'b0;
 
+      // SPI command FSM
+      spi_state <= FSM_IDLE;
+
       // Data registers
-      tx_data         <= '0;
-      rx_data         <= '0;
+      tx_data       <= '0;
+      rx_data       <= '0;
+      received_byte <= '0;
+
+      // SPI command and address
+      spi_command       <= '0;
+      spi_address       <= '0;
+      address_shift     <= '0;
+      address_bit_count <= '0;
 
       // Receive logic
-      rx_shift        <= '0;
-      bit_count       <= '0;
+      rx_shift  <= '0;
+      bit_count <= '0;
 
       // Transmit logic
-      tx_shift        <= '0;
-      tx_bit_count    <= '0;
+      tx_shift     <= '0;
+      tx_bit_count <= '0;
 
       // SPI clock history
-      spi_sck_d       <= 1'b0;
+      spi_sck_d <= 1'b0;
 
       // Status
       status_rx_valid <= 1'b0;
@@ -153,6 +189,20 @@ module ahb_spi_s #(
       // Remember previous SPI clock state
       spi_sck_d <= spi_sck;
 
+      // SPI command FSM
+      if (spi_ss) begin
+
+        spi_state         <= FSM_IDLE;
+        bit_count         <= 3'd0;
+        address_bit_count <= 5'd0;
+
+      end
+      else if (spi_state == FSM_IDLE) begin
+
+        spi_state <= FSM_COMMAND;
+
+      end
+
       // SPI RECEIVE
       // sample MOSI on the rising edge of SCK
       if (!spi_ss && spi_sck_rise) begin
@@ -162,24 +212,140 @@ module ahb_spi_s #(
           spi_mosi
         };
 
-        if (bit_count == 3'd7) begin
+        // Receiving command
+        if (spi_state == FSM_COMMAND) begin
 
-          // Eight bits received.
-          rx_data <= {
-            rx_shift[6:0],
+          if (bit_count == 3'd7) begin
+
+            received_byte <= {
+              rx_shift[6:0],
+              spi_mosi
+            };
+
+            rx_data <= {
+              rx_shift[6:0],
+              spi_mosi
+            };
+
+            status_rx_valid <= 1'b1;
+
+            bit_count <= 3'd0;
+
+            // Save command
+            spi_command <= {
+              rx_shift[6:0],
+              spi_mosi
+            };
+
+            // SPI command decode
+            unique case ({
+              rx_shift[6:0],
+              spi_mosi
+            })
+
+              SPI_WRITE,
+              SPI_READ,
+              FAST_WRITE,
+              FAST_READ:
+                spi_state <= FSM_ADDRESS;
+
+              default:
+                spi_state <= FSM_IDLE;
+
+            endcase
+
+          end
+          else begin
+
+            bit_count <= bit_count + 1'b1;
+
+          end
+
+        end
+
+        // Receiving address
+        else if (spi_state == FSM_ADDRESS) begin
+
+          address_shift <= {
+            address_shift[22:0],
             spi_mosi
           };
 
-          status_rx_valid <= 1'b1;
+          if (address_bit_count == 5'd23) begin
 
-          bit_count <= 3'd0;
+            // 24-bit address received.
+            spi_address <= {
+              address_shift[22:0],
+              spi_mosi
+            };
+
+            address_bit_count <= 5'd0;
+
+            // Decide whether this is a read or write.
+            if (spi_command == SPI_READ ||
+                spi_command == FAST_READ) begin
+
+              spi_state <= FSM_READ_DATA;
+
+            end
+            else begin
+
+              spi_state <= FSM_WRITE_DATA;
+
+            end
+
+          end
+          else begin
+
+            address_bit_count <= address_bit_count + 1'b1;
+
+          end
 
         end
-        else begin
 
-          bit_count <= bit_count + 1'b1;
+        // Receiving write data
+        else if (spi_state == FSM_WRITE_DATA) begin
+
+          if (bit_count == 3'd7) begin
+
+            // Eight bits received.
+            received_byte <= {
+              rx_shift[6:0],
+              spi_mosi
+            };
+
+            rx_data <= {
+              rx_shift[6:0],
+              spi_mosi
+            };
+
+            status_rx_valid <= 1'b1;
+
+            bit_count <= 3'd0;
+
+          end
+          else begin
+
+            bit_count <= bit_count + 1'b1;
+
+          end
 
         end
+
+      end
+
+      // SPI READ DATA
+      if (!spi_ss &&
+          spi_state == FSM_READ_DATA &&
+          status_tx_ready) begin
+
+        // Load the current transmit byte.
+        tx_shift     <= tx_data;
+        tx_bit_count <= 3'd0;
+
+        // A byte is now being transmitted.
+        status_tx_ready <= 1'b0;
+
       end
 
       // SPI TRANSMIT
@@ -191,10 +357,14 @@ module ahb_spi_s #(
           tx_bit_count <= 3'd0;
 
           status_tx_ready <= 1'b1;
+
         end
         else begin
+
           tx_bit_count <= tx_bit_count + 1'b1;
+
         end
+
       end
 
       // Keep transmit shift register updated
@@ -230,14 +400,22 @@ module ahb_spi_s #(
               // Software reset
               if (HWDATA[1]) begin
 
-                rx_shift        <= '0;
-                bit_count       <= '0;
+                rx_shift          <= '0;
+                bit_count         <= '0;
 
-                tx_shift        <= '0;
-                tx_bit_count    <= '0;
+                tx_shift          <= '0;
+                tx_bit_count      <= '0;
 
-                status_rx_valid <= 1'b0;
-                status_tx_ready <= 1'b1;
+                status_rx_valid   <= 1'b0;
+                status_tx_ready   <= 1'b1;
+
+                spi_state         <= FSM_IDLE;
+
+                spi_command       <= '0;
+                spi_address       <= '0;
+                address_shift     <= '0;
+                address_bit_count <= '0;
+
               end
             end
           end
@@ -258,10 +436,13 @@ module ahb_spi_s #(
 
               // A byte is now waiting to be transmitted.
               status_tx_ready <= 1'b0;
+
             end
           end
+
           default: begin
           end
+
         endcase
       end
     end
@@ -272,7 +453,7 @@ module ahb_spi_s #(
 
     if (!spi_ss && ctrl_enable && !status_tx_ready) begin
 
-      spi_miso = tx_data[7 - tx_bit_count];
+      spi_miso = tx_shift[7];
 
     end
     else begin
@@ -321,6 +502,7 @@ module ahb_spi_s #(
 
         default:
           HRDATA = '0;
+
       endcase
     end
 
@@ -328,9 +510,11 @@ module ahb_spi_s #(
 
   // AHB invalid-access detection
   always_comb begin
+
     invalid_access = 1'b0;
 
     if (write_enable) begin
+
       unique case (word_address_r)
 
         // STATUS is read-only
@@ -343,7 +527,7 @@ module ahb_spi_s #(
 
         default: begin
         end
-        
+
       endcase
     end
   end
@@ -354,5 +538,3 @@ module ahb_spi_s #(
 
   // FIXME: add 2-cycle error response for invalid access.
   assign HRESP = invalid_access ? 1'b1 : 1'b0;
-
-endmodule
