@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "soc.h"
+#include "config.h"
 #include "greg.h"
 
 // QSPI register addresses.

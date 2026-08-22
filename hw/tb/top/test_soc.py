@@ -638,18 +638,17 @@ async def load_firmware(dut, uart, image="firmware.bin", addr=bootloader.RAM_BAS
 # --------------------------------------------------------------------------
 #
 # Sending the image over the UART costs ~280 ms of simulated time and ~18 minutes of wall
-# clock.
-
-# `boot_preload` writes the image straight into the SRAM macros and then still
-# sends 'B' - the bank switch, the CPU reset and the refetch from RAM all stay
-# under test, and only the bulk transfer is skipped.
+# clock. So the `default` target writes it straight into the SRAM macros and
+# then still sends 'B' - the bank switch, the CPU reset and the refetch from
+# RAM all stay under test, and only the bulk transfer is skipped. `boot` is the
+# target that still does it the honest way.
 
 RAM_LANES = 4
 
 def ram_lane_arrays(dut):
     """Handles to the four byte-lane SRAM macro arrays.
 
-    Needs the signals to be public, which the boot_preload target arranges with
+    Needs the signals to be public, which the `default` target arranges with
     verilator's --public-flat-rw. Without it the traversal fails, so say so
     rather than letting an AttributeError surface with no explanation.
     """
@@ -662,7 +661,7 @@ def ram_lane_arrays(dut):
     except AttributeError as exc:
         raise AssertionError(
             f"cannot reach the SRAM macro arrays for a backdoor preload ({exc}). "
-            f"This needs verilator's --public-flat-rw, which the boot_preload "
+            f"This needs verilator's --public-flat-rw, which the `default` "
             f"target sets, and USE_MACRO_RAM=1 in hw/rtl/ram_ss.sv"
         ) from None
 
@@ -724,8 +723,8 @@ def cpu_state(dut):
     """A snapshot of cpu_ss's bank switch and CPU handshake, or None.
 
     Only reachable when the target made signals public (--public-flat-rw, i.e.
-    boot_preload). Returns None rather than raising so it can be called from an
-    error path without masking the original failure.
+    the `default` target). Returns None rather than raising so it can be called
+    from an error path without masking the original failure.
     """
     try:
         cpu = dut.u_grouper_soc_dig_ss.u_cpu_ss
@@ -980,7 +979,7 @@ DRIVEN_FW = ("uart_echo", "gpio", "qspi")
 ROM_IS_BOOTLOADER = "bootloader" in firmware_id()
 
 # Whether to skip the UART transfer and write the image into the SRAM macros
-# directly. The boot_preload target drops ram_preload.txt in the work root,
+# directly. The `default` target drops ram_preload.txt in the work root,
 # because that target is also the only one that passes verilator
 # --public-flat-rw - without which the backdoor is not reachable at all. So the
 # marker and the ability to act on it always arrive together.
@@ -1035,7 +1034,7 @@ def soc_test(**kwargs):
 async def test_preloaded_boot(dut):
     """The bank switch boots an image that was placed in RAM by the backdoor.
 
-    The `boot_preload` target. Same ending as test_bootloader_load - greeting,
+    The `default` target. Same ending as test_bootloader_load - greeting,
     'B', then the image has to report itself - but the image gets into RAM by
     a direct write to the SRAM macros instead of ~600 UART writes. That trades
     ~18 minutes of wall clock for a few seconds, at the cost of not exercising

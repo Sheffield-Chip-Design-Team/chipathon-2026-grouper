@@ -17,12 +17,13 @@ description: Directed cocotb top-level testbench for the Grouper SoC (hw/tb/top/
 # their code.hex to the work root, which is the cwd rom_ss.sv's $readmemh
 # resolves against. So the target selects the image -
 #
-#   default/debug/trace  the application firmware  (sw/scripts/build_fw.sh)
-#   boot                 the ROM bootloader        (sw/scripts/build_bootloader.sh)
+#   default/boot         the ROM bootloader        (sw/scripts/build_bootloader.sh)
+#   fw_rom/debug/trace   the application firmware  (sw/scripts/build_fw.sh)
 #
 # FW_LINK=ram builds the application for RAM instead of ROM, which is the form
 # the bootloader loads over the UART. The SoC's ROM is only 1 KiB, so anything
-# bigger than the bootloader has to go that way.
+# bigger than the bootloader has to go that way - which is why the bootloader
+# flow, not the ROM-linked one, is the default.
 
 scripts:
   build_fw:
@@ -61,10 +62,52 @@ filesets:
     depend:
       - sharc:soc_ip:grouper_soc:0.0.1
 
-# Deliberately no YAML merge key - prevents firmware build re-running 
+# Deliberately no YAML merge key - prevents firmware build re-running
 targets:
+  # The ROM holds the bootloader and the image is written straight into the
+  # SRAM macros rather than sent over the UART - ~18 minutes of wall clock
+  # becomes a few seconds, which is what makes this a usable default. The bank
+  # switch still happens for real, driven by a 'B' on the UART, so the part
+  # most likely to be broken stays covered; only the bulk transfer and the
+  # bootloader's 'W' path are skipped, and `boot` still covers those.
+  #
+  # --public-flat-rw is what makes the macro arrays reachable over VPI. It
+  # applies to this target only: it makes every signal public, which costs
+  # simulation speed and is not something the other targets should pay for -
+  # hence the flow options written out here rather than shared through
+  # &flow_opts below.
+  #
+  # --coverage is load bearing here too, and not for coverage: without it
+  # verilator flattens ram_ss's gen_macro_ram generate block away, the
+  # gen_sram[j].u_wrapper.u_sram_macro path stops existing, and the preload
+  # cannot find the arrays. Removing it fails the test with exactly that
+  # message out of ram_lane_arrays().
   default:
-    description: Grouper SoC cocotb simulation.
+    description: The ROM bootloader boots a RAM-linked image preloaded into the SRAM macros.
+    filesets: [rtl]
+    flow: sim
+    flow_options:
+      tool: verilator
+      cocotb_module: hw.tb.top.test_soc
+      verilator_options:
+        - -Wno-TIMESCALEMOD
+        - -Wno-fatal
+        - --sv
+        - --trace
+        - --coverage
+        - --public-flat-rw
+      run_options:
+        - --trace
+    toplevel: grouper_soc_top
+    hooks:
+      pre_build: [build_fw_ram, build_bootloader, mark_preload]
+
+  # The application firmware in the ROM, with no bootloader in the picture -
+  # what `default` was before the preload flow took that slot. Only firmware
+  # that fits the 1 KiB ROM can run this way; anything larger needs `default`
+  # or `boot`.
+  fw_rom:
+    description: A ROM-linked application image, booted directly from the ROM.
     filesets: [rtl]
     flow: sim
     flow_options: &flow_opts
@@ -83,7 +126,7 @@ targets:
       pre_build: [build_fw]
 
   debug:
-    description: As default, plus debug firmware and the ahb_debug peripheral.
+    description: As fw_rom, plus debug firmware and the ahb_debug peripheral.
     filesets: [rtl]
     flow: sim
     flow_options: *flow_opts
@@ -114,41 +157,6 @@ targets:
     toplevel: grouper_soc_top
     hooks:
       pre_build: [build_fw_ram, build_bootloader]
-
-  # As boot, but the image is written straight into the SRAM macros instead of
-  # being sent over the UART - ~18 minutes of wall clock becomes a few seconds.
-  # The bank switch still happens for real, driven by a 'B' on the UART, so the
-  # part most likely to be broken stays covered; only the bulk transfer and the
-  # bootloader's 'W' path are skipped, and `boot` still covers those.
-  #
-  # --public-flat-rw is what makes the macro arrays reachable over VPI. It
-  # applies to this target only: it makes every signal public, which costs
-  # simulation speed and is not something the other targets should pay for.
-  #
-  # --coverage is load bearing here too, and not for coverage: without it
-  # verilator flattens ram_ss's gen_macro_ram generate block away, the
-  # gen_sram[j].u_wrapper.u_sram_macro path stops existing, and the preload
-  # cannot find the arrays. Removing it fails the test with exactly that
-  # message out of ram_lane_arrays().
-  boot_preload:
-    description: As boot, but the image is preloaded into RAM rather than sent over the UART.
-    filesets: [rtl]
-    flow: sim
-    flow_options:
-      tool: verilator
-      cocotb_module: hw.tb.top.test_soc
-      verilator_options:
-        - -Wno-TIMESCALEMOD
-        - -Wno-fatal
-        - --sv
-        - --trace
-        - --coverage
-        - --public-flat-rw
-      run_options:
-        - --trace
-    toplevel: grouper_soc_top
-    hooks:
-      pre_build: [build_fw_ram, build_bootloader, mark_preload]
 
   # CPU_TRACE turns on picorv32's trace port via cpu_ss's ENABLE_TRACE, but
   # ahb_debug is what actually writes cpu.trace - hence DEBUG_PERIPH as well.
