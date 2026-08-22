@@ -148,7 +148,6 @@ module digital_ss #(
     .ADDR_WIDTH (RAM_ADDR_WIDTH)
   ) u_ram_ss (
     .clk        (clk),
-    .rst_n      (rst_n),
     .ram_addr   (ram_addr),
     .ram_read   (ram_read),
     .ram_write  (ram_write),
