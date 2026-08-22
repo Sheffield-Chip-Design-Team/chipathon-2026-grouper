@@ -1,5 +1,10 @@
 // Wrapper for gf180mcu_ocd_ip_sram__sram1024x8m8wm1
+//
+// The macro instantiated here comes from whichever fileset the sram1024x8.core
+// target selected: _rtl_model.v (`generic`) or _gl_model.v (`gate`). Ports are
+// identical either way.
 
+/* verilator lint_off DECLFILENAME */
 module sram1024x8_wrapper (
 	input  wire 			CLK,
 	input  wire 			CEN,	// Chip Enable
