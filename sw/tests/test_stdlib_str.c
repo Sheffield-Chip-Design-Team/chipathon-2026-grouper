@@ -8,6 +8,8 @@
 
 #include "irq.h"
 
+// FIXME - these tests are now much bigger than 4k
+
 // Self-checking exercise of the string/memory, timing and MMIO parts of
 // sw/src/lib. The formatter has its own test in test_stdlib_fmt.c - split
 // because the two together do not fit the 8 KiB ROM window in sw/soc.ld.
