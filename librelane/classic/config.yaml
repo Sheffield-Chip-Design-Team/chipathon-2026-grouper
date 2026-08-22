@@ -79,7 +79,7 @@ VERILOG_FILES:
 - dir::../../hw/rtl/digital_ss.sv
 - dir::../../hw/rtl/grouper_soc_top.sv
 
-# CHIP core wrapper
+# CHIP core wrapper: the pin-flattening shell that is this flow's DESIGN_NAME.
 - dir::../../hw/pd/grouper_soc_chip_core.sv
 
 VERILOG_INCLUDE_DIRS:

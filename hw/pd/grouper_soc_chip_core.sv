@@ -1,117 +1,204 @@
 // SPDX-FileCopyrightText: © 2025 XXX Authors
 // SPDX-License-Identifier: Apache-2.0
+//
+// grouper_soc_chip_core - the hardened macro, and the top level of the
+// LibreLane classic flow (librelane/classic/config.yaml).
+//
+// It wraps grouper_soc_top in a flat pad-facing port list: every pad-facing
+// port is a single signal, so the macro's boundary is one net per pad line
+// rather than a bus. The GPIO pad map is the concatenations in the instance
+// below - pad index N is gpio[N] - and there is nothing else to it.
+//
+// Only GPIO carries the pad-control interface, because only GPIO is
+// configurable at run time. uart_rx and uart_tx leave here as plain signals;
+// mapping them onto pads - pulls off for uart_rx, oe=1 / ie=0 for uart_tx - is
+// chip_top's job, along with every spare pad in the slot. That keeps this port
+// list independent of which slot the padring is built for, and it is why the
+// pad budget is fixed here rather than parameterised (a flat port list cannot
+// be).
+//
+// Port names are <function>_<pad kind>_<signal>, with the index carried in the
+// function where the function has more than one pad:
+//
+//   gpio_0_bidir_{in,out,oe,cs,sl,ie,pu,pd} .. gpio_15_*  bidir pads 0-15
 
 `default_nettype none
 
-module grouper_soc_chip_core #(
-    // Defaults are the slot 1x1 pad counts; chip_top always overrides these
-    // from slot_defines.svh.
-    parameter int unsigned NUM_GPIO       = 16,
-    parameter int unsigned NUM_INPUT_PADS = 1,
-    parameter int unsigned NUM_BIDIR_PADS = 40
-)(
-    input  wire                      clk,       // clock
-    input  wire                      rst_n,     // reset (active low)
+module grouper_soc_chip_core (
+    input  wire clk,               // clock
+    input  wire rst_n,             // reset (active low)
 
-    input  wire [NUM_INPUT_PADS-1:0] input_in,  // Input value
-    output wire [NUM_INPUT_PADS-1:0] input_pu,  // Pull-up
-    output wire [NUM_INPUT_PADS-1:0] input_pd,  // Pull-down
-
-    input  wire [NUM_BIDIR_PADS-1:0] bidir_in,  // Input value
-    output wire [NUM_BIDIR_PADS-1:0] bidir_out, // Output value
-    output wire [NUM_BIDIR_PADS-1:0] bidir_oe,  // Output enable
-    output wire [NUM_BIDIR_PADS-1:0] bidir_cs,  // Input type    (0=CMOS Buffer, 1=Schmitt Trigger)
-    output wire [NUM_BIDIR_PADS-1:0] bidir_sl,  // Slew rate     (0=fast, 1=slow)
-    output wire [NUM_BIDIR_PADS-1:0] bidir_ie,  // Input enable
-    output wire [NUM_BIDIR_PADS-1:0] bidir_pu,  // Pull-up
-    output wire [NUM_BIDIR_PADS-1:0] bidir_pd   // Pull-down
-
-    // FIXME - add Trouper Bus interface
-
-    // See here for usage: https://gf180mcu-pdk.readthedocs.io/en/latest/IPs/IO/gf180mcu_fd_io/digital.html
-    //
-    // Pad map (slot A + slot C: 12 input pads, 40 bidir pads)
-    //
-    //   input_PAD[0]              uart_rx
-    //   bidir_PAD[NUM_GPIO-1:0]   gpio[NUM_GPIO-1:0]  (SoC drives out/oe/cs/sl/ie/pu/pd)
-    //   bidir_PAD[NUM_GPIO]       uart_tx             (output only)
-    //   bidir_PAD[..:NUM_GPIO+1]  unused, driven low
-
-    localparam int unsigned UART_TX_PAD  = NUM_GPIO;         // bidir index of uart_tx
-    localparam int unsigned NUM_USED_BID = NUM_GPIO + 1;     // gpio + uart_tx
-
-    // --- SoC <-> pad signals ------------------------------------------------
-
-    wire [NUM_GPIO-1:0] gpio_in;
-    wire [NUM_GPIO-1:0] gpio_out;
-    wire [NUM_GPIO-1:0] gpio_oe;
-    wire [NUM_GPIO-1:0] gpio_cs;
-    wire [NUM_GPIO-1:0] gpio_sl;
-    wire [NUM_GPIO-1:0] gpio_ie;
-    wire [NUM_GPIO-1:0] gpio_pu;
-    wire [NUM_GPIO-1:0] gpio_pd;
-
-    wire                uart_tx;
-    wire                uart_rx;
-
-    // --- Input-only pads ----------------------------------------------------
-
-    // Disable pull-up and pull-down for input
-    assign input_pu = '0;
-    assign input_pd = '0;
-
-    assign uart_rx  = input_in[0];
+    // --- UART ---------------------------------------------------------------
+    input  wire uart_rx,           // from an input-only pad
+    output wire uart_tx,           // to a bidir pad held as an output
 
     // --- Bidirectional pads -------------------------------------------------
+    //   *_in  Input value                
+    //   *_ie  Input enable
+    //   *_out Output value               
+    //  *_pu Pull-up
+    //   *_oe  Output enable              
+    //   *_pd Pull-down
+    //   *_cs  Input type (0=CMOS Buffer, 1=Schmitt Trigger)
+    //   *_sl  Slew rate  (0=fast, 1=slow)
 
-    // GPIO pads: every pad control comes from the SoC's GPIO controller.
-    assign bidir_out[NUM_GPIO-1:0] = gpio_out;
-    assign bidir_oe [NUM_GPIO-1:0] = gpio_oe;
-    assign bidir_cs [NUM_GPIO-1:0] = gpio_cs;
-    assign bidir_sl [NUM_GPIO-1:0] = gpio_sl;
-    assign bidir_ie [NUM_GPIO-1:0] = gpio_ie;
-    assign bidir_pu [NUM_GPIO-1:0] = gpio_pu;
-    assign bidir_pd [NUM_GPIO-1:0] = gpio_pd;
+    input  wire gpio_0_bidir_in,    // gpio_0 PAD
+    output wire gpio_0_bidir_out,
+    output wire gpio_0_bidir_oe,
+    output wire gpio_0_bidir_cs,
+    output wire gpio_0_bidir_sl,
+    output wire gpio_0_bidir_ie,
+    output wire gpio_0_bidir_pu,
+    output wire gpio_0_bidir_pd,
 
-    assign gpio_in = bidir_in[NUM_GPIO-1:0];
+    input  wire gpio_1_bidir_in,    // gpio_1 PAD
+    output wire gpio_1_bidir_out,
+    output wire gpio_1_bidir_oe,
+    output wire gpio_1_bidir_cs,
+    output wire gpio_1_bidir_sl,
+    output wire gpio_1_bidir_ie,
+    output wire gpio_1_bidir_pu,
+    output wire gpio_1_bidir_pd,
 
-    // uart_tx: permanent output, input buffer off.
-    assign bidir_out[UART_TX_PAD] = uart_tx;
-    assign bidir_oe [UART_TX_PAD] = 1'b1;
-    assign bidir_cs [UART_TX_PAD] = 1'b0;
-    assign bidir_sl [UART_TX_PAD] = 1'b0;
-    assign bidir_ie [UART_TX_PAD] = 1'b0;
-    assign bidir_pu [UART_TX_PAD] = 1'b0;
-    assign bidir_pd [UART_TX_PAD] = 1'b0;
+    input  wire gpio_2_bidir_in,    // gpio_2 PAD
+    output wire gpio_2_bidir_out,
+    output wire gpio_2_bidir_oe,
+    output wire gpio_2_bidir_cs,
+    output wire gpio_2_bidir_sl,
+    output wire gpio_2_bidir_ie,
+    output wire gpio_2_bidir_pu,
+    output wire gpio_2_bidir_pd,
 
-    // Spare pads: driven low so they never float, input buffer off.
-    if (NUM_BIDIR_PADS > NUM_USED_BID) begin : gen_spare_bidir
-        assign bidir_out[NUM_BIDIR_PADS-1:NUM_USED_BID] = '0;
-        assign bidir_oe [NUM_BIDIR_PADS-1:NUM_USED_BID] = '1;
-        assign bidir_cs [NUM_BIDIR_PADS-1:NUM_USED_BID] = '0;
-        assign bidir_sl [NUM_BIDIR_PADS-1:NUM_USED_BID] = '0;
-        assign bidir_ie [NUM_BIDIR_PADS-1:NUM_USED_BID] = '0;
-        assign bidir_pu [NUM_BIDIR_PADS-1:NUM_USED_BID] = '0;
-        assign bidir_pd [NUM_BIDIR_PADS-1:NUM_USED_BID] = '0;
-    end
+    input  wire gpio_3_bidir_in,    // gpio_3 PAD
+    output wire gpio_3_bidir_out,
+    output wire gpio_3_bidir_oe,
+    output wire gpio_3_bidir_cs,
+    output wire gpio_3_bidir_sl,
+    output wire gpio_3_bidir_ie,
+    output wire gpio_3_bidir_pu,
+    output wire gpio_3_bidir_pd,
 
-    // Tie off the pad inputs nothing reads. input_in[0] is uart_rx; the slice
-    // above it is empty when the slot has a single input pad, and an empty
-    // part-select is an out-of-range error rather than a zero-width value.
-    logic _unused;
-    if (NUM_INPUT_PADS > 1) begin : gen_unused_multi_input
-        assign _unused = &{1'b0,
-                           input_in[NUM_INPUT_PADS-1:1],
-                           bidir_in[NUM_BIDIR_PADS-1:NUM_GPIO]};
-    end else begin : gen_unused_single_input
-        assign _unused = &{1'b0,
-                           bidir_in[NUM_BIDIR_PADS-1:NUM_GPIO]};
-    end
+    input  wire gpio_4_bidir_in,    // gpio_4 PAD
+    output wire gpio_4_bidir_out,
+    output wire gpio_4_bidir_oe,
+    output wire gpio_4_bidir_cs,
+    output wire gpio_4_bidir_sl,
+    output wire gpio_4_bidir_ie,
+    output wire gpio_4_bidir_pu,
+    output wire gpio_4_bidir_pd,
 
-    // --- Grouper SoC Instantiation ---------------------------------------------------------
+    input  wire gpio_5_bidir_in,    // gpio_5 PAD
+    output wire gpio_5_bidir_out,
+    output wire gpio_5_bidir_oe,
+    output wire gpio_5_bidir_cs,
+    output wire gpio_5_bidir_sl,
+    output wire gpio_5_bidir_ie,
+    output wire gpio_5_bidir_pu,
+    output wire gpio_5_bidir_pd,
+
+    input  wire gpio_6_bidir_in,    // gpio_6 PAD
+    output wire gpio_6_bidir_out,
+    output wire gpio_6_bidir_oe,
+    output wire gpio_6_bidir_cs,
+    output wire gpio_6_bidir_sl,
+    output wire gpio_6_bidir_ie,
+    output wire gpio_6_bidir_pu,
+    output wire gpio_6_bidir_pd,
+
+    input  wire gpio_7_bidir_in,    // gpio_7 PAD
+    output wire gpio_7_bidir_out,
+    output wire gpio_7_bidir_oe,
+    output wire gpio_7_bidir_cs,
+    output wire gpio_7_bidir_sl,
+    output wire gpio_7_bidir_ie,
+    output wire gpio_7_bidir_pu,
+    output wire gpio_7_bidir_pd,
+
+    input  wire gpio_8_bidir_in,    // gpio_8 PAD
+    output wire gpio_8_bidir_out,
+    output wire gpio_8_bidir_oe,
+    output wire gpio_8_bidir_cs,
+    output wire gpio_8_bidir_sl,
+    output wire gpio_8_bidir_ie,
+    output wire gpio_8_bidir_pu,
+    output wire gpio_8_bidir_pd,
+
+    input  wire gpio_9_bidir_in,    // gpio_9 PAD
+    output wire gpio_9_bidir_out,
+    output wire gpio_9_bidir_oe,
+    output wire gpio_9_bidir_cs,
+    output wire gpio_9_bidir_sl,
+    output wire gpio_9_bidir_ie,
+    output wire gpio_9_bidir_pu,
+    output wire gpio_9_bidir_pd,
+
+    input  wire gpio_10_bidir_in,   // gpio_10 PAD
+    output wire gpio_10_bidir_out,
+    output wire gpio_10_bidir_oe,
+    output wire gpio_10_bidir_cs,
+    output wire gpio_10_bidir_sl,
+    output wire gpio_10_bidir_ie,
+    output wire gpio_10_bidir_pu,
+    output wire gpio_10_bidir_pd,
+
+    input  wire gpio_11_bidir_in,   // gpio_11 PAD
+    output wire gpio_11_bidir_out,
+    output wire gpio_11_bidir_oe,
+    output wire gpio_11_bidir_cs,
+    output wire gpio_11_bidir_sl,
+    output wire gpio_11_bidir_ie,
+    output wire gpio_11_bidir_pu,
+    output wire gpio_11_bidir_pd,
+
+    input  wire gpio_12_bidir_in,   // gpio_12 PAD
+    output wire gpio_12_bidir_out,
+    output wire gpio_12_bidir_oe,
+    output wire gpio_12_bidir_cs,
+    output wire gpio_12_bidir_sl,
+    output wire gpio_12_bidir_ie,
+    output wire gpio_12_bidir_pu,
+    output wire gpio_12_bidir_pd,
+
+    input  wire gpio_13_bidir_in,   // gpio_13 PAD
+    output wire gpio_13_bidir_out,
+    output wire gpio_13_bidir_oe,
+    output wire gpio_13_bidir_cs,
+    output wire gpio_13_bidir_sl,
+    output wire gpio_13_bidir_ie,
+    output wire gpio_13_bidir_pu,
+    output wire gpio_13_bidir_pd,
+
+    input  wire gpio_14_bidir_in,   // gpio_14 PAD
+    output wire gpio_14_bidir_out,
+    output wire gpio_14_bidir_oe,
+    output wire gpio_14_bidir_cs,
+    output wire gpio_14_bidir_sl,
+    output wire gpio_14_bidir_ie,
+    output wire gpio_14_bidir_pu,
+    output wire gpio_14_bidir_pd,
+
+    input  wire gpio_15_bidir_in,   // gpio_15 PAD
+    output wire gpio_15_bidir_out,
+    output wire gpio_15_bidir_oe,
+    output wire gpio_15_bidir_cs,
+    output wire gpio_15_bidir_sl,
+    output wire gpio_15_bidir_ie,
+    output wire gpio_15_bidir_pu,
+    output wire gpio_15_bidir_pd
+
+);
+
+    // --- Grouper SoC --------------------------------------------------------
+    //
+    // Instance name is load-bearing: librelane/classic/config.yaml places the
+    // SRAM macros by their full flattened path from this module, which starts
+    // u_grouper_soc_top...
+    //
+    // The concatenations are the GPIO pad map: bit N of each vector is the pad
+    // named gpio_N_bidir_*.
 
     grouper_soc_top #(
-        .NUM_GPIO       (NUM_GPIO)
+        .NUM_GPIO       (16)
     ) u_grouper_soc_top (
         .clk            (clk),
         .async_rst_n    (rst_n),
@@ -119,14 +206,45 @@ module grouper_soc_chip_core #(
         .uart_tx        (uart_tx),
         .uart_rx        (uart_rx),
 
-        .gpio_in        (gpio_in),
-        .gpio_out       (gpio_out),
-        .gpio_oe        (gpio_oe),
-        .gpio_cs        (gpio_cs),
-        .gpio_sl        (gpio_sl),
-        .gpio_ie        (gpio_ie),
-        .gpio_pu        (gpio_pu),
-        .gpio_pd        (gpio_pd)
+        .gpio_in        ({gpio_15_bidir_in, gpio_14_bidir_in, gpio_13_bidir_in, gpio_12_bidir_in, gpio_11_bidir_in,
+                             gpio_10_bidir_in, gpio_9_bidir_in, gpio_8_bidir_in, gpio_7_bidir_in, gpio_6_bidir_in,
+                             gpio_5_bidir_in, gpio_4_bidir_in, gpio_3_bidir_in, gpio_2_bidir_in, gpio_1_bidir_in,
+                             gpio_0_bidir_in}),
+
+        .gpio_out       ({gpio_15_bidir_out, gpio_14_bidir_out, gpio_13_bidir_out, gpio_12_bidir_out, gpio_11_bidir_out,
+                             gpio_10_bidir_out, gpio_9_bidir_out, gpio_8_bidir_out, gpio_7_bidir_out, gpio_6_bidir_out,
+                             gpio_5_bidir_out, gpio_4_bidir_out, gpio_3_bidir_out, gpio_2_bidir_out, gpio_1_bidir_out,
+                             gpio_0_bidir_out}),
+
+        .gpio_oe        ({gpio_15_bidir_oe, gpio_14_bidir_oe, gpio_13_bidir_oe, gpio_12_bidir_oe, gpio_11_bidir_oe,
+                             gpio_10_bidir_oe, gpio_9_bidir_oe, gpio_8_bidir_oe, gpio_7_bidir_oe, gpio_6_bidir_oe,
+                             gpio_5_bidir_oe, gpio_4_bidir_oe, gpio_3_bidir_oe, gpio_2_bidir_oe, gpio_1_bidir_oe,
+                             gpio_0_bidir_oe}),
+
+        .gpio_cs        ({gpio_15_bidir_cs, gpio_14_bidir_cs, gpio_13_bidir_cs, gpio_12_bidir_cs, gpio_11_bidir_cs,
+                             gpio_10_bidir_cs, gpio_9_bidir_cs, gpio_8_bidir_cs, gpio_7_bidir_cs, gpio_6_bidir_cs,
+                             gpio_5_bidir_cs, gpio_4_bidir_cs, gpio_3_bidir_cs, gpio_2_bidir_cs, gpio_1_bidir_cs,
+                             gpio_0_bidir_cs}),
+
+        .gpio_sl        ({gpio_15_bidir_sl, gpio_14_bidir_sl, gpio_13_bidir_sl, gpio_12_bidir_sl, gpio_11_bidir_sl,
+                             gpio_10_bidir_sl, gpio_9_bidir_sl, gpio_8_bidir_sl, gpio_7_bidir_sl, gpio_6_bidir_sl,
+                             gpio_5_bidir_sl, gpio_4_bidir_sl, gpio_3_bidir_sl, gpio_2_bidir_sl, gpio_1_bidir_sl,
+                             gpio_0_bidir_sl}),
+
+        .gpio_ie        ({gpio_15_bidir_ie, gpio_14_bidir_ie, gpio_13_bidir_ie, gpio_12_bidir_ie, gpio_11_bidir_ie,
+                             gpio_10_bidir_ie, gpio_9_bidir_ie, gpio_8_bidir_ie, gpio_7_bidir_ie, gpio_6_bidir_ie,
+                             gpio_5_bidir_ie, gpio_4_bidir_ie, gpio_3_bidir_ie, gpio_2_bidir_ie, gpio_1_bidir_ie,
+                             gpio_0_bidir_ie}),
+
+        .gpio_pu        ({gpio_15_bidir_pu, gpio_14_bidir_pu, gpio_13_bidir_pu, gpio_12_bidir_pu, gpio_11_bidir_pu,
+                             gpio_10_bidir_pu, gpio_9_bidir_pu, gpio_8_bidir_pu, gpio_7_bidir_pu, gpio_6_bidir_pu,
+                             gpio_5_bidir_pu, gpio_4_bidir_pu, gpio_3_bidir_pu, gpio_2_bidir_pu, gpio_1_bidir_pu,
+                             gpio_0_bidir_pu}),
+
+        .gpio_pd        ({gpio_15_bidir_pd, gpio_14_bidir_pd, gpio_13_bidir_pd, gpio_12_bidir_pd, gpio_11_bidir_pd,
+                             gpio_10_bidir_pd, gpio_9_bidir_pd, gpio_8_bidir_pd, gpio_7_bidir_pd, gpio_6_bidir_pd,
+                             gpio_5_bidir_pd, gpio_4_bidir_pd, gpio_3_bidir_pd, gpio_2_bidir_pd, gpio_1_bidir_pd,
+                             gpio_0_bidir_pd})
     );
 
 endmodule
