@@ -60,6 +60,13 @@ VERILOG_FILES:
 - dir::../../hw/rtl/gpio/gpio_ctrl_pkg.sv
 - dir::../../hw/rtl/gpio/ahb_gpio_ctrl.sv
 - dir::../../hw/rtl/spi_s/ahb_spi_s.sv
+- dir::../../hw/rtl/spi_m/spi_m_clk_div.sv
+- dir::../../hw/rtl/spi_m/spi_m_rx.sv
+- dir::../../hw/rtl/spi_m/spi_m_tx.sv
+- dir::../../hw/rtl/spi_m/spi_m_core.sv
+- dir::../../hw/rtl/spi_m/ahb_spi_m.sv
+- dir::../../hw/rtl/qspi/qspi.sv
+- dir::../../hw/rtl/qspi/ahb_qspi.sv
 - dir::../../hw/rtl/uart/uart_clk_div.sv
 - dir::../../hw/rtl/uart/uart_rx.sv
 - dir::../../hw/rtl/uart/uart_tx.sv
@@ -197,11 +204,11 @@ MACROS:
     # One Liberty per corner, matching the STA_CORNERS names 
     lib:
       "*_tt_025C_3v30":
-        - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__tt_025C_3v30.lib
-      # "*_ss_125C_3v00":
-      #   - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__ss_125C_3v00.lib
+      - dir::../../gf180mcu/gf180mcuD/libs.ref/gf180mcu_fd_sc_mcu7t5v0/lib/gf180mcu_fd_sc_mcu7t5v0__tt_025C_3v30.lib
+      "*_ss_125C_3v00":
+      - dir::../../gf180mcu/gf180mcuD/libs.ref/gf180mcu_fd_sc_mcu7t5v0/lib/gf180mcu_fd_sc_mcu7t5v0__ss_125C_3v00.lib
       "*_ff_n40C_3v60":
-        - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__ff_n40C_3v60.lib
+      - dir::../../gf180mcu/gf180mcuD/libs.ref/gf180mcu_fd_sc_mcu7t5v0/lib/gf180mcu_fd_sc_mcu7t5v0__ff_n40C_3v60.lib
 
 # This is an alternative method compared to
 # specifying the power connections in the RTL
@@ -461,11 +468,11 @@ STA_CORNERS:
 
 LIB:
   "*_tt_025C_3v30":
-    - /foss/pdks/gf180mcuD/libs.ref/gf180mcu_fd_sc_mcu7t5v0/lib/gf180mcu_fd_sc_mcu7t5v0__tt_025C_3v30.lib
+    - pdk_dir::/libs.ref/gf180mcu_fd_sc_mcu7t5v0/lib/gf180mcu_fd_sc_mcu7t5v0__tt_025C_3v30.lib
   "*_ss_125C_3v00":
-    - /foss/pdks/gf180mcuD/libs.ref/gf180mcu_fd_sc_mcu7t5v0/lib/gf180mcu_fd_sc_mcu7t5v0__ss_125C_3v00.lib
+    - pdk_dir::/libs.ref/gf180mcu_fd_sc_mcu7t5v0/lib/gf180mcu_fd_sc_mcu7t5v0__ss_125C_3v00.lib
   "*_ff_n40C_3v60":
-    - /foss/pdks/gf180mcuD/libs.ref/gf180mcu_fd_sc_mcu7t5v0/lib/gf180mcu_fd_sc_mcu7t5v0__ff_n40C_3v60.lib
+    - pdk_dir::/libs.ref/gf180mcu_fd_sc_mcu7t5v0/lib/gf180mcu_fd_sc_mcu7t5v0__ff_n40C_3v60.lib
 
 # ---------------------------------------------------------------------------
 # DRC / LVS / Antenna

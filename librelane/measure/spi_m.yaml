@@ -12,6 +12,9 @@ DESIGN_NAME: ahb_spi_m
 
 VERILOG_FILES:
 - dir::../../hw/rtl/ahb3lite/ahb3lite_pkg.sv
+- dir::../../hw/rtl/common/downcounter.sv
+- dir::../../hw/rtl/common/shift_reg.sv
+- dir::../../hw/rtl/common/small_sync_fifo.sv
 - dir::../../hw/rtl/spi_m/spi_m_clk_div.sv
 - dir::../../hw/rtl/spi_m/spi_m_tx.sv
 - dir::../../hw/rtl/spi_m/spi_m_rx.sv

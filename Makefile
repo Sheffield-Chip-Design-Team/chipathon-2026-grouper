@@ -73,9 +73,9 @@ GE_BLOCKS ?= spi_s spi_m qspi
 
 # Multiplier applied to each block's measured area to allow for the features it
 # still has to grow. Rationale per block in librelane/measure/README.md.
-GE_MULT_spi_s = 2.0
-GE_MULT_spi_m = 1.3
-GE_MULT_qspi  = 2.0
+GE_MULT_spi_s = 1.0
+GE_MULT_spi_m = 1.0
+GE_MULT_qspi  = 1.0
 
 # Synthesis first, then every report together - a LibreLane run buries a few
 # hundred lines of its own output between blocks.

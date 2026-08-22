@@ -538,3 +538,5 @@ module ahb_spi_s #(
 
   // FIXME: add 2-cycle error response for invalid access.
   assign HRESP = invalid_access ? 1'b1 : 1'b0;
+
+endmodule

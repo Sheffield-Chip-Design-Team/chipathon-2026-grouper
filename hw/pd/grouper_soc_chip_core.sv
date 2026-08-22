@@ -25,6 +25,7 @@ module grouper_soc_chip_core #(
     output wire [NUM_BIDIR_PADS-1:0] bidir_ie,  // Input enable
     output wire [NUM_BIDIR_PADS-1:0] bidir_pu,  // Pull-up
     output wire [NUM_BIDIR_PADS-1:0] bidir_pd   // Pull-down
+);
 
     // FIXME - add Trouper Bus interface
 
