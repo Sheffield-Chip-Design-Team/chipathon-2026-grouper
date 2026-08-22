@@ -127,8 +127,8 @@ e_state                  prev_state;
   always_comb begin : next_state_logic
 
     next_state = state;
-     $display("state=%0d enable=%0b start=%0b cmd_en=%0b next=%0d",
-             state, enable, start, cmd_en, next_state);
+    //  $display("state=%0d enable=%0b start=%0b cmd_en=%0b next=%0d",
+    //          state, enable, start, cmd_en, next_state);
 
 
     unique case (state)

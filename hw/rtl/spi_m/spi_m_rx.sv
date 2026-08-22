@@ -67,10 +67,9 @@ module spi_m_rx #(
     .load_value ('0),
     .in         (spi_miso),
     .value_out  (fifo_wdata),
-    .out        ()
+    .out        () 
   );
 
-  
   downcounter #(
     .WIDTH(SHIFT_CTR_W)
   ) u_shift_ctr (

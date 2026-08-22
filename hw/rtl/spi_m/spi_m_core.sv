@@ -51,7 +51,7 @@ module spi_m_core #(
   logic spi_clk_en;
   logic received;
 
-  spi_clk_div #(
+  spi_m_clk_div #(
     .CLK_DIV_BITS(CLK_DIV_BITS)
   ) u_clk_div (
     .clk      (clk),
