@@ -107,10 +107,19 @@ VERILOG_DEFINES:
 # Enable plugin for better SystemVerilog support
 USE_SLANG: true
 SLANG_ARGUMENTS: ['--keep-hierarchy']
-# SYNTH_HIERARCHY_MODE: keep
 SYNTH_HIERARCHY_MODE: deferred_flatten
 
-SYNTH_AUTONAME: true # human readable names
+# OFF because ON makes Magic streamout die with "stack smashing" on this RTL's
+# deep hierarchy, in BOTH flatten and deferred_flatten (jobs 4296, 4314 -- 4296
+# ground in Magic for 121 minutes before dying). OFF got the flow to step 74.
+
+# Cost: the netlist no longer carries readable instance names, so the
+#   grep -o '[^ ]*u_sram_macro' <run>/*-yosys-synthesis/*.nl.v | sort -u
+# check recommended in the MACROS block below only works against a run made
+# while this was still true. Confirm the macro instance paths from an older run
+# rather than re-deriving them after this change.
+SYNTH_AUTONAME: false
+
 SYNTH_STRATEGY: "AREA 0"
 SYNTH_SIZING: true
 SYNTH_ABC_DFF: true
@@ -152,21 +161,29 @@ MACROS:
       # strip west of the block, a 359um band across the top, a 103um strip
       # east of it, and 9 rows in the column gap.
       #
-      # x: 309.12 and 668.64 are both multiples of the 0.56um site width, and
-      #    their 359.52um spacing is 6 x the 59.92um PDN half-period, which is
-      #    what puts a VSS strap on each macro's west power band and a VDD
-      #    strap on its east one -- see constraint 3 in the PDN section. These
-      #    are not free parameters. Only the macros' phase RELATIVE to the
-      #    strap lattice matters, so they must move whenever PDN_VOFFSET does,
-      #    by the same amount, and otherwise only in whole 59.92um half-periods.
+      # x: 309.12 and 668.64 are both multiples of the 0.56um site width, which
+      #    is the one hard requirement on them.
       #
-      #    Both columns moved 10.64um west (from 319.76 / 679.28) when
-      #    PDN_VOFFSET went 14.98 -> 4.34 to fit a 19th strap -- constraint 4 in
-      #    the PDN section. Verified after the move: col0 west band 309.12
-      #    catches VSS at 310.66 and its east band 607.42 catches VDD at 610.26;
-      #    col1 west band 668.64 catches VSS at 670.18 and its east band 966.94
-      #    catches VDD at 969.78. Re-check with `check_power_grid -net VDD` /
-      #    `-net VSS` after ANY change to either number.
+      #    STRAP PHASE IS NOT A CONSTRAINT ON THESE NUMBERS, contrary to what
+      #    this comment used to claim. It said the 359.52um spacing had to be
+      #    6 x the 59.92um PDN half-period to land a VSS strap on each macro's
+      #    west power band and a VDD strap on its east one, and concluded the
+      #    macros had to move whenever PDN_VOFFSET did. The premise is wrong:
+      #    the macro exposes 239 VDD and 195 VSS Metal3 tabs over its entire
+      #    perimeter rather than two edge bands, so any on-grid Metal4 lattice
+      #    crossing it taps both nets -- see constraint 3 in the PDN section.
+      #
+      #    Both columns did move 10.64um west (from 319.76 / 679.28) when
+      #    PDN_VOFFSET went 14.98 -> 4.34 to fit a 19th strap (constraint 4).
+      #    That move was unnecessary rather than harmful; the coordinates stay
+      #    where they are because they are on-grid and consistent with the
+      #    FP_OBSTRUCTIONS rectangle below, not because phase demands it.
+      #
+      #    NEITHER THE MOVE NOR THE 4.34 OFFSET HAS BEEN RUN. Both were derived
+      #    arithmetically (TRIAL_NOTES.md Session 5 section 8) and the next run
+      #    must confirm design__power_grid_violation__count__net:VSS at the
+      #    *-checker-powergridviolations step, and that the improvised strap at
+      #    x~1016 is gone, before either is trusted.
       #
       #    The 123.34um now east of the block is 113.34um of rows after the
       #    halo -- a real 202-site-wide placeable column, not a stranded sliver,
@@ -285,7 +302,8 @@ PDN_HORIZONTAL_LAYER: Metal5
 # ---------------------------------------------------------------------------
 # Straps
 #
-# Three independent constraints set these numbers.
+# Four constraints set these numbers, listed below in the order they were
+# discovered rather than numerically.
 #
 # 1. ROUTING-GRID ALIGNMENT (this is the DRC one). Every width, pitch and
 #    spacing is a whole number of routing tracks: 0.56um on Metal2/3/4,
@@ -321,25 +339,42 @@ PDN_HORIZONTAL_LAYER: Metal5
 #    pdngen has nothing to improvise. Margins are tight but legal: 1.82um of
 #    core west of the first stripe, 1.14um east of the last.
 #
-#    THE LATTICE MOVED, SO THE MACROS MOVED WITH IT -- both by exactly 10.64um.
-#    Constraint 3 depends only on the macros' phase relative to the lattice, so
-#    shifting both preserves it; shifting either alone does not. See MACROS.
+#    The macros were shifted 10.64um west at the same time, to hold their phase
+#    relative to the lattice. Per the correction in constraint 3 that was not
+#    actually required -- the shift is retained, not defended. See MACROS.
 #
 # 3. SRAM TAPPING. gf180mcu_ocd_ip_sram__sram1024x8m8wm1 obstructs
-#    Metal1-Metal3 over its interior (LEF OBS: 3.0 3.0 .. 298.3 512.81) and
-#    exposes VDD/VSS on Metal3 only in the 3um frame outside that box, so the
-#    Metal4 straps are the SRAM's only power path. The two vertical edge bands
-#    of the frame are 298.3um apart and carry both nets, so a stripe lattice
-#    whose HALF period divides 298.3 an ODD number of times puts opposite nets
-#    on the two bands of every macro. 298.3/5 = 59.66 -> 59.92 (107 tracks),
-#    hence PDN_VPITCH 119.84 and PDN_VSPACING 119.84/2 - 5.04. With the macro
-#    x-coordinates in MACROS below this lands a full-height VSS stripe on each
-#    macro's west band and a VDD stripe on its east band: ~580-620um^2 of
-#    Metal3/Metal4 overlap per net per macro, versus 0um^2 of VSS for the
-#    right-hand column at the old 180um pitch. THE MACRO X-COORDINATES AND
-#    THESE THREE NUMBERS ARE ONE UNIT -- changing either alone silently floats
-#    an SRAM rail. Re-check with scripts in TRIAL_NOTES.md or
-#    `check_power_grid -net VSS`.
+#    Metal1-Metal3 over its interior (LEF OBS: 3.0 3.0 .. 298.3 512.81), so the
+#    Metal4 straps are the SRAM's only power path. Outside that box it exposes
+#    239 VDD and 195 VSS Metal3 tabs distributed around the WHOLE perimeter --
+#    x 0..301.3, y 0..515.81 -- not just two vertical edge bands.
+#
+#    AN EARLIER VERSION OF THIS COMMENT WAS WRONG, and it is worth spelling out
+#    because it locked four coordinates that did not need locking. It claimed
+#    the frame carried both nets only on two bands 298.3um apart, and derived
+#    PDN_VPITCH 119.84 from needing a half-period that divides 298.3 an odd
+#    number of times (298.3/5 = 59.66 -> 59.92). Read against the LEF that
+#    reasoning does not hold: because the tabs are dense and all round the
+#    frame, ANY on-grid Metal4 lattice that crosses a macro taps both nets.
+#    Measured on the landscape branch, all four macros pass check_power_grid at
+#    four DIFFERENT strap phases (22.4, 163.4, 124.0, 84.7 mod a 180.32 pitch).
+#    So macro x is free apart from the 0.56um site grid, and the macros are NOT
+#    welded to PDN_VOFFSET. See TRIAL_NOTES.md, landscape branch Session 6.6.
+#
+#    119.84 is kept because it is on-grid and has run, not because that
+#    derivation supports it. It is not a proven number on this floorplan either:
+#    the 4.34 offset and the macro positions it implies (constraint 4) have only
+#    ever been checked arithmetically.
+#
+#    WHAT DOES STILL MATTER IS DRIFT ACROSS THE MACRO ROW, which is a grid
+#    problem rather than a phase one: at 179.2 the lattice walks -5.6um over the
+#    7 periods spanning a row of macros, the straps step off the 3um-wide tabs,
+#    and the power-grid checker reports 28,227 VSS violations; 180.32 drifts
+#    +2.24um and holds. Always confirm
+#    design__power_grid_violation__count__net:VSS at the
+#    *-checker-powergridviolations step before trusting ANY pitch or macro-x
+#    change -- it fails fast and it is the check that catches a walked-off
+#    lattice. `check_power_grid -net VDD` / `-net VSS` is the interactive form.
 #
 # Metal5 (horizontal) never touches the macros, so PDN_HPITCH only has to obey
 # constraint 1: 360 = 400 x 0.90, width 6 x 0.90, offset 15 x 0.90.
@@ -400,15 +435,70 @@ PDN_CFG: dir::/pdn_cfg.tcl
 # looks like. One site of padding puts it at 62.5%.
 
 PL_TARGET_DENSITY_PCT: 68
-MAX_FANOUT_CONSTRAINT: 16
+MAX_FANOUT_CONSTRAINT: 32   # was 16. 232 nets exceed fanout 16, and the worst
+                            # setup path in job 4315 WAS a fanout tree:
+                            # u_grouper_soc_top.rst_n_sync has 996 loads and
+                            # repair_design built ~5 buffer levels to serve it.
+                            # log16(996)=2.5 levels minimum vs log32(996)=2.0, so
+                            # relaxing this makes the tree shallower AND smaller.
+                            # 114 nets still exceed 32, so this relaxes rather
+                            # than removes the constraint. Second, independent
+                            # lever on the same failure as DONT_USE_CELLS below.
 GPL_CELL_PADDING: 2
 DPL_CELL_PADDING: 0
 
-# These delay buffers materially worsen routing congestion at this die size.
+# BAN THE DELAY CELLS THAT ARE ABUSED, KEEP THE ONE THAT DOES REAL WORK.
+#
+# The library has twelve delay cells: dlya/dlyb/dlyc/dlyd x _1/_2/_4 (confirmed
+# against gf180mcu_fd_sc_mcu7t5v0__tt_025C_3v30.lib, job 4321). They are
+# functionally buffers (Z = I), so OpenROAD's resizer treats them as buffer
+# candidates -- but it uses them for two very different jobs, and only one of
+# those is legitimate:
+#
+#   HOLD REPAIR (legitimate). Job 4315 used 67 dlyc_1 as hold buffers. Buying
+#     delay per unit area is exactly what a delay cell is for. Banning these
+#     forces hold repair onto clkbuf_1 chains: job 4322 needed 229 cells to do
+#     what 68 did, and hold margin fell from 0.8966 -> 0.8004ns (nom_tt) and
+#     0.3677 -> 0.3431ns (min_ff). Still passing, but 3.4x the cells and ~10%
+#     less margin -- a bad trade to make on purpose, and a worse one once the
+#     hardened SRAM's real hold requirements land.
+#
+#   MAX-FANOUT / MAX-SLEW REPAIR (abuse). Job 4315 also inserted 794 dlyd_1 as
+#     fanout buffers, making it the most-used cell in the design -- more than
+#     every real buffer combined. Fanout repair is a DRIVE STRENGTH problem and
+#     a delay cell is the worst possible answer to it. Same path, same load,
+#     from 4315's own signoff report:
+#
+#       load_slew822  buf_4   fanout 12  0.113pF  delay 0.667ns  slew 0.700ns
+#       fanout828     dlyd_1  fanout 11  0.141pF  delay 5.151ns  slew 3.299ns
+#
+#     7.7x the delay, 4.7x the output slew. Seven of them contributed ~35ns to
+#     the worst path while the real logic (nand3 -> nor4 -> or2) contributed
+#     2.6ns. That was the whole of the setup failure: WNS -4.42ns, TNS
+#     -38.17ns over 35 reg-to-reg endpoints. Banning the family took the same
+#     floorplan to WNS +18.76ns and TNS 0 (job 4322).
+#
+# So: ban dlya/dlyb/dlyd, keep dlyc_* for hold repair. This supersedes the
+# earlier dlyb-only ban, which was made on congestion grounds and missed dlyd
+# entirely -- see TRIAL_NOTES.md Session 2.1 for the original finding and the
+# landscape branch's Session 6.1-6.3 for the full one.
+#
+# WATCH FOR MIGRATION. The resizer chose dlyd for fanout and dlyc for hold, so
+# they are not interchangeable in its cost model -- but if a future run shows
+# dlyc_* instance counts in the hundreds rather than the ~70 hold repair needs,
+# fanout repair has migrated onto it and the full twelve-cell ban is the
+# fallback. Check with:
+#   grep -oE "gf180mcu_fd_sc_mcu7t5v0__dly[a-z]_[0-9]+" <run>/*detailedrouting/*.def | sort | uniq -c
 DONT_USE_CELLS:
+  - gf180mcu_fd_sc_mcu7t5v0__dlya_1
+  - gf180mcu_fd_sc_mcu7t5v0__dlya_2
+  - gf180mcu_fd_sc_mcu7t5v0__dlya_4
   - gf180mcu_fd_sc_mcu7t5v0__dlyb_1
   - gf180mcu_fd_sc_mcu7t5v0__dlyb_2
   - gf180mcu_fd_sc_mcu7t5v0__dlyb_4
+  - gf180mcu_fd_sc_mcu7t5v0__dlyd_1
+  - gf180mcu_fd_sc_mcu7t5v0__dlyd_2
+  - gf180mcu_fd_sc_mcu7t5v0__dlyd_4
 
 # ---------------------------------------------------------------------------
 # CTS
@@ -457,8 +547,17 @@ DIODE_ON_PORTS: in
 # Route
 # ---------------------------------------------------------------------------
 
-GRT_ALLOW_CONGESTION: false
-GRT_ADJUSTMENT: 0.2
+# GRT hands off to DRT instead of failing on congestion. Safe only because
+# Checker.TrDRC is still live downstream (it is absent from
+# meta.substituting_steps and has no ERROR_ON_* override), so a route that does
+# not converge still hard-fails -- it just fails later, with a DRC report.
+GRT_ALLOW_CONGESTION: true
+GRT_ADJUSTMENT: 0.3   # 0.2 handed DRT a start it plateaued on at 91 violations
+                      # (job 4285); reserve more global capacity so DRT begins
+                      # cleaner. Travels with GRT_ALLOW_CONGESTION above.
+
+# Cap the DRC opt loop so a plateauing route reaches a verdict instead of
+# grinding to the flow default. Keep while iterating; raise for signoff.
 DRC_OPT_ITERS: 12
 
 # Moved to Metal5 to relieve Metal3 congestion at 1310x1150 (see TRIAL_NOTES.md).
@@ -468,8 +567,11 @@ PL_MAX_DISPLACEMENT_X: 800
 PL_MAX_DISPLACEMENT_Y: 500
 
 # Fix antenna violations after DRT
-DRT_ANTENNA_REPAIR_ITERS: 10
-DRT_ANTENNA_REPAIR_MARGIN: 10 
+DRT_ANTENNA_REPAIR_ITERS: 0    # DRT's antenna reroute took a converged 4-violation
+                               # route to 128 (job 4296, drt-run-0 vs drt-run-1).
+                               # Antennas are already repaired at step 40 (94 -> 0,
+                               # 97 diodes) and the post-route count was 0 regardless.
+DRT_ANTENNA_REPAIR_MARGIN: 10 # %
 
 # ---------------------------------------------------------------------------
 # STA Lib Setup
