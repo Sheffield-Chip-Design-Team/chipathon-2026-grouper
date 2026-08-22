@@ -41,10 +41,8 @@ module ram_ss #(
               memory[ram_addr][i*8 +: 8] <= ram_wdata[i*8 +: 8];
     
       // Read Port
-      always_ff @(posedge clk, negedge rst_n)
-        if (~rst_n)
-          ram_rdata <= '0;
-        else if (ram_read)
+      always_ff @(posedge clk)
+        if (ram_read)
           ram_rdata <= memory[ram_addr];
     end
   endgenerate
