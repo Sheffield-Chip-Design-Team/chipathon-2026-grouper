@@ -17,6 +17,7 @@ module ahb_stub_slave #(
   // AHB Slave Interface
 
   // Master Signals
+  /* verilator lint_off UNUSEDSIGNAL */
   input logic [ADDR_WIDTH-1:0]  HADDR,
   input logic [2:0]             HBURST,
   input logic                   HMASTLOCK,
@@ -25,6 +26,7 @@ module ahb_stub_slave #(
   input logic [1:0]             HTRANS,
   input logic [DATA_WIDTH-1:0]  HWDATA,
   input logic                   HWRITE,
+  /* verilator lint_on UNUSEDSIGNAL */
 
   // Slave Signals
   output logic [DATA_WIDTH-1:0] HRDATA,
