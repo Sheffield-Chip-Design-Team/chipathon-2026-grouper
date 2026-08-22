@@ -16,6 +16,8 @@ module ahb_qspi #(
   input  logic                  HCLK,
   input  logic                  HRESETn,
 
+  // AHB-Lite interface
+  // Master -> Slave
   input  logic [ADDR_WIDTH-1:0] HADDR,
   input  logic [2:0]            HBURST,
   input  logic                  HMASTLOCK,
@@ -24,11 +26,13 @@ module ahb_qspi #(
   input  logic [1:0]            HTRANS,
   input  logic [DATA_WIDTH-1:0] HWDATA,
   input  logic                  HWRITE,
-
+  
+  // Slave -> Master
   output logic [DATA_WIDTH-1:0] HRDATA,
   output logic                  HREADYOUT,
   output logic                  HRESP,
-
+ 
+  // Decoder Signals
   input  logic                  HREADYIN,
   input  logic                  HSEL,
 
@@ -137,13 +141,9 @@ module ahb_qspi #(
   logic error_first_cycle;
   logic error_second_cycle;
 
-  assign access =
-      HSEL &&
-      HREADYIN &&
-      HTRANS[1];
+  assign access = HSEL && HREADYIN && HTRANS[1];
 
   // AHB access size / byte lanes
-
   always_comb begin
     byte_select    = 4'b0000;
     transfer_valid = 1'b0;
@@ -294,44 +294,7 @@ module ahb_qspi #(
       !start_bad_address &&
       !start_blocked_flash;
 
-  // AHB-Lite two-cycle ERROR response
-  //
-  // Cycle 1:
-  //   HRESP     = 1
-  //   HREADYOUT = 0
-  //
-  // Cycle 2:
-  //   HRESP     = 1
-  //   HREADYOUT = 1
-
-  assign error_first_cycle =
-      !error_second_cycle &&
-      (
-        (
-          (write_pending || read_pending) &&
-          access_error_r
-        ) ||
-        start_blocked_flash
-      );
-
-  always_ff @(posedge HCLK or negedge HRESETn) begin
-    if (!HRESETn) begin
-      error_second_cycle <= 1'b0;
-    end else if (error_second_cycle) begin
-      error_second_cycle <= 1'b0;
-    end else if (error_first_cycle) begin
-      error_second_cycle <= 1'b1;
-    end
-  end
-
-  assign HRESP =
-      error_first_cycle ||
-      error_second_cycle;
-
-  assign HREADYOUT =
-      !error_first_cycle;
-
-  // Register writes / STATUS events
+  // --- AHB Write Logic -----------------------------------------
 
   always_ff @(posedge HCLK or negedge HRESETn) begin
     if (!HRESETn) begin
@@ -524,7 +487,7 @@ module ahb_qspi #(
     end
   end
 
-  // Register reads
+  // --- AHB Read Logic -----------------------------------------
 
   always_comb begin
     HRDATA = '0;
@@ -581,7 +544,7 @@ module ahb_qspi #(
     end
   end
 
-  // Serial engine
+  // --- QSPI Serial engine -----------------------------------------
 
   qspi u_qspi (
     .clk          (HCLK),
@@ -615,16 +578,33 @@ module ahb_qspi #(
     .qspi_sio_oe  (qspi_sio_oe)
   );
 
-  // Combined interrupt
-  assign irq =
-      (status_done && ctrl_ie_done) ||
-      (
-        (
-          status_cfg_err ||
-          status_write_blocked ||
-          status_addr_err
-        ) &&
-        ctrl_ie_err
-      );
+  //  ---- AHB-Lite ERROR response --------------------------------------------
+  // Cycle 1:
+  //   HRESP     = 1 , HREADYOUT = 0
+  // Cycle 2:
+  //   HRESP     = 1,  HREADYOUT = 1
+
+  assign error_first_cycle = !error_second_cycle // FIXME - can this be simplifies?
+  && (
+     ((write_pending || read_pending) && access_error_r) 
+      || start_blocked_flash );
+
+  always_ff @(posedge HCLK or negedge HRESETn) begin
+    if (!HRESETn) begin
+      error_second_cycle <= 1'b0;
+    end else if (error_second_cycle) begin
+      error_second_cycle <= 1'b0;
+    end else if (error_first_cycle) begin
+      error_second_cycle <= 1'b1;
+    end
+  end
+
+  assign HRESP = error_first_cycle || error_second_cycle;
+  assign HREADYOUT = !error_first_cycle;
+  
+  // ---- Combined interrupt ---------------------------------------------------
+  assign irq = ((status_done && ctrl_ie_done) || 
+  (( status_cfg_err || status_write_blocked   || status_addr_err)
+                                              && ctrl_ie_err ));
 
 endmodule
