@@ -262,13 +262,17 @@ module cpu_ss #(
   // cycles - so this is a transfer-outstanding flag rather than a delayed
   // copy of the select. Setting it takes priority so back-to-back transfers
   // stay pipelined.
-  always_ff @(posedge HCLK, negedge HRESETn)
-    if (~HRESETn)
+  always_ff @(posedge HCLK, negedge HRESETn) begin
+    if (~HRESETn) begin
       ahb_sel_r <= '0;
-    else if (ahb_sel && mem_la_req)
+    end
+    else if (ahb_sel && mem_la_req) begin
       ahb_sel_r <= '1;
-    else if (HREADY)
+    end
+    else if (HREADY) begin
       ahb_sel_r <= '0;
+    end
+  end
 
   always_comb begin
     mem_rdata = rom_rdata;
