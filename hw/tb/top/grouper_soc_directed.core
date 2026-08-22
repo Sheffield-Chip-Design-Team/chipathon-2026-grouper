@@ -71,7 +71,7 @@ filesets:
 
   ram_macro:
     depend:
-      - sharc:mem_ip:gf180mcu_4096_32w1_ram_ss:0.0.1
+      - ocd:mem_ip:gf180_mcu_sram1024x8:1.0.0
 
 # Deliberately no YAML merge key - prevents firmware build re-running 
 targets:
