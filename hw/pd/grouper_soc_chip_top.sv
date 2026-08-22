@@ -79,7 +79,10 @@ module chip_top #(
 
     // Signal IO pad instances
 
-    // Schmitt trigger
+    // Schmitt trigger. Hysteresis costs a constant delay CTS absorbs, and the
+    // duty-cycle skew it introduces is harmless here - nothing in the design
+    // clocks on a falling edge. In exchange it will not double-clock on a slow
+    // or noisy edge, which a bring-up clock over a jumper wire can produce.
     gf180mcu_fd_io__in_s clk_pad (
         `ifdef USE_POWER_PINS
         .DVDD   (VDD),
@@ -95,8 +98,10 @@ module chip_top #(
         .PD     (1'b0)
     );
     
-    // Normal input
-    gf180mcu_fd_io__in_c rst_n_pad (
+    // Schmitt trigger. The reset comes off a push button (see async_rst_n in
+    // grouper_soc_top), so its edge is slow enough that a plain CMOS buffer
+    // could oscillate crossing the threshold and issue a burst of resets.
+    gf180mcu_fd_io__in_s rst_n_pad (
         `ifdef USE_POWER_PINS
         .DVDD   (VDD),
         .DVSS   (VSS),
