@@ -100,7 +100,7 @@ module periph_ss #(
   logic                  gpio_ctrl_HREADYOUT;
   logic                  gpio_ctrl_HRESP;
 
-  // FIXME - slot wired to ahb_stub_slave
+  // Now wired to ahb_qspi
   logic [ADDR_WIDTH-1:0] qpsi_HADDR;
   logic [2:0]            qpsi_HBURST;
   logic                  qpsi_HMASTLOCK;
@@ -185,6 +185,12 @@ logic mux_spi_s_ss_i;      // internal signal for SPI slave chip select
 logic mux_spi_s_sck_i;     // internal signal for SPI slave clock
 logic mux_spi_s_mosi_i;    // internal signal for SPI slave master out slave in
 logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
+
+logic       mux_qspi_sck_o;
+logic [1:0] mux_qspi_ce_n_o;
+logic [3:0] mux_qspi_sio_i;
+logic [3:0] mux_qspi_sio_o;
+logic [3:0] mux_qspi_sio_oe;
 
 //--- Interconnect ----------------------------------------------------------------------
 
@@ -346,14 +352,14 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
 
   //--- QSPI -----------------------------------------------------------------------------
 
-  // FIXME - replace with actual QSPI peripheral
-  ahb_stub_slave #(
-    .ADDR_WIDTH (ADDR_WIDTH),
+  ahb_qspi #(
+    .ADDR_WIDTH (12),
     .DATA_WIDTH (DATA_WIDTH)
-  ) u_qspi_stub (
+  ) u_qspi (
     .HCLK         (HCLK),
     .HRESETn      (HRESETn),
-    .HADDR        (qpsi_HADDR),
+
+    .HADDR        (qpsi_HADDR[11:0]),
     .HBURST       (qpsi_HBURST),
     .HMASTLOCK    (qpsi_HMASTLOCK),
     .HPROT        (qpsi_HPROT),
@@ -361,11 +367,21 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
     .HTRANS       (qpsi_HTRANS),
     .HWDATA       (qpsi_HWDATA),
     .HWRITE       (qpsi_HWRITE),
+
     .HRDATA       (qpsi_HRDATA),
     .HREADYOUT    (qpsi_HREADYOUT),
     .HRESP        (qpsi_HRESP),
+
     .HREADYIN     (qpsi_HREADYIN),
-    .HSEL         (qpsi_HSEL)
+    .HSEL         (qpsi_HSEL),
+
+    .qspi_sck_o   (mux_qspi_sck_o),
+    .qspi_ce_n_o  (mux_qspi_ce_n_o),
+    .qspi_sio_i   (mux_qspi_sio_i),
+    .qspi_sio_o   (mux_qspi_sio_o),
+    .qspi_sio_oe  (mux_qspi_sio_oe),
+
+    .irq          ()
   );
 
   //--- SPI Master ------------------------------------------------------------------------
@@ -488,17 +504,17 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
     .spi_s_mosi_i    (mux_spi_s_mosi_i),
     .spi_s_miso_o    (mux_spi_s_miso_o),
 
-    // FIXME - tied off until the SPI master and QSPI peripherals are implemented
+    // FIXME - tied off until the SPI master is implemented
     .spi_m_sck_o     (1'b0),
     .spi_m_mosi_o    (1'b0),
     .spi_m_miso_i    (),
     .spi_m_ss_o      (1'b1),
 
-    .qspi_sck_o      (1'b0),
-    .qspi_ce_n_o     (2'b11),
-    .qspi_sio_i      (),
-    .qspi_sio_o      (4'b0),
-    .qspi_sio_oe     (4'b0),
+    .qspi_sck_o       (mux_qspi_sck_o),
+    .qspi_ce_n_o      (mux_qspi_ce_n_o),
+    .qspi_sio_i       (mux_qspi_sio_i),
+    .qspi_sio_o       (mux_qspi_sio_o),
+    .qspi_sio_oe      (mux_qspi_sio_oe),
 
     // GPIO pin control interface
     .gpio_in         (gpio_in),
