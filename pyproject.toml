@@ -11,7 +11,10 @@ dependencies = [
   "cocotb==2.0.1",
   "pyuvm==4.0.1",
   "edalize==0.6.8",
-  "pyyaml==6.0.3"
+  "pyyaml==6.0.3",
+  # Only sw/scripts/load_fw.py needs this, to talk to a real board over a
+  # serial port. It is imported lazily there, so simulation never touches it.
+  "pyserial==3.5"
 ]
 
 [tool.setuptools.packages.find]
