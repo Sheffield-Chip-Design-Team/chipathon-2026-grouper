@@ -2,7 +2,7 @@ package gpio_ctrl_pkg;
 
   // ---- Register map ------------------------------------------------------
   // Decoded from HADDR[5:2] - 16 word slots in the 4 KiB window at
-  // 0x0000_4000. Offsets 0x2C-0x3C are reserved: reads return 0, writes ERROR.
+  // 0x8000_4000. Offsets 0x2C-0x3C are reserved: reads return 0, writes ERROR.
 
   localparam bit [3:0] REG_OUT        = 4'h0;  // 0x00 RW  output data
   localparam bit [3:0] REG_IN         = 4'h1;  // 0x04 RO  live pad value

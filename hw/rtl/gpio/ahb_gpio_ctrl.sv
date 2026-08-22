@@ -14,6 +14,11 @@ module ahb_gpio_ctrl #(
   // AHB Slave Interface
 
   // Master Signals
+  // A register-block slave legitimately ignores most of the address phase: the
+  // fabric issues no bursts and no locked transfers, HPROT carries nothing this
+  // block acts on, and only the low HADDR bits inside its own window (and the
+  // byte lanes it implements) are decoded.
+  /* verilator lint_off UNUSEDSIGNAL */
   input logic [ADDR_WIDTH-1:0]  HADDR,
   input logic [2:0]             HBURST,
   input logic                   HMASTLOCK,
@@ -22,6 +27,7 @@ module ahb_gpio_ctrl #(
   input logic [1:0]             HTRANS,
   input logic [DATA_WIDTH-1:0]  HWDATA,
   input logic                   HWRITE,
+  /* verilator lint_on UNUSEDSIGNAL */
 
   // Slave Signals
   output logic [DATA_WIDTH-1:0] HRDATA,
