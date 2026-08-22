@@ -138,7 +138,6 @@ module digital_ss #(
     .ADDR_WIDTH (ROM_ADDR_WIDTH)
   ) u_rom_ss (
     .clk        (clk),
-    .rst_n      (rst_n),
     .rom_addr   (rom_addr),
     .rom_read   (rom_read),
     .rom_rdata  (rom_rdata)
@@ -148,7 +147,6 @@ module digital_ss #(
     .ADDR_WIDTH (RAM_ADDR_WIDTH)
   ) u_ram_ss (
     .clk        (clk),
-    .rst_n      (rst_n),
     .ram_addr   (ram_addr),
     .ram_read   (ram_read),
     .ram_write  (ram_write),

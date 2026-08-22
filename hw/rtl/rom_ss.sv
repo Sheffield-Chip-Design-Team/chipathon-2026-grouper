@@ -12,7 +12,6 @@ module rom_ss #(
   parameter int  ADDR_WIDTH = 8
 ) (
   input  logic                  clk,
-  input  logic                  rst_n,
   input  logic [ADDR_WIDTH-1:0] rom_addr,
   input  logic                  rom_read,
   output logic [31:0]           rom_rdata
@@ -34,10 +33,8 @@ module rom_ss #(
     $readmemh(`PROG_FILE_HEX, memory);
 `endif
 
-  always_ff @(posedge clk, negedge rst_n) begin
-    if (~rst_n) begin
-      rom_rdata <= '0;
-    end else if (rom_read) begin
+  always_ff @(posedge clk) begin
+    if (rom_read) begin
       rom_rdata <= memory[rom_addr[ACTUAL_MEM_ADDR_WIDTH-1:0]];
     end
   end
