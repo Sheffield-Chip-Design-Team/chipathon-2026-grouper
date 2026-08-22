@@ -44,6 +44,7 @@ filesets:
       - sharc:comms_ip:ahb_spi_s:0.0.1
       - sharc:comms_ip:ahb_gpio_ctrl:0.0.1
       - sharc:comms_ip:ahb_qspi:0.0.1
+      - ocd:mem_ip:gf180_mcu_sram1024x8:1.0.0
 
     files:
       - hw/rtl/verilator_waivers.vlt:                     {file_type: vlt}
@@ -51,13 +52,13 @@ filesets:
       - hw/rtl/interconnect/ahb_debug.sv:                 {file_type: systemVerilogSource}
       - hw/rtl/interconnect/ahb_conn_buff.sv:             {file_type: systemVerilogSource}
       - hw/rtl/interconnect/ahb_stub_slave.sv:            {file_type: systemVerilogSource}
-      - hw/rtl/ahb_interconnect_ss.sv:                    {file_type: systemVerilogSource}
+      - hw/rtl/interconnect_ss.sv:                        {file_type: systemVerilogSource}
 
-      - hw/rtl/memory/ahb_rom.sv:                         {file_type: systemVerilogSource}
-      - hw/rtl/memory/ahb_ram.sv:                         {file_type: systemVerilogSource}
+      - hw/rtl/cpu_ss.sv:                                 {file_type: systemVerilogSource}
+      - hw/rtl/rom_ss.sv:                                 {file_type: systemVerilogSource}
+      - hw/rtl/ram_ss.sv:                                 {file_type: systemVerilogSource}
 
       - hw/rtl/io_ss.sv:                                  {file_type: systemVerilogSource}
-      - hw/rtl/cpu_ss.sv:                                 {file_type: systemVerilogSource}
       - hw/rtl/periph_ss.sv:                              {file_type: systemVerilogSource}
       - hw/rtl/digital_ss.sv:                             {file_type: systemVerilogSource}
       - hw/rtl/grouper_soc_top.sv:                        {file_type: systemVerilogSource}

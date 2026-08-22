@@ -25,7 +25,8 @@ extern int main (void);
 // The stack usage can be decreased to 0, by marking the function as "naked",
 // this means the function doesn't do any register preservation, etc. (or any other compiler prologue/epilogue code)
 // This may break things, so should only really be used on non-returning functions
-// __attribute__ ((naked))
+
+__attribute__ ((naked))
 void ResetHandler (void)
 {
    uint32_t *pDest;

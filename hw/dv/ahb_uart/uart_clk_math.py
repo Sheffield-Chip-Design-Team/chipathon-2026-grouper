@@ -1,12 +1,14 @@
 import random
 
+from .reg_model.uart_reg_consts import CTRL_CLK_DIV_BITS, CTRL_CLK_DIV_MASK
+
 # ahb_uart.sv-specific: how the CTRL register's clk_div field maps to an
 # actual baud rate. UartConfig/UartDriver/UartMonitor don't know about this -
 # they use baud_rate directly via real-time Timer waits (see
 # hw/dv/uvc/uart/uart_config.py) - this is purely what needs to be written to
 # this particular DUT's register to make it run at the same baud rate.
 AHB_UART_OVERSAMPLE = 8       # matches hw/rtl/uart/uart.sv's fixed OVERSAMPLE parameter
-MAX_CLK_DIV = 1023            # CTRL register's clk_div field is 10 bits wide
+MAX_CLK_DIV = CTRL_CLK_DIV_MASK  # widest value CTRL's clk_div field can hold
 
 
 def clk_div_for_baud(baud_rate: int, clk_period_ns: int) -> int:
@@ -15,7 +17,7 @@ def clk_div_for_baud(baud_rate: int, clk_period_ns: int) -> int:
     if clk_div > MAX_CLK_DIV:
         raise ValueError(
             f"baud_rate={baud_rate} needs clk_div={clk_div}, which overflows "
-            f"the CTRL register's 10-bit field (max {MAX_CLK_DIV}) at "
+            f"the CTRL register's {CTRL_CLK_DIV_BITS}-bit field (max {MAX_CLK_DIV}) at "
             f"clk_period_ns={clk_period_ns}/oversample={AHB_UART_OVERSAMPLE} "
             f"- raise baud_rate, or lower AhbConfig.clk_period_ns to increase the clock frequency"
         )

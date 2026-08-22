@@ -8,6 +8,8 @@
 
 #include "irq.h"
 
+// FIXME - these tests are now much bigger than 4k
+
 // Self-checking exercise of the formatter in sw/src/lib/gio.c. Everything
 // here runs through snprintf and compares against expected strings, so the
 // formatter is verified against buffers rather than against whatever comes

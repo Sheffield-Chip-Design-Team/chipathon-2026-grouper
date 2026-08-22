@@ -9,11 +9,25 @@
 # is anchored to REPO_ROOT (resolved from this script's own location) rather
 # than to cwd.
 #
-# Usage: build_fw.sh [--debug] [--test <name>] [--no-disasm] [--list] [--help]
+# Usage: build_fw.sh [--debug] [--test <name>] [--link rom|ram] [--baud N]
+#                    [--no-disasm] [--list] [--help]
 #   --debug        compile with -DDEBUG, enabling debug()/debug_str() output via
 #                  the ahb_debug peripheral. Pair with the DEBUG_PERIPH
 #                  vlogdefine (FuseSoC target tb_top_debug), otherwise the debug
 #                  peripheral isn't instantiated and the accesses will fault.
+#   --link rom|ram which linker script to use, default rom.
+#                    rom - sw/boot/soc.ld. Code in ROM at 0x0000_0000, data
+#                          copied to RAM at 0x4000_0000 by ResetHandler. The
+#                          image is the ROM contents (sw/code.hex).
+#                    ram - sw/boot/ram.ld. Everything in RAM, linked for
+#                          0x0000_0000 - i.e. where RAM appears *after* the
+#                          bank switch. This is what the bootloader in sw/boot
+#                          receives over the UART; it is loaded through the
+#                          0x4000_0000 alias and run from zero after the swap.
+#   --baud N       build for N baud instead of the 19200 default, by defining
+#                  UART_BAUD_RATE. Has to match the bootloader that loads this
+#                  image and whatever drives the far end - see the same option
+#                  in sw/scripts/build_bootloader.sh. Written to uart_baud.txt.
 #   --test <name>  build sw/tests/<name>.c as the top level instead of
 #                  sw/src/main.c. <name> is matched leniently: "hello_world",
 #                  "test_hello_world", "test_hello_world.c" and a path to any
@@ -37,6 +51,8 @@
 #             plain and the debug targets, selected by the script's env block
 #             in the .core file rather than by a second script.
 #             An explicit --debug on the command line wins.
+#   FW_LINK   default for --link. An explicit --link wins.
+#   FW_BAUD   default for --baud. An explicit --baud wins.
 
 set -euo pipefail
 
@@ -65,6 +81,7 @@ OBJDUMP="${CROSS}objdump"
 cd "$REPO_ROOT"
 
 SRC_DIR="sw/src"
+BOOT_DIR="sw/boot"
 TESTS_DIR="sw/tests"
 BUILD_DIR="sw/build"
 
@@ -128,6 +145,8 @@ else
 fi
 
 TEST_NAME="${FW_TEST:-}"
+LINK="${FW_LINK:-rom}"
+BAUD="${FW_BAUD:-19200}"
 DISASM=1
 
 while [ "$#" -gt 0 ]; do
@@ -137,14 +156,32 @@ while [ "$#" -gt 0 ]; do
             [ "$#" -ge 2 ] || { echo "ERROR: --test needs a test name" >&2; exit 1; }
             TEST_NAME="$2"; shift ;;
         --test=*) TEST_NAME="${1#--test=}" ;;
+        --link)
+            [ "$#" -ge 2 ] || { echo "ERROR: --link needs rom or ram" >&2; exit 1; }
+            LINK="$2"; shift ;;
+        --link=*) LINK="${1#--link=}" ;;
+        --baud)
+            [ "$#" -ge 2 ] || { echo "ERROR: --baud needs a rate" >&2; exit 1; }
+            BAUD="$2"; shift ;;
+        --baud=*) BAUD="${1#--baud=}" ;;
         --disasm) DISASM=1 ;;
         --no-disasm) DISASM=0 ;;
         --list) echo "Tests available in $TESTS_DIR:"; list_tests; exit 0 ;;
         -h|--help) usage; exit 0 ;;
-        *) echo "ERROR: unknown argument '$1' (expected --debug, --test, --disasm, --no-disasm, --list or --help)" >&2; exit 1 ;;
+        *) echo "ERROR: unknown argument '$1' (expected --debug, --test, --link, --baud, --disasm, --no-disasm, --list or --help)" >&2; exit 1 ;;
     esac
     shift
 done
+
+case "$LINK" in
+    rom) LD_SCRIPT="$BOOT_DIR/soc.ld" ;;
+    ram) LD_SCRIPT="$BOOT_DIR/ram.ld" ;;
+    *) echo "ERROR: --link takes 'rom' or 'ram', not '$LINK'." >&2; exit 1 ;;
+esac
+
+case "$BAUD" in
+    ''|*[!0-9]*) echo "ERROR: --baud takes a positive integer, not '$BAUD'." >&2; exit 1 ;;
+esac
 
 # Pick the translation unit that supplies main(). Default is sw/src/main.c.
 if [ -n "$TEST_NAME" ]; then
@@ -177,7 +214,10 @@ fi
 # ENABLE_REGS_16_31=0) plus M and C. Building rv32i* here would emit x16-x31,
 # which the CPU does not have.
 MARCH="-march=rv32emc -mabi=ilp32e"
-INCS="-I$SRC_DIR -I$SRC_DIR/lib -I$SRC_DIR/uart -I$SRC_DIR/debug -I$SRC_DIR/spi_m -I$SRC_DIR/gpio -I$SRC_DIR/qspi -I$TESTS_DIR"
+
+INCS="-I$SRC_DIR -I$SRC_DIR/lib -I$SRC_DIR/irq -I$SRC_DIR/debug -I$TESTS_DIR"
+INCS="$INCS -I$SRC_DIR/drivers/uart -I$SRC_DIR/drivers/spi_m -I$SRC_DIR/drivers/gpio -I$SRC_DIR/qspi"
+#FIXME - qspi dir
 
 # -fno-builtin is load-bearing, not decorative: sw/src/lib defines printf,
 # memcpy and other libc-reserved names, and without it GCC would rewrite calls
@@ -190,32 +230,37 @@ INCS="-I$SRC_DIR -I$SRC_DIR/lib -I$SRC_DIR/uart -I$SRC_DIR/debug -I$SRC_DIR/spi_
 #
 # -ffunction-sections/-fdata-sections plus --gc-sections below let the linker
 # drop library functions the image never calls. That is what keeps a general
-# purpose library affordable against the 8 KiB ROM window in sw/soc.ld.
+# purpose library affordable against the memory the SoC actually has.
 CFLAGS="$MARCH -Os -g -ffreestanding -fno-builtin -fno-tree-loop-distribute-patterns"
-CFLAGS="$CFLAGS -ffunction-sections -fdata-sections -Wall -Wextra $DEBUG_FLAGS $INCS"
-LDFLAGS="$MARCH -nostdlib -Wl,--gc-sections -Wl,-T,sw/soc.ld -Wl,-Map,$BUILD_DIR/firmware.map"
+CFLAGS="$CFLAGS -ffunction-sections -fdata-sections -Wall -Wextra $DEBUG_FLAGS"
+CFLAGS="$CFLAGS -DUART_BAUD_RATE=$BAUD $INCS"
+LDFLAGS="$MARCH -nostdlib -Wl,--gc-sections -Wl,-T,$LD_SCRIPT -Wl,-Map,$BUILD_DIR/firmware.map"
 
 # custom_ops.S, irq_vec.S and the headers are pulled in by textual #include,
 # so they are not compiled as separate translation units. $TOP_SRC supplies
 # main() and is the only entry that changes with --test.
 SOURCES=(
-    "$SRC_DIR/start.S"
-    "$SRC_DIR/reset_handler.c"
+    "$BOOT_DIR/start.S"
+    "$BOOT_DIR/reset_handler.c"
     "$TOP_SRC"
-    "$SRC_DIR/irq.c"
+    "$SRC_DIR/irq/irq.c"
     "$SRC_DIR/debug/debug.c"
-    "$SRC_DIR/uart/uart.c"
-    "$SRC_DIR/spi_m/spi_m.c"
     "$SRC_DIR/qspi/qspi.c"
+    "$SRC_DIR/drivers/uart/uart.c"
+    "$SRC_DIR/drivers/spi_m/spi_m.c"
     "$SRC_DIR/lib/gio.c"
     "$SRC_DIR/lib/gstr.c"
     "$SRC_DIR/lib/gtest.c"
 )
 
+# FIXME QSPI directory for firmware
+
 echo "=== build_fw.sh: building GrouperSoC firmware ($BUILD_KIND) ==="
 echo "    repo root : $REPO_ROOT"
 echo "    toolchain : $CC"
 echo "    top level : $TOP_KIND"
+echo "    link      : $LINK ($LD_SCRIPT)"
+echo "    baud      : $BAUD"
 
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
@@ -265,7 +310,13 @@ python3 sw/scripts/bin_to_hex.py "$BUILD_DIR/firmware.bin" "$BUILD_DIR/code.vmem
 # starts exactly like code.hex is and cannot report a different firmware from
 # the one actually in the ROM.
 echo "Generating fw_id.txt"
-echo "$TOP_SRC ($BUILD_KIND)" > "$BUILD_DIR/fw_id.txt"
+echo "$TOP_SRC ($BUILD_KIND, $LINK)" > "$BUILD_DIR/fw_id.txt"
+
+# The baud is compiled in, so anything driving the other end of the link has to
+# be told what it ended up as. Same reasoning as fw_id.txt: read at simulation
+# start, not baked in at elaboration time.
+echo "Generating uart_baud.txt"
+echo "$BAUD" > "$BUILD_DIR/uart_baud.txt"
 
 # ahb_rom.sv loads code.hex with $readmemh, which resolves its path against the
 # simulator's working directory rather than any include path. Run as a FuseSoC
@@ -285,9 +336,14 @@ publish_to_work_root() {
     [ "$INVOKE_DIR" != "$REPO_ROOT" ] || return 0
     compgen -G "$INVOKE_DIR/"*.vc >/dev/null || return 0
 
-    echo "Publishing code.hex and fw_id.txt to the work root ($INVOKE_DIR)"
+    echo "Publishing code.hex, firmware.bin, fw_id.txt and uart_baud.txt to the work root ($INVOKE_DIR)"
     cp "$BUILD_DIR/code.hex" "$INVOKE_DIR/code.hex"
     cp "$BUILD_DIR/fw_id.txt" "$INVOKE_DIR/fw_id.txt"
+    cp "$BUILD_DIR/uart_baud.txt" "$INVOKE_DIR/uart_baud.txt"
+    # The raw image too: under the boot target the testbench loads this into
+    # RAM over the UART rather than the ROM holding it. Published unconditionally
+    # so the testbench never has to reason about which link was used to get here.
+    cp "$BUILD_DIR/firmware.bin" "$INVOKE_DIR/firmware.bin"
 }
 
 # Publish only what changed, so an unchanged firmware doesn't churn mtimes and

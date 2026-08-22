@@ -4,48 +4,53 @@ from pyuvm import ConfigDB
 
 from hw.dv.uvc.uart.uart_sequences import UartByteSequence, UartRandomByteSequence
 
-from .uart_ahb_base_sequence import (
+from ..reg_model.uart_reg_consts import (
+    DATA_MASK,
     STATUS_RX_BREAK,
     STATUS_RX_EMPTY,
     STATUS_RX_FRAME_ERROR,
     STATUS_TX_EMPTY,
-    UartAhbBaseSequence,
 )
 
-ADDR_RXDATA_MASK = 0xFF
+from .uart_ahb_base_sequence import UartAhbBaseSequence
 
 FRAME_KIND_CLEAN = "clean"
 FRAME_KIND_BAD_STOP = "bad_stop"
 FRAME_KIND_BREAK = "break"
 
-
 class UartSanitySequence(UartAhbBaseSequence):
     async def body(self):
         self.get_config()
-        self.sequencer.logger.info(f"Starting {self.get_name()}")
+        self.vseqr.logger.info(f"Starting {self.get_name()}")
         await self.configure_uart()
 
+        rand_tx_data = random.randint(0,255)
+
         # Sanity write path: push a byte into TXDATA and confirm the write completes.
-        await self.reg_write(self.reg_model.txdata, 0xA5)
+        await self.reg_write(self.reg_model.txdata, rand_tx_data)
         await self.wait_for_status(STATUS_TX_EMPTY, STATUS_TX_EMPTY)
 
         # Sanity read path: drive the UART RX pin, then read RXDATA back through AHB.
-        await self.drive_uart_frame(0x3C)
+        rand_rx_data = random.randint(0,255)
+
+        await self.drive_uart_frame(rand_rx_data)
+
         await self.wait_for_status(STATUS_RX_EMPTY, 0)
         rx_data = await self.reg_read(self.reg_model.rxdata)
-        if (rx_data & ADDR_RXDATA_MASK) != 0x3C:
-            msg = f"RXDATA mismatch: expected 0x3c got 0x{(rx_data & ADDR_RXDATA_MASK):02x}"
-            self.sequencer.logger.warning(msg)
+        
+        if (rx_data & DATA_MASK) != rand_rx_data:
+            msg = f"RXDATA mismatch: expected 0x{rand_rx_data: 02x} got 0x{(rx_data & DATA_MASK):02x}"
+            self.vseqr.logger.warning(msg)
             raise AssertionError(msg)
 
         # Check the status register still reads back and does not flag an error.
         status = await self.reg_read(self.reg_model.status)
         if status & (STATUS_RX_FRAME_ERROR | STATUS_RX_BREAK):
             msg = "Unexpected RX error/break status during sanity test"
-            self.sequencer.logger.warning(msg)
+            self.vseqr.logger.warning(msg)
             raise AssertionError(msg)
 
-        self.sequencer.logger.info(f"{self.get_name()} passed")
+        self.vseqr.logger.info(f"{self.get_name()} passed")
 
 
 class UartHelloWorldSequence(UartAhbBaseSequence):
@@ -58,24 +63,24 @@ class UartHelloWorldSequence(UartAhbBaseSequence):
 
     async def body(self):
         self.get_config()
-        self.sequencer.logger.info(f"Starting {self.get_name()}")
+        self.vseqr.logger.info(f"Starting {self.get_name()}")
         await self.configure_uart()
 
         uart_seqr = ConfigDB().get(None, "", "UART_SEQR")
         send_seq = UartByteSequence("send_hello", byte_value=self.HELLO_BYTE)
-        self.sequencer.logger.info(f"Sending hello byte 0x{self.HELLO_BYTE:02x} via UartAgent")
+        self.vseqr.logger.info(f"Sending hello byte 0x{self.HELLO_BYTE:02x} via UartAgent")
 
         await send_seq.start(uart_seqr)
 
         await self.wait_for_status(STATUS_RX_EMPTY, 0)
 
         rx_data = await self.reg_read(self.reg_model.rxdata)
-        if (rx_data & ADDR_RXDATA_MASK) != self.HELLO_BYTE:
+        if (rx_data & DATA_MASK) != self.HELLO_BYTE:
             msg = (
                 f"Hello-world byte mismatch: expected 0x{self.HELLO_BYTE:02x} "
-                f"got 0x{(rx_data & ADDR_RXDATA_MASK):02x}"
+                f"got 0x{(rx_data & DATA_MASK):02x}"
             )
-            self.sequencer.logger.warning(msg)
+            self.vseqr.logger.warning(msg)
             raise AssertionError(msg)
 
 
@@ -90,10 +95,10 @@ class UartRandomResetSequence(UartAhbBaseSequence):
 
     async def body(self):
         self.get_config()
-        self.sequencer.logger.info(f"Starting {self.get_name()}: mid-test reset")
+        self.vseqr.logger.info(f"Starting {self.get_name()}: mid-test reset")
         await self.reset_dut()
         await self.configure_uart()
-        self.sequencer.logger.info(f"{self.get_name()} passed")
+        self.vseqr.logger.info(f"{self.get_name()} passed")
 
 
 class UartRandomBitbangFrameSequence(UartAhbBaseSequence):
@@ -120,19 +125,19 @@ class UartRandomBitbangFrameSequence(UartAhbBaseSequence):
         else:
             byte_value = self.byte_value if self.byte_value is not None else random.randint(0, 255)
 
-        self.sequencer.logger.info(f"Starting {self.get_name()}: kind={kind} byte=0x{byte_value:02x}")
+        self.vseqr.logger.info(f"Starting {self.get_name()}: kind={kind} byte=0x{byte_value:02x}")
         self.result_kind, self.result_byte = kind, byte_value
 
         if kind == FRAME_KIND_CLEAN:
             await self.drive_uart_frame(byte_value)
             await self.wait_for_status(STATUS_RX_EMPTY, 0)
             rx_data = await self.reg_read(self.reg_model.rxdata)
-            if (rx_data & ADDR_RXDATA_MASK) != byte_value:
+            if (rx_data & DATA_MASK) != byte_value:
                 msg = (
                     f"clean bitbang mismatch: expected 0x{byte_value:02x} "
-                    f"got 0x{(rx_data & ADDR_RXDATA_MASK):02x}"
+                    f"got 0x{(rx_data & DATA_MASK):02x}"
                 )
-                self.sequencer.logger.warning(msg)
+                self.vseqr.logger.warning(msg)
                 raise AssertionError(msg)
             status = await self.reg_read(self.reg_model.status)
             if status & STATUS_RX_FRAME_ERROR:
@@ -155,7 +160,7 @@ class UartRandomBitbangFrameSequence(UartAhbBaseSequence):
             await self.drive_break_condition(low_periods)
             await self.wait_for_status(STATUS_RX_BREAK, STATUS_RX_BREAK)
 
-        self.sequencer.logger.info(f"{self.get_name()} passed (kind={kind})")
+        self.vseqr.logger.info(f"{self.get_name()} passed (kind={kind})")
 
 
 class UartRandomDutTransmitSequence(UartAhbBaseSequence):
@@ -175,7 +180,7 @@ class UartRandomDutTransmitSequence(UartAhbBaseSequence):
         tx_monitor = ConfigDB().get(None, "", "UART_TX_MONITOR")
         baseline = len(tx_monitor.received_bytes)
 
-        self.sequencer.logger.info(f"Starting {self.get_name()}: byte=0x{byte_value:02x}")
+        self.vseqr.logger.info(f"Starting {self.get_name()}: byte=0x{byte_value:02x}")
         await self.wait_for_status(STATUS_TX_EMPTY, STATUS_TX_EMPTY)
         await self.reg_write(self.reg_model.txdata, byte_value)
 
@@ -185,15 +190,15 @@ class UartRandomDutTransmitSequence(UartAhbBaseSequence):
             await self.wait_uart_bits(1)
         else:
             msg = "DUT never transmitted the byte written to TXDATA"
-            self.sequencer.logger.warning(msg)
+            self.vseqr.logger.warning(msg)
             raise AssertionError(msg)
 
         observed = tx_monitor.received_bytes[-1]
         if observed != byte_value:
             msg = f"DUT transmit mismatch: wrote 0x{byte_value:02x}, wire showed 0x{observed:02x}"
-            self.sequencer.logger.warning(msg)
+            self.vseqr.logger.warning(msg)
             raise AssertionError(msg)
-        self.sequencer.logger.info(f"{self.get_name()} passed")
+        self.vseqr.logger.info(f"{self.get_name()} passed")
 
 
 class UartRandomMoveSequence(UartAhbBaseSequence):
@@ -222,32 +227,32 @@ class UartRandomMoveSequence(UartAhbBaseSequence):
         await self.configure_uart()
 
         n = self.num_moves if self.num_moves is not None else random.randint(self.min_moves, self.max_moves)
-        self.sequencer.logger.info(f"{self.get_name()}: running {n} random moves")
+        self.vseqr.logger.info(f"{self.get_name()}: running {n} random moves")
 
         moves, weights = list(self.MOVE_WEIGHTS), list(self.MOVE_WEIGHTS.values())
         for i in range(n):
             move = random.choices(moves, weights=weights, k=1)[0]
-            self.sequencer.logger.info(f"[{i + 1}/{n}] move={move} (break_pending={self.break_pending})")
+            self.vseqr.logger.info(f"[{i + 1}/{n}] move={move} (break_pending={self.break_pending})")
             await self._run_move(move)
 
-        self.sequencer.logger.info(f"{self.get_name()} passed ({n} moves)")
+        self.vseqr.logger.info(f"{self.get_name()} passed ({n} moves)")
 
     async def _run_move(self, move: str):
         if move == "reset":
-            await UartRandomResetSequence("m_reset").start(self.sequencer)
+            await UartRandomResetSequence("m_reset").start(self.vseqr)
             self.break_pending = False  # reset is the only thing that clears it
 
         elif move == "clean_bitbang":
             seq = UartRandomBitbangFrameSequence("m_clean", frame_kind=FRAME_KIND_CLEAN)
-            await seq.start(self.sequencer)
+            await seq.start(self.vseqr)
 
         # elif move == "bad_stop_bitbang":
         #     seq = UartRandomBitbangFrameSequence("m_bad_stop", frame_kind=FRAME_KIND_BAD_STOP)
-        #     await seq.start(self.sequencer)
+        #     await seq.start(self.vseqr)
 
         # elif move == "break_bitbang":
         #     seq = UartRandomBitbangFrameSequence("m_break", frame_kind=FRAME_KIND_BREAK)
-        #     await seq.start(self.sequencer)
+        #     await seq.start(self.vseqr)
         #     self.break_pending = True
 
         # elif move == "vip_byte":
@@ -261,13 +266,13 @@ class UartRandomMoveSequence(UartAhbBaseSequence):
         #         return
         #     await self.wait_for_status(STATUS_RX_EMPTY, 0)
         #     rx_data = await self.reg_read(self.reg_model.rxdata)
-        #     if not seq.item.bad_stop_bit and (rx_data & ADDR_RXDATA_MASK) != seq.item.data:
+        #     if not seq.item.bad_stop_bit and (rx_data & DATA_MASK) != seq.item.data:
         #         msg = (
         #             f"vip_byte mismatch: expected 0x{seq.item.data:02x} "
-        #             f"got 0x{(rx_data & ADDR_RXDATA_MASK):02x}"
+        #             f"got 0x{(rx_data & DATA_MASK):02x}"
         #         )
-        #         self.sequencer.logger.warning(msg)
+        #         self.vseqr.logger.warning(msg)
         #         raise AssertionError(msg)
 
         elif move == "dut_transmit":
-            await UartRandomDutTransmitSequence("m_dut_tx").start(self.sequencer)
+            await UartRandomDutTransmitSequence("m_dut_tx").start(self.vseqr)
