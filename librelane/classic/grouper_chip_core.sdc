@@ -31,37 +31,35 @@ if { [info exists ::env(MAX_CAPACITANCE_CONSTRAINT)] } {
 
 set clocks [get_clocks $clock_port]
 
-# Inputs: async reset plus the pad-side input values coming back from the
-# padring. bidir_in is an input to chip_core even though the pad is bidirectional.
+# Inputs: async reset, uart_rx, and the pad-side input values coming back from
+# the padring. gpio_*_bidir_in is an input to chip_core even though the pad is
+# bidirectional.
 #
-# Trailing `*` rather than `[*]`: this design is elaborated standalone, so it
-# takes chip_core's own NUM_INPUT_PADS default of 1 rather than the 12 that
-# slot_defines.svh gives chip_top. A one-bit port is emitted as a scalar
-# `input_in`, which `input_in[*]` does not match - STA reports
-# "[STA-0366] port 'input_in[*]' not found" and the port silently ends up with
-# no input delay at all. `input_in*` matches the scalar and every bit of a
-# bussed version, so the same constraints hold whatever the pad count is.
+# chip_core's pad-facing ports are flat scalars named
+# <function>_<pad kind>_<signal> - `gpio_0_bidir_in` - so these are name globs,
+# not bus selects, and the leading `*` is what catches every function prefix.
+# `bidir_in[*]` would match nothing and STA would report "[STA-0366] port
+# 'bidir_in[*]' not found", leaving the ports with no input delay at all.
 set core_input_ports [get_ports {
     rst_n
-    input_in*
-    bidir_in*
+    uart_rx
+    *_bidir_in
 }]
 
 set_input_delay -min 0                   -clock $clocks $core_input_ports
 set_input_delay -max $input_delay_value  -clock $clocks $core_input_ports
 
-# Outputs: everything chip_core drives towards the padring - the bidir pad
-# value and its seven control lines, plus the input pads' pull configuration.
+# Outputs: everything chip_core drives towards the padring - uart_tx, plus each
+# GPIO pad's value and its six control lines.
 set core_output_ports [get_ports {
-    bidir_out[*]
-    bidir_oe[*]
-    bidir_cs[*]
-    bidir_sl[*]
-    bidir_ie[*]
-    bidir_pu[*]
-    bidir_pd[*]
-    input_pu*
-    input_pd*
+    uart_tx
+    *_bidir_out
+    *_bidir_oe
+    *_bidir_cs
+    *_bidir_sl
+    *_bidir_ie
+    *_bidir_pu
+    *_bidir_pd
 }]
 
 set_output_delay $output_delay_value -clock $clocks $core_output_ports
