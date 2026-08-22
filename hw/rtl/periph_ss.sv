@@ -72,34 +72,6 @@ module periph_ss #(
   // are flat because an interface cannot cross a hierarchy boundary in a
   // Verilog netlist - see the header of ahb_interconnect_ss.sv.
 
-  logic [ADDR_WIDTH-1:0] rom_HADDR;
-  logic [2:0]            rom_HBURST;
-  logic                  rom_HMASTLOCK;
-  logic [3:0]            rom_HPROT;
-  logic [2:0]            rom_HSIZE;
-  logic [1:0]            rom_HTRANS;
-  logic [DATA_WIDTH-1:0] rom_HWDATA;
-  logic                  rom_HWRITE;
-  logic                  rom_HREADYIN;
-  logic                  rom_HSEL;
-  logic [DATA_WIDTH-1:0] rom_HRDATA;
-  logic                  rom_HREADYOUT;
-  logic                  rom_HRESP;
-
-  logic [ADDR_WIDTH-1:0] ram_HADDR;
-  logic [2:0]            ram_HBURST;
-  logic                  ram_HMASTLOCK;
-  logic [3:0]            ram_HPROT;
-  logic [2:0]            ram_HSIZE;
-  logic [1:0]            ram_HTRANS;
-  logic [DATA_WIDTH-1:0] ram_HWDATA;
-  logic                  ram_HWRITE;
-  logic                  ram_HREADYIN;
-  logic                  ram_HSEL;
-  logic [DATA_WIDTH-1:0] ram_HRDATA;
-  logic                  ram_HREADYOUT;
-  logic                  ram_HRESP;
-
   logic [ADDR_WIDTH-1:0] uart_HADDR;
   logic [2:0]            uart_HBURST;
   logic                  uart_HMASTLOCK;
@@ -172,6 +144,10 @@ module periph_ss #(
   logic                  spi_s_HREADYOUT;
   logic                  spi_s_HRESP;
 
+  // Only the low EXT_*_WIDTH bits of HADDR/HWDATA leave the block, and HSEL
+  // and HREADYIN have no external port at all - see the external peripheral
+  // section at the bottom of this file.
+  /* verilator lint_off UNUSEDSIGNAL */
   logic [ADDR_WIDTH-1:0] ext_periph_HADDR;
   logic [2:0]            ext_periph_HBURST;
   logic                  ext_periph_HMASTLOCK;
@@ -182,6 +158,7 @@ module periph_ss #(
   logic                  ext_periph_HWRITE;
   logic                  ext_periph_HREADYIN;
   logic                  ext_periph_HSEL;
+  /* verilator lint_on UNUSEDSIGNAL */
   logic [DATA_WIDTH-1:0] ext_periph_HRDATA;
   logic                  ext_periph_HREADYOUT;
   logic                  ext_periph_HRESP;
@@ -222,7 +199,7 @@ logic [3:0] mux_qspi_sio_oe;  // internal signal for QSPI data output enable
 
 //--- Interconnect ----------------------------------------------------------------------
 
-  ahb_interconnect_ss #(
+  interconnect_ss #(
     .ADDR_WIDTH (ADDR_WIDTH),
     .DATA_WIDTH (DATA_WIDTH)
   ) u_interconnect (
@@ -245,34 +222,8 @@ logic [3:0] mux_qspi_sio_oe;  // internal signal for QSPI data output enable
     .HRESP            (HRESP),
 
     // Peripheral master ports
-    .rom_HADDR              (rom_HADDR),
-    .rom_HBURST             (rom_HBURST),
-    .rom_HMASTLOCK          (rom_HMASTLOCK),
-    .rom_HPROT              (rom_HPROT),
-    .rom_HSIZE              (rom_HSIZE),
-    .rom_HTRANS             (rom_HTRANS),
-    .rom_HWDATA             (rom_HWDATA),
-    .rom_HWRITE             (rom_HWRITE),
-    .rom_HREADYIN           (rom_HREADYIN),
-    .rom_HSEL               (rom_HSEL),
-    .rom_HRDATA             (rom_HRDATA),
-    .rom_HREADYOUT          (rom_HREADYOUT),
-    .rom_HRESP              (rom_HRESP),
-
-    .ram_HADDR              (ram_HADDR),
-    .ram_HBURST             (ram_HBURST),
-    .ram_HMASTLOCK          (ram_HMASTLOCK),
-    .ram_HPROT              (ram_HPROT),
-    .ram_HSIZE              (ram_HSIZE),
-    .ram_HTRANS             (ram_HTRANS),
-    .ram_HWDATA             (ram_HWDATA),
-    .ram_HWRITE             (ram_HWRITE),
-    .ram_HREADYIN           (ram_HREADYIN),
-    .ram_HSEL               (ram_HSEL),
-    .ram_HRDATA             (ram_HRDATA),
-    .ram_HREADYOUT          (ram_HREADYOUT),
-    .ram_HRESP              (ram_HRESP),
-
+    // ROM and RAM are not fabric slots: cpu_ss reaches them over its own
+    // native memory ports and never puts their addresses on HADDR.
     .uart_HADDR             (uart_HADDR),
     .uart_HBURST            (uart_HBURST),
     .uart_HMASTLOCK         (uart_HMASTLOCK),
@@ -373,52 +324,6 @@ logic [3:0] mux_qspi_sio_oe;  // internal signal for QSPI data output enable
     .debug_HREADYOUT        (debug_HREADYOUT),
     .debug_HRESP            (debug_HRESP)
   `endif
-  );
-
-//--- ROM ------------------------------------------------------------------------------
-
-  ahb_rom #(
-    .ADDR_WIDTH (ADDR_WIDTH),
-    .DATA_WIDTH (DATA_WIDTH)
-  ) u_rom (
-    .HCLK         (HCLK),
-    .HRESETn      (HRESETn),
-    .HADDR        (rom_HADDR),
-    .HBURST       (rom_HBURST),
-    .HMASTLOCK    (rom_HMASTLOCK),
-    .HPROT        (rom_HPROT),
-    .HSIZE        (rom_HSIZE),
-    .HTRANS       (rom_HTRANS),
-    .HWDATA       (rom_HWDATA),
-    .HWRITE       (rom_HWRITE),
-    .HRDATA       (rom_HRDATA),
-    .HREADYOUT    (rom_HREADYOUT),
-    .HRESP        (rom_HRESP),
-    .HREADYIN     (rom_HREADYIN),
-    .HSEL         (rom_HSEL)
-  );
-
-  //--- RAM ------------------------------------------------------------------------------
-
-  ahb_ram #(
-    .ADDR_WIDTH (ADDR_WIDTH),
-    .DATA_WIDTH (DATA_WIDTH)
-  ) u_ram (
-    .HCLK         (HCLK),
-    .HRESETn      (HRESETn),
-    .HADDR        (ram_HADDR),
-    .HBURST       (ram_HBURST),
-    .HMASTLOCK    (ram_HMASTLOCK),
-    .HPROT        (ram_HPROT),
-    .HSIZE        (ram_HSIZE),
-    .HTRANS       (ram_HTRANS),
-    .HWDATA       (ram_HWDATA),
-    .HWRITE       (ram_HWRITE),
-    .HRDATA       (ram_HRDATA),
-    .HREADYOUT    (ram_HREADYOUT),
-    .HRESP        (ram_HRESP),
-    .HREADYIN     (ram_HREADYIN),
-    .HSEL         (ram_HSEL)
   );
 
   //--- UART ------------------------------------------------------------------------------
@@ -668,16 +573,28 @@ logic [3:0] mux_qspi_sio_oe;  // internal signal for QSPI data output enable
   );
 
   //--- External Peripheral -------------------------------------------------------------------------
+  
+  // FIXME - bridge this to an external interface
+  //
+  // The external port is deliberately narrower than the fabric slot
+  // (EXT_ADDR_WIDTH / EXT_DATA_WIDTH, both 8 by default) to keep the wire
+  // count out of the block down, so the address and write data are truncated
+  // and the read data zero-extended. Note the consequence: the slot decodes a
+  // 64 KiB window but an 8-bit address only reaches its first 256 bytes.
+  //
+  // ext_periph_HSEL and ext_periph_HREADYIN have nowhere to go until the
+  // bridge above exists - an external slave cannot tell it is selected
+  // without them.
 
-  assign ext_HADDR     = ext_periph_HADDR;
+  assign ext_HADDR     = ext_periph_HADDR[EXT_ADDR_WIDTH-1:0];
   assign ext_HBURST    = ext_periph_HBURST;
   assign ext_HMASTLOCK = ext_periph_HMASTLOCK;
   assign ext_HPROT     = ext_periph_HPROT;
   assign ext_HSIZE     = ext_periph_HSIZE;
   assign ext_HTRANS    = ext_periph_HTRANS;
-  assign ext_HWDATA    = ext_periph_HWDATA;
+  assign ext_HWDATA    = ext_periph_HWDATA[EXT_DATA_WIDTH-1:0];
   assign ext_HWRITE    = ext_periph_HWRITE;
-  assign ext_periph_HRDATA    = ext_HRDATA;
+  assign ext_periph_HRDATA    = {{(DATA_WIDTH-EXT_DATA_WIDTH){1'b0}}, ext_HRDATA};
   assign ext_periph_HREADYOUT = ext_HREADY;
   assign ext_periph_HRESP     = ext_HRESP;
 

@@ -1,6 +1,6 @@
 // GPIO Controller with external MUX support
 //
-// Specification: planning/Hardware/design/blocks/GPIO Mux.md
+// Specification: docs/hardware/design/blocks/GPIO Mux.md
 // Directed tests: hw/tb/gpio/test_gpio.py (port names must match)
 
 module ahb_gpio_ctrl #(
@@ -14,6 +14,8 @@ module ahb_gpio_ctrl #(
   // AHB Slave Interface
 
   // Master Signals
+
+  /* verilator lint_off UNUSEDSIGNAL */
   input logic [ADDR_WIDTH-1:0]  HADDR,
   input logic [2:0]             HBURST,
   input logic                   HMASTLOCK,
@@ -22,6 +24,7 @@ module ahb_gpio_ctrl #(
   input logic [1:0]             HTRANS,
   input logic [DATA_WIDTH-1:0]  HWDATA,
   input logic                   HWRITE,
+  /* verilator lint_on UNUSEDSIGNAL */
 
   // Slave Signals
   output logic [DATA_WIDTH-1:0] HRDATA,
@@ -48,20 +51,29 @@ module ahb_gpio_ctrl #(
 );
 
   import ahb3lite_pkg::*;
-  import gpio_ctrl_pkg::*;
-
+  
+  // ---- Register Block ------------------------------------------------------
+  // Decoded from HADDR[5:2] - 16 word slots in the 4 KiB window at
+  // 0x8000_4000. Offsets 0x2C-0x3C are reserved: reads return 0, writes ERROR.
+  
+  localparam bit [3:0] REG_OUT        = 4'h0;  // 0x00 RW  output data
+  localparam bit [3:0] REG_IN         = 4'h1;  // 0x04 RO  live pad value
+  localparam bit [3:0] REG_OE         = 4'h2;  // 0x08 RW  output enable
+  localparam bit [3:0] REG_ALTSEL     = 4'h3;  // 0x0C RW  alternate function select
+  localparam bit [3:0] REG_RO_MASK    = 4'h4;  // 0x10 RW  read-only pad mask
+  localparam bit [3:0] REG_SYNC_EN_N  = 4'h5;  // 0x14 RW  synchroniser bypass
+  localparam bit [3:0] REG_IE         = 4'h6;  // 0x18 RW  input enable
+  localparam bit [3:0] REG_PU         = 4'h7;  // 0x1C RW  pull-up
+  localparam bit [3:0] REG_PD         = 4'h8;  // 0x20 RW  pull-down
+  localparam bit [3:0] REG_CS         = 4'h9;  // 0x24 RW  input type
+  localparam bit [3:0] REG_SL         = 4'hA;  // 0x28 RW  slew rate
+  localparam bit [3:0] REG_LAST_VALID = REG_SL;
 
   localparam int NUM_BYTES = DATA_WIDTH / 8;
 
   // Internal Signals
   logic [NUM_GPIO-1:0] wdata;
   logic [NUM_GPIO-1:0] wmask;
-
-  // Merge the selected byte lanes over a register's current value, so a byte
-  // or halfword write leaves the other lanes alone.
-  function automatic logic [NUM_GPIO-1:0] merge(input logic [NUM_GPIO-1:0] old_val);
-    return (wdata & wmask) | (old_val & ~wmask);
-  endfunction
 
   //  Register Fields 
   logic [NUM_GPIO-1:0] out_r;         // GPIO_OUT
@@ -86,11 +98,26 @@ module ahb_gpio_ctrl #(
   logic [NUM_BYTES-1:0] byte_select_r;
 
   logic                  invalid_access;
-  logic                  ro_violation;
   logic                  reserved_access;
   logic                  error_req;
   logic                  err_phase2;
   logic [DATA_WIDTH-1:0] bit_enable;      // byte_select_r expanded to bits
+
+  // ---- Helper Functions ------------------------------------------------------
+
+  // Merge the selected byte lanes over a register's current value, so a byte
+  // or halfword write leaves the other lanes alone.
+  function automatic logic [NUM_GPIO-1:0] merge(input logic [NUM_GPIO-1:0] old_val);
+    return (wdata & wmask) | (old_val & ~wmask);
+  endfunction
+
+  // Mask a register's current value with the read-only mask, so that any bits
+  // that are read-only remain unchanged.
+  function automatic logic [NUM_GPIO-1:0] merge_ro(input logic [NUM_GPIO-1:0] old_val);
+    return (merge(old_val) & ~ro_mask_r) | (old_val & ro_mask_r);
+  endfunction
+
+  // ---- AHB Control Logic ------------------------------------------------------
 
   // Generate the control signals in the address phase
   assign access       = HREADYIN && HSEL && (HTRANS != HTRANS_IDLE);
@@ -125,9 +152,7 @@ module ahb_gpio_ctrl #(
   assign wdata = HWDATA[NUM_GPIO-1:0];
   assign wmask = bit_enable[NUM_GPIO-1:0];
 
-
   // Invalid access 
-  assign ro_violation = |((wdata ^ out_r) & ro_mask_r & wmask);
   assign reserved_access = (word_address_r > REG_LAST_VALID);
 
   always_comb begin
@@ -137,11 +162,10 @@ module ahb_gpio_ctrl #(
     if (write_enable) begin
       if (reserved_access)                invalid_access = 1'b1;
       else if (word_address_r == REG_IN)  invalid_access = 1'b1;  // read-only
-      else if (word_address_r == REG_OUT) invalid_access = ro_violation;
     end
   end
 
-  // Write path 
+  // ---- Write Logic ------------------------------------------------------
   always_ff @(posedge HCLK, negedge HRESETn) begin
     if (~HRESETn) begin
       out_r       <= '0;
@@ -156,7 +180,7 @@ module ahb_gpio_ctrl #(
       sl_r        <= '0;
     end else if (write_enable && !invalid_access) begin
       case (word_address_r)
-        REG_OUT:       out_r       <= merge(out_r);
+        REG_OUT:       out_r       <= merge_ro(out_r);
         REG_OE:        oe_r        <= merge(oe_r);
         REG_ALTSEL:    alt_sel_r   <= merge(alt_sel_r);
         REG_RO_MASK:   ro_mask_r   <= merge(ro_mask_r);
@@ -171,7 +195,7 @@ module ahb_gpio_ctrl #(
     end
   end
 
-  // Read
+  // ---- Read Logic ------------------------------------------------------
   always_comb begin
     if (!read_enable_r)
       // Zero when not reading is not required, but it keeps waveforms honest.

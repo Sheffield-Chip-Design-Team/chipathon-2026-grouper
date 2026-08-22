@@ -17,21 +17,20 @@ cpu.trace, which hw/tb/top/trace_decode.py turns into cpu_trace.dis in the
 work root - and whose tail is dumped to the log automatically when a test
 fails. See the soc_test decorator below.
 
-Why cocotb rather than the SystemVerilog testbench: the firmware and the
-testbench have to agree on a GPIO handshake, and expressing the pattern
-generators, the scoreboard and the timeout handling in Python is far less
-code than in SystemVerilog.
-
 The DUT is grouper_soc_top, so the top-level input synchronisers are in the
-path - grouper_soc_hello_tb.sv drove digital_ss, which sits below them.
+path.
 """
 
+import contextlib
 import functools
 import logging
 import os
 
 import cocotb
+import cocotb.utils
 from cocotb.clock import Clock
+from cocotb.queue import Queue, QueueEmpty
+
 from cocotb.triggers import (
     ClockCycles,
     FallingEdge,
@@ -41,6 +40,7 @@ from cocotb.triggers import (
     with_timeout,
 )
 
+from hw.tb.tb_utils import bootloader
 from hw.tb.top import trace_decode
 
 log = logging.getLogger("cocotb.soc_tb")
@@ -48,11 +48,29 @@ log = logging.getLogger("cocotb.soc_tb")
 # How many decoded instructions to dump when a test fails.
 TRACE_TAIL = 64
 
-CLK_FREQ = 10_000_000                 # must match SYS_CLK_HZ in sw/src/soc.h
+CLK_FREQ = 10_000_000                 # must match SYS_CLK_HZ in sw/src/config.h
 CLK_PERIOD_NS = 1e9 / CLK_FREQ
 
-TX_BAUD = 19200                       # must match UART_BAUD_RATE in sw/src/uart/uart.h
-RX_BAUD = 19200
+DEFAULT_BAUD = 19200                  # the default of UART_BAUD_RATE in sw/src/drivers/uart/uart.h
+
+def firmware_baud():
+    """The baud the firmware in the ROM was built for.
+
+    UART_BAUD_RATE is a compile-time constant, and the build scripts can
+    override it (--baud/FW_BAUD) so a simulated load does not cost a second of
+    simulated time. They publish what they used as uart_baud.txt next to the
+    code.hex they publish, both resolved against the simulator's working
+    directory - so this is read at time zero rather than baked in at
+    elaboration, for the same reason report_firmware() reads fw_id.txt.
+    """
+    try:
+        with open("uart_baud.txt") as handle:
+            return int(handle.readline().strip())
+    except (FileNotFoundError, ValueError):
+        return DEFAULT_BAUD
+
+TX_BAUD = firmware_baud()
+RX_BAUD = TX_BAUD
 
 # 1/19200 s is 52083.333... ns, which cocotb refuses to round onto the
 # simulator's 1 ps grid. Work in whole picoseconds instead - the 0.33 ps
@@ -75,6 +93,12 @@ GPIO_ECHO_COUNT = 64
 # so a chatty test is dominated by UART time, not by the CPU.
 SIM_TIMEOUT_MS = 200
 
+# How long to wait for a freshly bank-switched image to report itself. Much
+# shorter than SIM_TIMEOUT_MS: by this point the UART is running at the fast
+# simulation baud and the image only has to reach its first print, so anything
+# beyond a few ms means it is not running at all - and every idle millisecond
+# here is ~10k clocks of wall time spent proving nothing.
+BOOT_TIMEOUT_MS = 20
 
 # --------------------------------------------------------------------------
 # Pad model
@@ -117,6 +141,22 @@ class PadModel:
         """What the SoC is currently driving, on the pads it has enabled."""
         return int(self.dut.gpio_out.value) & int(self.dut.gpio_oe.value) & PAD_MASK
 
+# Check Pad Configuration
+def check_pad_config(dut):
+    """The pad-electrical registers reach the pad interface.
+
+    These only leave the SoC, so firmware cannot check them - it writes a
+    distinct nibble pattern to each and this confirms it arrives.
+    """
+    for name, expected in (
+        ("gpio_pu", 0x000F),
+        ("gpio_pd", 0x00F0),
+        ("gpio_cs", 0x0F00),
+        ("gpio_sl", 0xF000),
+    ):
+        actual = int(getattr(dut, name).value) & PAD_MASK
+        log.info("CHECK %-10s got 0x%04x  expected 0x%04x", name, actual, expected)
+        assert actual == expected, f"{name}: got {actual:#06x}, expected {expected:#06x}"
 
 # --------------------------------------------------------------------------
 # GPIO pattern generators
@@ -216,6 +256,7 @@ def pattern_stream(count=GPIO_ECHO_COUNT):
     )
 
 
+
 # --------------------------------------------------------------------------
 # UART
 # --------------------------------------------------------------------------
@@ -234,6 +275,16 @@ class UartMonitor:
         self.text = ""
         self._partial = ""
         self.framing_errors = 0
+        # Every received byte, for callers that need the raw stream rather than
+        # lines of text - the bootloader's 'R' response is binary and contains
+        # newlines like any other value. Line assembly still happens below, so
+        # a test can use either view.
+        self.bytes = Queue()
+        # While set, bytes go to the queue only. A read response is machine
+        # code: decoding it as text logs line noise, and its 0x0a bytes would
+        # split it into "lines" at arbitrary points and leave a half-formed one
+        # to corrupt the next real message. See binary_mode().
+        self.binary = False
 
     def start(self):
         cocotb.start_soon(self._run())
@@ -250,6 +301,11 @@ class UartMonitor:
                         "in sw/src/soc.h",
                         TX_BAUD,
                     )
+                continue
+
+            self.bytes.put_nowait(value)
+
+            if self.binary:
                 continue
 
             char = chr(value)
@@ -282,6 +338,57 @@ class UartMonitor:
         await Timer(TX_BIT_PS, unit="ps")
         ok = int(self.dut.uart_tx.value) == 1
         return value, ok
+
+    @contextlib.contextmanager
+    def binary_mode(self):
+        """Treat everything received inside the block as data, not text."""
+        self.binary = True
+        try:
+            yield self
+        finally:
+            self.binary = False
+
+    def drain_bytes(self):
+        """Discard anything queued on the raw byte stream. Returns the count.
+
+        The byte queue and the line view are fed from the same decoder, so
+        text the test consumed as lines - the bootloader's greeting, most
+        obviously - is still sitting in the queue afterwards. A binary
+        response read on top of that comes out shifted by however many bytes
+        were left over. Drain immediately before asking for one.
+        """
+        dropped = 0
+        while True:
+            try:
+                self.bytes.get_nowait()
+            except QueueEmpty:
+                if dropped:
+                    log.debug("discarded %d stale byte(s) before a binary read", dropped)
+                return dropped
+            dropped += 1
+
+    async def recv_bytes(self, count, timeout_ms=SIM_TIMEOUT_MS):
+        """Exactly `count` raw bytes off the DUT's uart_tx.
+
+        For binary responses. Anything already queued is consumed first, so a
+        caller that sends a request and then calls this cannot lose a response
+        that arrived while it was still sending.
+        """
+        async def collect():
+            out = bytearray()
+            while len(out) < count:
+                out.append(await self.bytes.get())
+            return bytes(out)
+
+        try:
+            return await with_timeout(collect(), timeout_ms, "ms")
+        except SimTimeoutError:
+            raise AssertionError(
+                f"timed out after {timeout_ms} ms waiting for {count} bytes on "
+                f"the UART. The bootloader sends nothing until a command is "
+                f"complete, so a short response usually means it is still "
+                f"waiting for the rest of one"
+            ) from None
 
     async def wait_for(self, needle, timeout_ms=SIM_TIMEOUT_MS):
         """Block until a complete line containing `needle` has been received.
@@ -328,20 +435,381 @@ async def uart_rx_send_str(dut, text):
     for char in text:
         await uart_rx_send(dut, char)
 
+
+async def uart_rx_send_bytes(dut, data):
+    """Send a raw byte string into the DUT's uart_rx, back to back.
+
+    No flow control, which is safe here: at CLK_FREQ the CPU has thousands of
+    cycles per bit time, so the bootloader always drains its RX FIFO long
+    before the next byte lands.
+    """
+    for value in data:
+        await uart_rx_send(dut, value)
+
+# --------------------------------------------------------------------------
+# Bootloader
+# --------------------------------------------------------------------------
+#
+# The ROM bootloader's half of this lives in sw/boot/bootloader.c and the wire
+# format in hw/tb/tb_utils/bootloader.py, which sw/scripts/load_fw.py uses to
+# do the same job against real silicon over a serial port.
+
+# Words per 'W'/'R' command. The protocol has no per-word acknowledgement, so
+# chunking is what turns "the image is wrong somewhere" into "the image is
+# wrong in this 64-word block", and gives progress on a long load.
+LOAD_CHUNK_WORDS = 64
+
+async def bootloader_write(dut, uart, addr, words, verify=True):
+    """Write `words` to `addr` through the bootloader, optionally reading back."""
+    await uart_rx_send_bytes(dut, bootloader.frame_write(addr, words))
+
+    if not verify:
+        return
+
+    # A 'W' is not acknowledged, so nothing should have arrived since the last
+    # readback - but the greeting the test synchronised on did, and anything
+    # the bootloader prints in future would too. Drop it before the response
+    # starts, or the words come back rotated by the leftovers.
+    uart.drain_bytes()
+
+    # binary_mode keeps the response out of the line logger: it is machine
+    # code, and the 0x0a bytes in it would otherwise be logged as "lines".
+    with uart.binary_mode():
+        await uart_rx_send_bytes(dut, bootloader.frame_read(addr, len(words)))
+        raw = await uart.recv_bytes(bootloader.read_response_len(len(words)))
+
+    got = bootloader.parse_words(raw, len(words))
+    log.debug("readback %#010x:\n%s", addr, bootloader.format_words(got, addr))
+
+    complaint = bootloader.compare_words(words, got, addr)
+    if complaint is not None:
+        log.error(
+            "readback failed at %#010x: %s\n%s",
+            addr, complaint, bootloader.format_diff(words, got, addr),
+        )
+        raise AssertionError(f"readback failed: {complaint}")
+
+
+async def load_firmware(dut, uart, image="firmware.bin", addr=bootloader.RAM_BASE,
+                        verify=True):
+    
+    """Load a RAM-linked firmware image into RAM over the UART.
+
+    `image` defaults to the firmware.bin that build_fw.sh publishes into the
+    work root, which is also the simulator's working directory.
+
+    Returns the number of words written. Does not boot it - call
+    bootloader_boot() for that, once anything else the test wants to set up is
+    in place.
+    """
+    words = bootloader.image_words(image)
+    bootloader.check_image(words, addr)
+
+    log.info(
+        "loading %s: %d bytes to %#010x at %d baud",
+        image, len(words) * bootloader.WORD_BYTES, addr, RX_BAUD,
+    )
+
+    for start, chunk in bootloader.chunks(words, LOAD_CHUNK_WORDS):
+        await bootloader_write(
+            dut, uart, addr + start * bootloader.WORD_BYTES, chunk, verify=verify
+        )
+        log.debug("loaded %d/%d words", start + len(chunk), len(words))
+
+    log.info("loaded %d words%s", len(words), " (verified)" if verify else "")
+    return len(words)
+
+
+# --------------------------------------------------------------------------
+# Backdoor RAM preload
+# --------------------------------------------------------------------------
+#
+# Sending the image over the UART costs ~280 ms of simulated time and ~18 minutes of wall
+# clock.
+
+# `boot_preload` writes the image straight into the SRAM macros and then still
+# sends 'B' - the bank switch, the CPU reset and the refetch from RAM all stay
+# under test, and only the bulk transfer is skipped.
+
+RAM_LANES = 4
+
+def ram_lane_arrays(dut):
+    """Handles to the four byte-lane SRAM macro arrays.
+
+    Needs the signals to be public, which the boot_preload target arranges with
+    verilator's --public-flat-rw. Without it the traversal fails, so say so
+    rather than letting an AttributeError surface with no explanation.
+    """
+    try:
+        ram = dut.u_grouper_soc_dig_ss.u_ram_ss
+        return [
+            ram.gen_macro_ram.gen_sram[j].u_wrapper.u_sram_macro.mem
+            for j in range(RAM_LANES)
+        ]
+    except AttributeError as exc:
+        raise AssertionError(
+            f"cannot reach the SRAM macro arrays for a backdoor preload ({exc}). "
+            f"This needs verilator's --public-flat-rw, which the boot_preload "
+            f"target sets, and USE_MACRO_RAM=1 in hw/rtl/ram_ss.sv"
+        ) from None
+
+
+async def preload_ram(dut, image="firmware.bin", addr=bootloader.RAM_BASE):
+    """Write a RAM-linked image into the SRAM macros without using the UART.
+
+    Returns the number of words written. Leaves the bank switch alone - the
+    caller still boots through the bootloader.
+    """
+    words = bootloader.image_words(image)
+    bootloader.check_image(words, addr)
+
+    base = (addr - bootloader.RAM_BASE) // bootloader.WORD_BYTES
+    lanes = ram_lane_arrays(dut)
+
+    log.info(
+        "preloading %s: %d bytes to %#010x (backdoor, no UART)",
+        image, len(words) * bootloader.WORD_BYTES, addr,
+    )
+
+    for index, word in enumerate(words):
+        for lane in range(RAM_LANES):
+            lanes[lane][base + index].value = (word >> (8 * lane)) & 0xFF
+
+    # Let the scheduled writes land before anything reads the array.
+    await ClockCycles(dut.clk, 2)
+
+    log.info("preloaded %d words", len(words))
+    return len(words)
+
+
+async def verify_ram(dut, words, addr=bootloader.RAM_BASE):
+    """Read the macro arrays back and check them against `words`.
+
+    Cheap - no simulated time - so the preload path keeps the same guarantee
+    the UART path gets from its readback.
+    """
+    base = (addr - bootloader.RAM_BASE) // bootloader.WORD_BYTES
+    lanes = ram_lane_arrays(dut)
+
+    got = []
+    for index in range(len(words)):
+        value = 0
+        for lane in range(RAM_LANES):
+            value |= int(lanes[lane][base + index].value) << (8 * lane)
+        got.append(value)
+
+    complaint = bootloader.compare_words(words, got, addr)
+    if complaint is not None:
+        log.error(
+            "preload verify failed: %s\n%s",
+            complaint, bootloader.format_diff(words, got, addr),
+        )
+        raise AssertionError(f"preload verify failed: {complaint}")
+
+
+def cpu_state(dut):
+    """A snapshot of cpu_ss's bank switch and CPU handshake, or None.
+
+    Only reachable when the target made signals public (--public-flat-rw, i.e.
+    boot_preload). Returns None rather than raising so it can be called from an
+    error path without masking the original failure.
+    """
+    try:
+        cpu = dut.u_grouper_soc_dig_ss.u_cpu_ss
+        state = {
+            "bank_switch": int(cpu.bank_switch.value),
+            "cpu_rst_n": int(cpu.cpu_rst_n.value),
+            "trap": int(cpu.trap.value),
+            "mem_valid": int(cpu.mem_valid.value),
+            "mem_addr": int(cpu.mem_addr.value),
+            "mem_la_addr": int(cpu.mem_la_addr.value),
+            "mem_rdata": int(cpu.mem_rdata.value),
+        }
+    except (AttributeError, ValueError):
+        return None
+
+    # picorv32 internals. Worth the separate try: reg_pc is what says *where*
+    # a trap happened, and irq_mask says whether an illegal instruction would
+    # have been catchable as IRQ 1 or had to become a trap - it resets to all
+    # ones, so anything faulting before start.S unmasks traps the core.
+    try:
+        core = cpu.u_cpu
+        state.update({
+            "reg_pc": int(core.reg_pc.value),
+            "irq_mask": int(core.irq_mask.value),
+            "irq_state": int(core.irq_state.value),
+        })
+    except (AttributeError, ValueError):
+        pass
+
+    return state
+
+
+def log_cpu_state(dut, when):
+    """Log a cpu_state() snapshot, if this target can see one."""
+    state = cpu_state(dut)
+    if state is None:
+        log.debug("cpu state (%s): not visible - needs --public-flat-rw", when)
+        return None
+
+    extra = ""
+    if "reg_pc" in state:
+        extra = (f" reg_pc={state['reg_pc']:#010x} irq_mask={state['irq_mask']:#010x}"
+                 f" irq_state={state['irq_state']}")
+
+    log.debug(
+        "cpu state (%s): bank_switch=%d cpu_rst_n=%d trap=%d mem_valid=%d "
+        "mem_addr=%#010x mem_la_addr=%#010x mem_rdata=%#010x%s",
+        when, state["bank_switch"], state["cpu_rst_n"], state["trap"],
+        state["mem_valid"], state["mem_addr"], state["mem_la_addr"],
+        state["mem_rdata"], extra,
+    )
+    return state
+
+
+async def trace_memory_select(dut, cycles=24):
+    """Log cpu_ss's memory decode cycle by cycle, from the bank switch on.
+
+    The decode is what turns a fetch address into a ROM, RAM or AHB access
+    (hw/rtl/cpu_ss.sv). When an image fails to boot after the switch this says
+    whether the fetch was routed to RAM at all, what word address it presented,
+    and what came back - which no amount of staring at reg_pc will tell you.
+    """
+    try:
+        cpu = dut.u_grouper_soc_dig_ss.u_cpu_ss
+        probes = {
+            name: getattr(cpu, name)
+            for name in ("bank_switch", "cpu_rst_n", "rom_sel", "ram_sel",
+                         "ram_sel_r", "ram_read", "ram_addr", "ram_rdata",
+                         "rom_rdata", "mem_la_read", "mem_rdata",
+                         "ram_write", "ram_wdata", "mem_wstrb", "mem_addr",
+                         "mem_la_addr")
+        }
+    except AttributeError as exc:
+        log.debug("memory decode not visible (%s) - needs --public-flat-rw", exc)
+        return
+
+    # The bootloader still has to decode the 'B' and execute the store, which
+    # takes longer than the byte did to arrive - so find the switch rather
+    # than assuming it has already happened.
+    for _ in range(20000):
+        await RisingEdge(dut.clk)
+        try:
+            hit = int(probes["mem_addr"].value) == 0x7fff_fffc
+        except ValueError:
+            hit = False
+        if hit or int(probes["bank_switch"].value) == 1:
+            break
+    else:
+        log.error("bank_switch never went high - the bootloader did not take the 'B'")
+        return
+
+    log.debug("cycle-by-cycle memory decode from the bank switch:")
+    for index in range(cycles):
+        await RisingEdge(dut.clk)
+        values = {}
+        for name, handle in probes.items():
+            try:
+                values[name] = int(handle.value)
+            except ValueError:       # x/z during reset
+                values[name] = -1
+        log.debug(
+            "  %2d bank=%d rst_n=%d ram_sel=%d ram_sel_r=%d rd=%d wr=%d "
+            "wstrb=%x ram_addr=%#05x ram_wdata=%#010x ram_rdata=%#010x "
+            "mem_addr=%#010x la_addr=%#010x mem_rdata=%#010x",
+            index, values["bank_switch"], values["cpu_rst_n"],
+            values["ram_sel"], values["ram_sel_r"], values["ram_read"],
+            values["ram_write"], values["mem_wstrb"], values["ram_addr"],
+            values["ram_wdata"], values["ram_rdata"], values["mem_addr"],
+            values["mem_la_addr"], values["mem_rdata"],
+        )
+
+
+def watch_bus_error(dut):
+    """Report the AHB address phase that led to each bus error.
+
+    A single-cycle snapshot is not enough: cpu_ss drives HADDR straight from
+    picorv32's look-ahead address, so by the time HRESP comes back HADDR has
+    already moved on to the next access. Keeping a few cycles of history is
+    what shows which transfer actually failed, and whether HREADY stretched
+    the address phase out from under it.
+    """
+    try:
+        cpu = dut.u_grouper_soc_dig_ss.u_cpu_ss
+        probes = {n: getattr(cpu, n) for n in
+                  ("bus_error", "HADDR", "HTRANS", "HWRITE", "HREADY", "HRESP",
+                   "ahb_sel", "ahb_sel_r", "mem_la_addr", "mem_addr")}
+    except AttributeError:
+        return
+
+    async def run():
+        history = []
+        seen = 0
+        while True:
+            await RisingEdge(dut.clk)
+            values = {}
+            for name, handle in probes.items():
+                try:
+                    values[name] = int(handle.value)
+                except ValueError:
+                    values[name] = -1
+            history.append((cocotb.utils.get_sim_time("ns"), values))
+            if len(history) > 8:
+                history.pop(0)
+
+            if values["bus_error"] != 1:
+                continue
+            seen += 1
+            if seen > 3:            # three is plenty to see the pattern
+                continue
+
+            log.info("BUS ERROR #%d - preceding AHB cycles:", seen)
+            for when, past in history:
+                log.info(
+                    "    %9.0fns HADDR=%#010x HTRANS=%d HWRITE=%d HREADY=%d "
+                    "HRESP=%d ahb_sel=%d/%d la_addr=%#010x mem_addr=%#010x",
+                    when, past["HADDR"], past["HTRANS"], past["HWRITE"],
+                    past["HREADY"], past["HRESP"], past["ahb_sel"],
+                    past["ahb_sel_r"], past["mem_la_addr"], past["mem_addr"],
+                )
+
+    cocotb.start_soon(run())
+
+
+async def bootloader_boot(dut):
+    """Swap the banks and reboot into the loaded image.
+
+    Nothing comes back from this command directly: cpu_ss takes the write,
+    holds the CPU in reset for a cycle and releases it with RAM mapped at zero,
+    so the next thing on the UART is whatever the loaded image prints.
+    """
+    log.info("bank switch: rebooting into RAM")
+    await uart_rx_send_bytes(dut, bootloader.frame_boot())
+
 # --------------------------------------------------------------------------
 # Bring-up
 # --------------------------------------------------------------------------
 
-def report_firmware():
-    """Log which firmware is in the ROM.
+def firmware_id():
+    """What the build scripts recorded about the image in the ROM.
 
-    build_fw.sh drops fw_id.txt next to the code.hex that ahb_rom loads, both
-    resolved against the simulator's working directory.
+    build_fw.sh and build_bootloader.sh both drop fw_id.txt next to the
+    code.hex that rom_ss loads, all resolved against the simulator's working
+    directory.
     """
     try:
         with open("fw_id.txt") as handle:
-            log.info("TB_FIRMWARE: %s", handle.readline().strip())
+            return handle.readline().strip()
     except FileNotFoundError:
+        return ""
+
+
+def report_firmware():
+    """Log which firmware is in the ROM."""
+    name = firmware_id()
+    if name:
+        log.info("TB_FIRMWARE: %s", name)
+    else:
         log.warning("TB_FIRMWARE: unknown (fw_id.txt not found - was build_fw.sh run?)")
 
 
@@ -349,6 +817,7 @@ async def bring_up(dut):
     """Clock, reset, pad model and UART monitor. Returns (pads, uart)."""
     report_firmware()
 
+    # Start the clock
     cocotb.start_soon(Clock(dut.clk, CLK_PERIOD_NS, unit="ns").start())
 
     dut.uart_rx.value = 1
@@ -372,9 +841,9 @@ async def bring_up(dut):
     return pads, uart
 
 
-async def expect_test_result(uart, name):
+async def expect_test_result(uart, name, timeout_ms=SIM_TIMEOUT_MS):
     """Wait for the harness summary line and require a PASS."""
-    line = await uart.wait_for("TEST_RESULT:")
+    line = await uart.wait_for("TEST_RESULT:", timeout_ms=timeout_ms)
     log.info("%s: %s", name, line)
     assert "PASS" in line, f"{name} reported {line!r}"
 
@@ -387,6 +856,36 @@ async def expect_test_result(uart, name):
 FW_TEST = os.environ.get("FW_TEST", "")
 DRIVEN_FW = ("uart_echo", "gpio")
 
+# Whether the ROM holds the bootloader rather than an application image, which
+# is what the `boot` target builds. The file's presence and content is the
+# signal, the same way cpu.trace tells soc_test whether a trace was recorded -
+# so nothing has to pass the target name through to Python.
+#
+# It splits the tests cleanly in two: with the bootloader in ROM no application
+# ever starts on its own, so every other test here would sit waiting for output
+# that cannot arrive.
+ROM_IS_BOOTLOADER = "bootloader" in firmware_id()
+
+# Whether to skip the UART transfer and write the image into the SRAM macros
+# directly. The boot_preload target drops ram_preload.txt in the work root,
+# because that target is also the only one that passes verilator
+# --public-flat-rw - without which the backdoor is not reachable at all. So the
+# marker and the ability to act on it always arrive together.
+RAM_PRELOAD = (
+    os.path.exists("ram_preload.txt")
+    or os.environ.get("RAM_PRELOAD", "") not in ("", "0")
+)
+
+
+async def settle(dut):
+    """Advance to a clock edge before letting the regression end."""
+    try:
+        await with_timeout(RisingEdge(dut.clk), 10 * CLK_PERIOD_NS, "ns")
+    except SimTimeoutError:
+        log.debug("settle: no clock edge - ending without one")
+    except Exception as exc: 
+        log.debug("settle: %s", exc)
+
 
 def soc_test(**kwargs):
     """cocotb.test plus instruction-trace handling.
@@ -398,6 +897,8 @@ def soc_test(**kwargs):
     Both are no-ops unless cpu.trace exists, so the `default` and `debug`
     targets are unaffected and nothing has to tell Python which target is
     running: the file's presence is the signal.
+
+    It also ends every test on a clock edge - see settle().
     """
     def wrap(fn):
         @cocotb.test(**kwargs)
@@ -410,13 +911,107 @@ def soc_test(**kwargs):
                 raise
             finally:
                 trace_decode.write_listing()
+                await settle(dut)
 
         return inner
 
     return wrap
 
 
-@soc_test(skip=FW_TEST in DRIVEN_FW)
+@soc_test(skip=not (ROM_IS_BOOTLOADER and RAM_PRELOAD))
+async def test_preloaded_boot(dut):
+    """The bank switch boots an image that was placed in RAM by the backdoor.
+
+    The `boot_preload` target. Same ending as test_bootloader_load - greeting,
+    'B', then the image has to report itself - but the image gets into RAM by
+    a direct write to the SRAM macros instead of ~600 UART writes. That trades
+    ~18 minutes of wall clock for a few seconds, at the cost of not exercising
+    the bootloader's 'W' path, which the `boot` target still covers.
+    """
+    _, uart = await bring_up(dut)
+    watch_bus_error(dut)
+
+    await uart.wait_for(bootloader.GREETING)
+
+    words = bootloader.image_words("firmware.bin")
+    await preload_ram(dut)
+    await verify_ram(dut, words)
+
+    # Independent check of the preload. verify_ram reads back through the same
+    # VPI handles it wrote, so it cannot detect the handles resolving somewhere
+    # other than where the CPU reads - all four lanes landing on one macro, for
+    # instance. Asking the bootloader to read the words back exercises the real
+    # functional path: a load through cpu_ss, ram_ss and the macro read port.
+    probe = min(8, len(words))
+    uart.drain_bytes()
+    with uart.binary_mode():
+        await uart_rx_send_bytes(
+            dut, bootloader.frame_read(bootloader.RAM_BASE, probe)
+        )
+        raw = await uart.recv_bytes(bootloader.read_response_len(probe))
+
+    through_cpu = bootloader.parse_words(raw, probe)
+    complaint = bootloader.compare_words(words[:probe], through_cpu,
+                                         bootloader.RAM_BASE)
+    if complaint is not None:
+        log.error(
+            "the CPU does not see the preloaded image: %s\n%s",
+            complaint,
+            bootloader.format_diff(words[:probe], through_cpu, bootloader.RAM_BASE),
+        )
+        raise AssertionError(
+            f"preload did not reach the memory the CPU reads: {complaint}"
+        )
+    log.info("preload confirmed through the CPU read path (%d words)", probe)
+
+   # log_cpu_state(dut, "before bank switch")
+    await bootloader_boot(dut)
+
+    # Debug the bank switch
+    await trace_memory_select(dut, cycles=48)
+
+    # Debug + logging
+    previous = 0
+    for cycles in (2, 4, 8, 16, 32, 64, 256, 1024):
+        await ClockCycles(dut.clk, cycles - previous)
+        previous = cycles
+        log_cpu_state(dut, f"+{cycles} clk after bank switch")
+
+    try:
+        await expect_test_result(uart, "preloaded boot", timeout_ms=BOOT_TIMEOUT_MS)
+    except AssertionError:
+        log_cpu_state(dut, "at timeout")
+        raise
+
+
+@soc_test(skip=not ROM_IS_BOOTLOADER or RAM_PRELOAD)
+async def test_bootloader_load(dut):
+    """The ROM bootloader loads an image into RAM over the UART and runs it.
+
+    The `boot` target of hw/tb/top/grouper_soc_directed.core: the ROM holds
+    sw/boot/bootloader.c and build_fw.sh has published a RAM-linked
+    firmware.bin next to it. This is the only way to run firmware bigger than
+    the 1 KiB ROM, so it exercises the whole path - greeting, write, readback,
+    bank switch, and then the loaded image proving itself exactly as it would
+    if it had booted from ROM.
+
+    A readback failure and a boot failure mean different things, so they are
+    separated: the first says the link dropped something, the second says the
+    image or the bank switch is wrong.
+    """
+    _, uart = await bring_up(dut)
+
+    # The bootloader prints this once its UART is up and it is ready for a
+    # command. Sending before it appears would be dropped.
+    await uart.wait_for(bootloader.GREETING)
+
+    await load_firmware(dut, uart, verify=True)
+    await bootloader_boot(dut)
+
+    await expect_test_result(uart, "bootloader")
+
+
+@soc_test(skip=FW_TEST in DRIVEN_FW or ROM_IS_BOOTLOADER)
 async def test_firmware_runs(dut):
     """Any self-checking firmware reaches TEST_RESULT: PASS.
 
@@ -428,7 +1023,7 @@ async def test_firmware_runs(dut):
     await expect_test_result(uart, FW_TEST or "firmware")
 
 
-@soc_test(skip=FW_TEST != "uart_echo")
+@soc_test(skip=FW_TEST != "uart_echo" or ROM_IS_BOOTLOADER)
 async def test_uart_echo(dut):
     """The interactive echo firmware (sw/tests/test_uart_echo.c).
 
@@ -452,24 +1047,7 @@ async def test_uart_echo(dut):
     await expect_test_result(uart, "uart_echo")
 
 
-def check_pad_config(dut):
-    """The pad-electrical registers reach the pad interface.
-
-    These only leave the SoC, so firmware cannot check them - it writes a
-    distinct nibble pattern to each and this confirms it arrives.
-    """
-    for name, expected in (
-        ("gpio_pu", 0x000F),
-        ("gpio_pd", 0x00F0),
-        ("gpio_cs", 0x0F00),
-        ("gpio_sl", 0xF000),
-    ):
-        actual = int(getattr(dut, name).value) & PAD_MASK
-        log.info("CHECK %-10s got 0x%04x  expected 0x%04x", name, actual, expected)
-        assert actual == expected, f"{name}: got {actual:#06x}, expected {expected:#06x}"
-
-
-@soc_test(skip=FW_TEST != "gpio")
+@soc_test(skip=FW_TEST != "gpio" or ROM_IS_BOOTLOADER)
 async def test_gpio_patterns(dut):
     """Stream GPIO patterns at the CPU and score what it echoes back.
 

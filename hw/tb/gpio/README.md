@@ -1,7 +1,7 @@
 # ahb_gpio_ctrl directed testbench
 
 Directed cocotb tests for the GPIO mux control register block, written against
-[GPIO Mux.md](../../../planning/Hardware/design/blocks/GPIO%20Mux.md) before
+[GPIO Mux.md](../../../docs/hardware/design/blocks/GPIO%20Mux.md) before
 the RTL existed. Each test names the `GRPR-GPIO-*` requirement it covers.
 
 ## Running

@@ -1,5 +1,50 @@
-// AHB UART 
-
+// AHB UART Interface
+//
+// Number of addressable locations : 4
+// Size of each addressable location : 32 bits
+// Supported transfer sizes : Word, Halfword, Byte
+// Alignment of base address : Double Word aligned
+//
+// Address map :
+//   Base address + 0 :
+//     UART Control Register
+//   Base address + 4:
+//     UART Status Register
+//   Base address + 8:
+//     UART TX Data FIFO
+//   Base address + 12:
+//     UART RX Data FIFO
+//
+// Bits within UART Control Register:
+//   Bit 0       UART Enable
+//   Bit 1       TX Enable
+//   Bit 2       RX Enable
+//   Bit 3       RX Resynchronizer Enable
+//   Bit 4       TX Assert Break - Asserts a break condition on TX if 1
+//   Bit 5       Flush TX FIFO (Self Clearing)
+//   Bit 6       Flush RX FIFO (Self Clearing)
+//   Bits 25-16  Clock Divider Ratio, (Calculated using (HCLK Frequency / (8*Baud Rate))-1)
+//
+// Bits within UART Status Register:
+//   Bit 0       TX FIFO Empty
+//   Bit 1       TX FIFO Full
+//   Bit 2       RX FIFO Empty
+//   Bit 3       RX FIFO Full
+//   Bit 4       TX Active (1 if currently transmitting data)
+//   Bit 5       RX Frame Error (Self clears after being read)
+//   Bit 6       RX Break Condition (Self clears after being read)
+//
+// Bits within UART TX Data FIFO:
+//   Bits 7-0    TX Data (Write Only, causes a bus error if written to when the FIFO is full)
+//
+// Bits within UART RX Data FIFO:
+//   Bits 7-0    RX Data (Read Only, causes a bus error if written to when the FIFO is empty)
+//
+//
+// Clock Divider Ratio Example Calculation (HCLK = 10MHz, Target Baud = 19200):
+//   int clk_div = 10e+6/(19200*8) - 0.5; // Equals 64
+//   The -0.5 is used to round it to the nearest integer and correct for the offset clock divider value
+//
 
 module ahb_uart #(
   parameter int ADDR_WIDTH = 32,
@@ -11,6 +56,7 @@ module ahb_uart #(
   // AHB Slave Interface
     
   // Master Signals
+  /* verilator lint_off UNUSEDSIGNAL */
   input logic [ADDR_WIDTH-1:0]  HADDR,
   input logic [2:0]             HBURST,
   input logic                   HMASTLOCK,
@@ -19,6 +65,7 @@ module ahb_uart #(
   input logic [1:0]             HTRANS,
   input logic [DATA_WIDTH-1:0]  HWDATA,
   input logic                   HWRITE,
+  /* verilator lint_on UNUSEDSIGNAL */
 
   // Slave Signals
   output logic [DATA_WIDTH-1:0] HRDATA,
@@ -55,8 +102,8 @@ module ahb_uart #(
   logic                     ctrl_rx_en;
   logic                     ctrl_rx_resync_en;
   logic                     ctrl_tx_break;
-  logic                     ctrl_flush_tx_fifo;    // WOSC
-  logic                     ctrl_flush_rx_fifo;    // WOSC
+  logic                     ctrl_flush_tx_fifo; // WOSC
+  logic                     ctrl_flush_rx_fifo; // WOSC
 
   
   // Status registers
@@ -65,8 +112,8 @@ module ahb_uart #(
   logic                     status_rx_empty;
   logic                     status_rx_full;
   logic                     status_tx_active;
-  logic                     status_rx_frame_error;  // RC
-  logic                     status_rx_break;        // RC
+  logic                     status_rx_frame_error; // RC
+  logic                     status_rx_break;       // RC
   
   // Control signals
   logic                     rx_frame_error; // 1-cycle pulse on frame error
@@ -87,47 +134,46 @@ module ahb_uart #(
   logic [1:0]                 word_address_r;
   logic [(DATA_WIDTH/8)-1:0]  byte_select;
   logic [(DATA_WIDTH/8)-1:0]  byte_select_r;
-
   logic                       invalid_access;
-  logic                       read_invalid;     // decided in the address phase
-  logic                       read_invalid_r;   // ...consumed in the data phase
-  logic                       hresp_err_req_r;  // second cycle of an ERROR response
+  logic                       invalid_access_r;
+  logic                       invalid_read;
+  logic                       invalid_read_r;
 
   // Instance the uart core
   uart #(
     .CLK_DIV_BITS (CLK_DIV_BITS),
     .DATA_WIDTH   (UART_DATA_W)
   ) u_uart (
-      .clk            (HCLK),
-      .rst_n          (HRESETn),
-      .enable         (ctrl_enable),
-      .clk_div        (ctrl_clk_div),
-      .tx_en          (ctrl_tx_en),
-      .rx_en          (ctrl_rx_en),
-      .rx_resync_en   (ctrl_rx_resync_en),
-      .tx_break       (ctrl_tx_break),
-      .tx_active      (status_tx_active),
-      .received       (rx_irq),
-      .rx_frame_error (rx_frame_error),
-      .rx_break       (rx_break),
-      .flush_tx_fifo  (ctrl_flush_tx_fifo),
-      .tx_data        (tx_data),
-      .tx_write       (tx_write),
-      .tx_full        (status_tx_full),
-      .tx_empty       (status_tx_empty),
-      .flush_rx_fifo  (ctrl_flush_rx_fifo),
-      .rx_read        (rx_read),
-      .rx_full        (status_rx_full),
-      .rx_empty       (status_rx_empty),
-      .rx_data        (rx_data),
-      .uart_tx        (uart_tx),
-      .uart_rx        (uart_rx)
+    .clk            (HCLK),
+    .rst_n          (HRESETn),
+    .enable         (ctrl_enable),
+    .clk_div        (ctrl_clk_div),
+    .tx_en          (ctrl_tx_en),
+    .rx_en          (ctrl_rx_en),
+    .rx_resync_en   (ctrl_rx_resync_en),
+    .tx_break       (ctrl_tx_break),
+    .tx_active      (status_tx_active),
+    .received       (rx_irq),
+    .rx_frame_error (rx_frame_error),
+    .rx_break       (rx_break),
+    .flush_tx_fifo  (ctrl_flush_tx_fifo),
+    .tx_data        (tx_data),
+    .tx_write       (tx_write),
+    .tx_full        (status_tx_full),
+    .tx_empty       (status_tx_empty),
+    .flush_rx_fifo  (ctrl_flush_rx_fifo),
+    .rx_read        (rx_read),
+    .rx_full        (status_rx_full),
+    .rx_empty       (status_rx_empty),
+    .rx_data        (rx_data),
+    .uart_tx        (uart_tx),
+    .uart_rx        (uart_rx)
   );
 
   assign rx_error_irq = rx_frame_error;
 
   //Generate the control signals in the address phase
-  assign access       = HREADYIN && HSEL && (HTRANS != HTRANS_IDLE);
+  assign access       = HREADYIN && HSEL && (HTRANS == HTRANS_NONSEQ || HTRANS == HTRANS_SEQ);
   assign read_enable  = access && ~HWRITE;
 
   assign word_address = access ? HADDR[3:2] : '0;
@@ -135,25 +181,22 @@ module ahb_uart #(
 
   assign rx_read = read_enable && !status_rx_empty && word_address == ADDR_RXDATA;
 
-  assign read_invalid = read_enable && (word_address == ADDR_RXDATA) && status_rx_empty;
-
-  // Delay write control signals to data phase.
+  // Delay write control signals to data phase
   always_ff @(posedge HCLK, negedge HRESETn)
     if (~HRESETn) begin
       write_enable    <= '0;
       read_enable_r   <= '0;
       word_address_r  <= '0;
       byte_select_r   <= '0;
-      read_invalid_r  <= '0;
-    end else if (HREADYOUT) begin
+    end else begin
       write_enable    <= access && HWRITE;
       read_enable_r   <= read_enable;
       word_address_r  <= word_address;
       byte_select_r   <= byte_select;
-      read_invalid_r  <= read_invalid;
     end
 
   //Act on control signals in the data phase
+
   // write
   always_ff @(posedge HCLK, negedge HRESETn)
     if (~HRESETn) begin
@@ -193,40 +236,39 @@ module ahb_uart #(
   assign tx_data  = HWDATA[0 +: UART_DATA_W];
 
   // read
-always_comb begin
-  if (!read_enable_r)
-    // (output of zero when not enabled for read is not necessary
-    //  but may help with debugging)
-    HRDATA = '0;
-  else
-    unique case (word_address_r)
-      ADDR_CTRL: HRDATA = {
-        {(16-CLK_DIV_BITS){1'b0}},
-        ctrl_clk_div,
-        11'b0,
-        ctrl_tx_break,
-        ctrl_rx_resync_en,
-        ctrl_rx_en,
-        ctrl_tx_en,
-        ctrl_enable
-      };
-      ADDR_STATUS: HRDATA = {
-        25'b0,
-        status_rx_break,
-        status_rx_frame_error,
-        status_tx_active,
-        status_rx_full,
-        status_rx_empty,
-        status_tx_full,
-        status_tx_empty
-      };
-      ADDR_RXDATA: HRDATA = {
-        {(32-UART_DATA_W){1'b0}},
-        rx_data
-      };
-      default: HRDATA = '0;
-    endcase
-  end
+  always_comb
+    if (!read_enable_r)
+      // (output of zero when not enabled for read is not necessary
+      //  but may help with debugging)
+      HRDATA = '0;
+    else
+      unique case (word_address_r)
+        ADDR_CTRL: HRDATA = {
+          {(16-CLK_DIV_BITS){1'b0}},
+          ctrl_clk_div,
+          11'b0,
+          ctrl_tx_break,
+          ctrl_rx_resync_en,
+          ctrl_rx_en,
+          ctrl_tx_en,
+          ctrl_enable
+        };
+        ADDR_STATUS: HRDATA = {
+          25'b0,
+          status_rx_break,
+          status_rx_frame_error,
+          status_tx_active,
+          status_rx_full,
+          status_rx_empty,
+          status_tx_full,
+          status_tx_empty
+        };
+        ADDR_RXDATA: HRDATA = {
+          {(32-UART_DATA_W){1'b0}},
+          rx_data
+        };
+        default: HRDATA = '0;
+      endcase
 
   always_ff @(posedge HCLK, negedge HRESETn)
     if (~HRESETn) begin
@@ -245,12 +287,9 @@ always_comb begin
     end
 
   //Transfer Response
-
-  // Everything here is data phase. The write terms are naturally so
-  // (write_enable, word_address_r and status_tx_full all are); the read term
-  // arrives pre-decided from the address phase
-  always_comb begin
-    invalid_access = read_invalid_r;
+  always_comb begin : invalid_access_check
+    // invalid_read is registered so it is valid in the data phase
+    invalid_access = invalid_read_r;
 
     if (write_enable)
       unique case (word_address_r)
@@ -261,13 +300,34 @@ always_comb begin
       endcase
   end
 
-  always_ff @(posedge HCLK or negedge HRESETn)
-    if (!HRESETn) hresp_err_req_r <= 1'b0;
-    else          hresp_err_req_r <= invalid_access && !hresp_err_req_r;
+  always_comb begin : invalid_read_check
+    invalid_read = '0;
 
-  // Low for the first cycle and high for the second, HRESP high for both.
-  assign HREADYOUT = !(invalid_access && !hresp_err_req_r);
-  assign HRESP     =   invalid_access || hresp_err_req_r;
+    if (read_enable)
+      unique case (word_address)
+        ADDR_RXDATA: invalid_read |= status_rx_empty;
+        default: begin end
+      endcase
+  end
+
+  always_ff @(posedge HCLK, negedge HRESETn)
+    if (~HRESETn) begin
+      invalid_access_r <= '0;
+      invalid_read_r <= '0;
+    end else begin
+      invalid_access_r <= invalid_access;
+      invalid_read_r <= invalid_read;
+    end
+
+  always_comb begin : ahb_resp
+    // Single cycle Write & Read. Zero Wait state operations
+    HREADYOUT = '1;
+    HRESP = invalid_access || invalid_access_r;
+    if (invalid_access && !invalid_access_r) begin
+      // 2 Cycle AHB Error Response
+      HREADYOUT = '0;
+    end
+  end
 
 endmodule
 

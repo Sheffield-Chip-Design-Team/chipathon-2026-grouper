@@ -32,18 +32,61 @@ _COVERAGE_SUMMARY_RE = re.compile(
 COVERAGE_CATEGORIES = ["line", "toggle", "branch", "expr", "fsm_state", "fsm_arc"]
 COVERAGE_SCOPES = ["full", "line", "none"]
 
+# Every test record carries exactly one of these. "skipped" is a distinct
+# outcome, not a flavour of "failed": cocotb emits <skipped/> both for
+# @cocotb.test(skip=...) and for a test excluded by a filter (e.g. the
+# FW_TEST legs of hw/tb/top/test_soc.py, where two of the three tests are
+# excluded by design), so folding those into tests_failed would report a
+# healthy run as mostly-failing. A <failure> is never counted as anything
+# but a failure.
+PASSED, FAILED, SKIPPED = "passed", "failed", "skipped"
+
+# Group a target belongs to in the aggregated CSV/summary, in report order.
+# Kept here (rather than in aggregate_metrics.py) so run_target.py can
+# validate --group against it at submission time.
+GROUPS = ["lint", "directed_tb", "pyuvm"]
+
+
+def _test_record(name, status, classname=None, sim_time_ns=None, wall_time_s=None, error_msg=None):
+    return {
+        "name": name,
+        "classname": classname,
+        "status": status,
+        "sim_time_ns": sim_time_ns,
+        "wall_time_s": wall_time_s,
+        "error_msg": error_msg,
+    }
+
 
 def parse_cocotb_results(results_xml: Path):
+    """Three states, not two: a cocotb <skipped/> testcase neither passed nor
+    failed, and must not be scored as a failure.
+
+    This matters because several suites here are parameterised by an
+    environment variable and deliberately skip the cases that don't apply -
+    hw/tb/top/test_soc.py gates each of its tests on FW_TEST, so any single
+    run reports one executed test and the rest skipped. Counting skips as
+    failures made every one of those legs red regardless of the result.
+    """
     root = ET.parse(results_xml).getroot()
     tests = []
     for testcase in root.iter("testcase"):
         failure = testcase.find("failure")
         skipped = testcase.find("skipped")
+        # A testcase should never carry both, but if it somehow does, the
+        # failure wins - a reported failure is never downgraded to a skip.
+        if failure is not None:
+            status, error_msg = FAILED, failure.get("error_msg")
+        elif skipped is not None:
+            status, error_msg = SKIPPED, None
+        else:
+            status, error_msg = PASSED, None
         tests.append(
             {
                 "name": testcase.get("name"),
                 "classname": testcase.get("classname"),
                 "passed": failure is None and skipped is None,
+                "skipped": skipped is not None,
                 "sim_time_ns": float(testcase.get("sim_time_ns", 0.0)),
                 "wall_time_s": float(testcase.get("time", 0.0)),
                 "error_msg": failure.get("error_msg") if failure is not None else None,
@@ -60,6 +103,7 @@ def parse_log_grep(log_file: Path, success_pattern: str):
             "name": "log_contains_success_marker",
             "classname": None,
             "passed": passed,
+            "skipped": False,
             "sim_time_ns": None,
             "wall_time_s": None,
             "error_msg": None if passed else f"pattern {success_pattern!r} not found in log",
@@ -74,6 +118,7 @@ def parse_exit_code(exit_code: int):
             "name": "process_exit_code",
             "classname": None,
             "passed": passed,
+            "skipped": False,
             "sim_time_ns": None,
             "wall_time_s": None,
             "error_msg": None if passed else f"exited with code {exit_code}",
@@ -133,11 +178,16 @@ def apply_coverage_scope(full_breakdown: dict | None, coverage_scope: str) -> di
 
 
 def write_metrics(
-    target: str, kind: str, tests: list, coverage_dat: Path | None, coverage_scope: str, out_dir: Path
+    target: str, kind: str, tests: list, coverage_dat: Path | None, coverage_scope: str, out_dir: Path,
+    group: str = "directed_tb", fail_ok: bool = False,
 ) -> int:
     """Write metrics-<target>.json and return the process exit code to use
-    (0 if every test passed, 1 otherwise). Shared by report_target's own CLI
+    (0 unless a test actually failed). Shared by report_target's own CLI
     and run_target.py, so both produce identical metrics output.
+
+    Skipped tests are their own category: they are excluded from both the
+    failure count and the pass_rate denominator, so a suite that skips the
+    cases not selected for this run scores on what it actually executed.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -146,15 +196,21 @@ def write_metrics(
 
     tests_total = len(tests)
     tests_passed = sum(1 for t in tests if t["passed"])
-    tests_failed = tests_total - tests_passed
+    tests_skipped = sum(1 for t in tests if t.get("skipped"))
+    tests_failed = tests_total - tests_passed - tests_skipped
+    tests_run = tests_total - tests_skipped
 
     metrics = {
         "target": target,
+        "group": group,
         "kind": kind,
+        "fail_ok": fail_ok,
         "tests_total": tests_total,
+        "tests_run": tests_run,
         "tests_passed": tests_passed,
         "tests_failed": tests_failed,
-        "pass_rate": (tests_passed / tests_total) if tests_total else None,
+        "tests_skipped": tests_skipped,
+        "pass_rate": (tests_passed / tests_run) if tests_run else None,
         "coverage": coverage,
         "sim_time_ns_total": sum(t["sim_time_ns"] or 0 for t in tests) or None,
         "wall_time_s_total": sum(t["wall_time_s"] or 0 for t in tests) or None,
@@ -167,9 +223,15 @@ def write_metrics(
         f"{cat}={v['pct']:.1f}%" if isinstance(v, dict) else f"{cat}={v}"
         for cat, v in coverage.items()
     )
-    print(f"Wrote {out_file}: {tests_passed}/{tests_total} passed{cov_summary}")
+    skip_summary = f" ({tests_skipped} skipped)" if tests_skipped else ""
+    print(f"Wrote {out_file}: {tests_passed}/{tests_run} passed{skip_summary}{cov_summary}")
 
-    return 1 if tests_failed else 0
+    if tests_failed:
+        return 1
+    if not tests_run:
+        print(f"error: {target} ran no tests at all ({tests_total} skipped)", file=sys.stderr)
+        return 1
+    return 0
 
 
 def main():
@@ -185,6 +247,11 @@ def main():
     ap.add_argument("--coverage-scope", default="full", choices=COVERAGE_SCOPES,
                      help="full = report every category, line = only line (rest N/A), "
                           "none = no coverage at all (all categories N/A)")
+    ap.add_argument("--group", default="directed_tb", choices=GROUPS,
+                     help="Reporting group this target belongs to in the aggregated CSV/summary")
+    ap.add_argument("--fail-ok", action="store_true",
+                     help="Target's failures don't block CI - recorded in the metrics so the "
+                          "summary can show them as known/non-blocking")
     args = ap.parse_args()
 
     if args.kind == "cocotb":
@@ -196,6 +263,7 @@ def main():
             # doesn't get a silent gap for this target.
             tests = [{
                 "name": "results_xml_present", "classname": None, "passed": False,
+                "skipped": False,
                 "sim_time_ns": None, "wall_time_s": None,
                 "error_msg": f"{args.results_xml} not found (build likely failed before cocotb ran)",
             }]
@@ -207,6 +275,7 @@ def main():
         if not args.log_file.is_file():
             tests = [{
                 "name": "log_contains_success_marker", "classname": None, "passed": False,
+                "skipped": False,
                 "sim_time_ns": None, "wall_time_s": None,
                 "error_msg": f"{args.log_file} not found (run likely failed before it was captured)",
             }]
@@ -217,7 +286,10 @@ def main():
             ap.error("--kind exit-code requires --exit-code")
         tests = parse_exit_code(args.exit_code)
 
-    return write_metrics(args.target, args.kind, tests, args.coverage_dat, args.coverage_scope, args.out_dir)
+    return write_metrics(
+        args.target, args.kind, tests, args.coverage_dat, args.coverage_scope, args.out_dir,
+        group=args.group, fail_ok=args.fail_ok,
+    )
 
 
 if __name__ == "__main__":

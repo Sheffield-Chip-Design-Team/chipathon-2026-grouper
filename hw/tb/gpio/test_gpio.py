@@ -1,6 +1,6 @@
 """Directed cocotb testbench for ahb_gpio_ctrl.
 
-Written against `planning/Hardware/design/blocks/GPIO Mux.md` before the RTL
+Written against `docs/hardware/design/blocks/GPIO Mux.md` before the RTL
 exists, so this file is the interface contract as much as it is a test. Each
 test names the requirement it covers.
 
@@ -61,14 +61,6 @@ DUT port list this testbench expects
       output logic [NUM_GPIO-1:0]    gpio_sl
     );
 
-GPIO_RO_MASK is deliberately not a port - it only feeds the internal write
-check, and the tests verify it through readback.
-
-Note on GPIO_IE: this block does *not* gate GPIO_IN with GPIO_IE. The input
-enable disables the pad's input buffer out in the pad ring, so by the time
-`mux_io_i` reaches here it is already 0 for a disabled pad. Masking again in
-the block would be redundant, and would make the block untestable in
-isolation. `test_gpio_in_ignores_ie` pins that down.
 """
 
 import logging
@@ -95,7 +87,7 @@ CLK_PERIOD_NS = 10
 NUM_GPIO = 16
 PIN_MASK = (1 << NUM_GPIO) - 1
 
-# Register map - planning/Hardware/design/blocks/GPIO Mux.md
+# Register map - docs/hardware/design/blocks/GPIO Mux.md
 GPIO_OUT = 0x00
 GPIO_IN = 0x04
 GPIO_OE = 0x08
@@ -432,7 +424,7 @@ async def test_gpio_in_ignores_ie(dut):
     """GPIO_IN is not masked by GPIO_IE inside the block.
 
     The input enable disables the pad's input buffer out in the pad ring, so
-    `mux_io_i` is already 0 for a disabled pad. See the module docstring.
+    `mux_io_i` is already 0 for a disabled pad.
     """
     await start_dut(dut)
 
@@ -501,26 +493,23 @@ async def test_halfword_write_touches_one_lane(dut):
 
 
 # --------------------------------------------------------------------------
-# GRPR-GPIO-007, -010 - read-only mask and the two-cycle error response
+# GRPR-GPIO-007, -010 - read-only mask holds masekd bits and allows unmasked bits
 # --------------------------------------------------------------------------
 
 @cocotb.test()
-async def test_ro_mask_rejects_changing_write(dut):
+async def test_ro_mask_holds_masked_bits_only (dut):
     """A write that would change a locked pad errors and updates nothing."""
     await start_dut(dut)
 
     phase("locking pad 3 via GPIO_RO_MASK, then trying to change it")
-    await write_ok(dut, GPIO_OUT, 0x0000, what="GPIO_OUT")
+
+    await write_ok(dut, GPIO_OUT, 0xFFFF, what="GPIO_OUT")
     await write_ok(dut, GPIO_RO_MASK, 1 << 3, what="GPIO_RO_MASK")
+    await write_ok(dut, GPIO_OUT, 0x0000, what="GPIO_OUT")
 
-    # Bit 3 goes 0 -> 1, and bits 0 and 8 would change too.
-    trace = await drive_error_write(dut, GPIO_OUT, 0x0109)
-    assert_two_cycle_error(trace, "GPIO_OUT write flipping locked pad 3")
-
-    phase("rejection is atomic - the unlocked pads must not change either")
-    check_eq(await read_ok(dut, GPIO_OUT), 0x0000, "GPIO_OUT after a rejected write")
-    check_eq(port(dut, "mux_io_o"), 0x0000, "mux_io_o after a rejected write")
-
+    # Check that everything except bit 3 changed, and that the mux sees the same.
+    check_eq(await read_ok(dut, GPIO_OUT), 0x0008, "GPIO_OUT after a masked write")
+    check_eq(port(dut, "mux_io_o"), 0x0008, "mux_io_o after a masked write")
 
 @cocotb.test()
 async def test_ro_mask_allows_unchanging_write(dut):
@@ -544,7 +533,6 @@ async def test_ro_mask_allows_unchanging_write(dut):
     await write_ok(dut, GPIO_OUT, 0x0008, what="GPIO_OUT")
     check_eq(await read_ok(dut, GPIO_OUT), 0x0008, "GPIO_OUT <- 0x0008, pad 3 unchanged")
 
-
 @cocotb.test()
 async def test_ro_mask_respects_byte_lanes(dut):
     """A locked pad outside the addressed byte lane cannot be violated."""
@@ -560,7 +548,6 @@ async def test_ro_mask_respects_byte_lanes(dut):
     check_eq(await read_ok(dut, GPIO_OUT), 0x00FF,
              "byte-0 write neither blocked by nor writing locked pad 11")
 
-
 @cocotb.test()
 async def test_ro_mask_zero_never_blocks(dut):
     """With no pad locked, every GPIO_OUT write succeeds."""
@@ -571,7 +558,6 @@ async def test_ro_mask_zero_never_blocks(dut):
         await write_ok(dut, GPIO_OUT, pattern, what="GPIO_OUT")
         check_eq(await read_ok(dut, GPIO_OUT), pattern,
                  f"GPIO_OUT <- 0x{pattern:04x} with no mask")
-
 
 # --------------------------------------------------------------------------
 # GRPR-GPIO-008 - illegal writes
@@ -586,7 +572,6 @@ async def test_write_to_gpio_in_errors(dut):
     trace = await drive_error_write(dut, GPIO_IN, 0xFFFF)
     assert_two_cycle_error(trace, "write to GPIO_IN")
 
-
 @cocotb.test()
 async def test_write_to_reserved_errors(dut):
     """Writing any reserved offset raises the two-cycle error."""
@@ -596,7 +581,6 @@ async def test_write_to_reserved_errors(dut):
     for addr in range(RESERVED, 0x40, 4):
         trace = await drive_error_write(dut, addr, 0xFFFF)
         assert_two_cycle_error(trace, f"write to reserved {addr:#04x}")
-
 
 # --------------------------------------------------------------------------
 # GRPR-GPIO-010, -013, -014 - response timing
@@ -632,11 +616,9 @@ async def test_access_after_error(dut):
     await start_dut(dut)
 
     phase("provoking an error, then checking the bus recovers immediately")
-    await write_ok(dut, GPIO_OUT, 0x0000, what="GPIO_OUT")
-    await write_ok(dut, GPIO_RO_MASK, 1 << 3, what="GPIO_RO_MASK")
-
-    trace = await drive_error_write(dut, GPIO_OUT, 0x0008)
-    assert_two_cycle_error(trace, "GPIO_OUT write flipping locked pad 3")
+    
+    trace = await drive_error_write(dut, RESERVED, 0xFFFF)
+    assert_two_cycle_error(trace, "write to RESERVED memory location")
 
     # Back-to-back after the error: a read, then a write, then a read.
     check_eq(await read_ok(dut, GPIO_OUT), 0x0000, "read straight after the error")

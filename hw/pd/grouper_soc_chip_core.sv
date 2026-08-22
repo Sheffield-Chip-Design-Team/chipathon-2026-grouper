@@ -6,11 +6,9 @@
 module grouper_soc_chip_core #(
     // Defaults are the slot 1x1 pad counts; chip_top always overrides these
     // from slot_defines.svh.
+    parameter int unsigned NUM_GPIO       = 16,
     parameter int unsigned NUM_INPUT_PADS = 1,
-    parameter int unsigned NUM_BIDIR_PADS = 40,
-    // GrouperSoC GPIO count. Must be <= NUM_BIDIR_PADS - 1 
-    // (one bidir pad is spent on uart_tx).
-    parameter int unsigned NUM_GPIO       = 16
+    parameter int unsigned NUM_BIDIR_PADS = 40
 )(
     input  wire                      clk,       // clock
     input  wire                      rst_n,     // reset (active low)
@@ -27,7 +25,8 @@ module grouper_soc_chip_core #(
     output wire [NUM_BIDIR_PADS-1:0] bidir_ie,  // Input enable
     output wire [NUM_BIDIR_PADS-1:0] bidir_pu,  // Pull-up
     output wire [NUM_BIDIR_PADS-1:0] bidir_pd   // Pull-down
-);
+
+    // FIXME - add Trouper Bus interface
 
     // See here for usage: https://gf180mcu-pdk.readthedocs.io/en/latest/IPs/IO/gf180mcu_fd_io/digital.html
     //
@@ -109,7 +108,7 @@ module grouper_soc_chip_core #(
                            bidir_in[NUM_BIDIR_PADS-1:NUM_GPIO]};
     end
 
-    // --- GrouperSoC ---------------------------------------------------------
+    // --- Grouper SoC Instantiation ---------------------------------------------------------
 
     grouper_soc_top #(
         .NUM_GPIO       (NUM_GPIO)

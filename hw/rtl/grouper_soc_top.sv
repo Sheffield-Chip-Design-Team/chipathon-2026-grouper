@@ -74,6 +74,7 @@ module grouper_soc_top #(
     .ADDR_WIDTH                (32),
     .DATA_WIDTH                (32),
     .NUM_GPIO                  (NUM_GPIO)
+    
   ) u_grouper_soc_dig_ss (
     .clk                       (clk),
     .rst_n                     (rst_n_sync),
@@ -93,6 +94,7 @@ module grouper_soc_top #(
 
     .gpio_sync_en_n            (gpio_sync_en_n),
 
+    // FIXME - change the AHB interface to internal grouper interface
     .ext_ahb_m_if_HADDR        (),
     .ext_ahb_m_if_HBURST       (),
     .ext_ahb_m_if_HMASTLOCK    (),

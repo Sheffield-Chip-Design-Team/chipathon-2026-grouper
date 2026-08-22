@@ -1,6 +1,8 @@
 module digital_ss #(
   parameter int                      ADDR_WIDTH = 32,
   parameter int                      DATA_WIDTH = 32,
+  parameter int                      ROM_ADDR_WIDTH = 8,
+  parameter int                      RAM_ADDR_WIDTH = 10,
   parameter int                      EXT_ADDR_WIDTH = 8,
   parameter int                      EXT_DATA_WIDTH = 8,
   parameter int                      NUM_GPIO   = 16
@@ -42,60 +44,117 @@ module digital_ss #(
   // --- Internal Signals ------------------------------------------------------------
 
   // AHB from CPU to Periph SS
-  logic [ADDR_WIDTH-1:0]          cpu_ss_ahb_s_if_HADDR;
-  logic [2:0]                     cpu_ss_ahb_s_if_HBURST;
-  logic                           cpu_ss_ahb_s_if_HMASTLOCK;
-  logic [3:0]                     cpu_ss_ahb_s_if_HPROT;
-  logic [2:0]                     cpu_ss_ahb_s_if_HSIZE;
-  logic [1:0]                     cpu_ss_ahb_s_if_HTRANS;
-  logic [DATA_WIDTH-1:0]          cpu_ss_ahb_s_if_HWDATA;
-  logic                           cpu_ss_ahb_s_if_HWRITE;
-  logic [DATA_WIDTH-1:0]          cpu_ss_ahb_s_if_HRDATA;
-  logic                           cpu_ss_ahb_s_if_HREADY;
-  logic                           cpu_ss_ahb_s_if_HRESP;
+  logic [ADDR_WIDTH-1:0]      cpu_ss_ahb_s_if_HADDR;
+  logic [2:0]                 cpu_ss_ahb_s_if_HBURST;
+  logic                       cpu_ss_ahb_s_if_HMASTLOCK;
+  logic [3:0]                 cpu_ss_ahb_s_if_HPROT;
+  logic [2:0]                 cpu_ss_ahb_s_if_HSIZE;
+  logic [1:0]                 cpu_ss_ahb_s_if_HTRANS;
+  logic [DATA_WIDTH-1:0]      cpu_ss_ahb_s_if_HWDATA;
+  logic                       cpu_ss_ahb_s_if_HWRITE;
+  logic [DATA_WIDTH-1:0]      cpu_ss_ahb_s_if_HRDATA;
+  logic                       cpu_ss_ahb_s_if_HREADY;
+  logic                       cpu_ss_ahb_s_if_HRESP;
+
+  // ROM Interface
+  logic [ROM_ADDR_WIDTH-1:0]  rom_addr;
+  logic                       rom_read;
+  logic [DATA_WIDTH-1:0]      rom_rdata;
+
+  // RAM Interface
+  logic [RAM_ADDR_WIDTH-1:0]  ram_addr;
+  logic                       ram_read;
+  logic                       ram_write;
+  logic [DATA_WIDTH-1:0]      ram_wdata;
+  logic [3:0]                 ram_wstrb;
+  logic [DATA_WIDTH-1:0]      ram_rdata;
 
   // Interrupts
-  logic                           uart_rx_irq;
-  logic                           uart_rx_error_irq;
+  logic                       uart_rx_irq;
+  logic                       uart_rx_error_irq;
 
   // CPU instruction trace (all zeroes unless CPU_TRACE)
-  logic                           cpu_trace_valid;
-  logic [35:0]                    cpu_trace_data;
+  logic                       cpu_trace_valid;
+  logic [35:0]                cpu_trace_data;
 
   // --- CPU Subsystem ------------------------------------------------------------
-
+  // Picorv32 Subsytem with AHB-lite master interface and Direct Memory interface 
+  // with bank switch logic
+  
   cpu_ss #(
-    .ADDR_WIDTH  (ADDR_WIDTH),
-    .DATA_WIDTH  (DATA_WIDTH),
-    .NUM_IRQ     (2),
-`ifdef CPU_TRACE
-    .ENABLE_TRACE (1'b1)
-`else
-    .ENABLE_TRACE (1'b0)
-`endif
+    .ADDR_WIDTH     (ADDR_WIDTH),
+    .DATA_WIDTH     (DATA_WIDTH),
+    .ROM_ADDR_WIDTH (ROM_ADDR_WIDTH),
+    .RAM_ADDR_WIDTH (RAM_ADDR_WIDTH),
+  `ifdef CPU_TRACE
+    .ENABLE_TRACE (1'b1),
+  `else
+    .ENABLE_TRACE (1'b0),
+  `endif
+    .NUM_IRQ        (2)
   ) u_cpu_ss (
-    .HCLK        (clk),
-    .HRESETn     (rst_n),
+    .HCLK       (clk),
+    .HRESETn    (rst_n),
 
-    .HADDR       (cpu_ss_ahb_s_if_HADDR),
-    .HBURST      (cpu_ss_ahb_s_if_HBURST),
-    .HMASTLOCK   (cpu_ss_ahb_s_if_HMASTLOCK),
-    .HPROT       (cpu_ss_ahb_s_if_HPROT),
-    .HSIZE       (cpu_ss_ahb_s_if_HSIZE),
-    .HTRANS      (cpu_ss_ahb_s_if_HTRANS),
-    .HWDATA      (cpu_ss_ahb_s_if_HWDATA),
-    .HWRITE      (cpu_ss_ahb_s_if_HWRITE),
-    .HRDATA      (cpu_ss_ahb_s_if_HRDATA),
-    .HREADY      (cpu_ss_ahb_s_if_HREADY),
-    .HRESP       (cpu_ss_ahb_s_if_HRESP),
+    // ROM Interface
+    .rom_addr   (rom_addr),
+    .rom_read   (rom_read),
+    .rom_rdata  (rom_rdata),
 
-    .trace_data  (cpu_trace_data),
-    .trace_valid (cpu_trace_valid),
+    // RAM Interface
+    .ram_addr   (ram_addr),
+    .ram_read   (ram_read),
+    .ram_write  (ram_write),
+    .ram_wdata  (ram_wdata),
+    .ram_wstrb  (ram_wstrb),
+    .ram_rdata  (ram_rdata),
 
+    // AHB Master Interface
+    .HADDR      (cpu_ss_ahb_s_if_HADDR),
+    .HBURST     (cpu_ss_ahb_s_if_HBURST),
+    .HMASTLOCK  (cpu_ss_ahb_s_if_HMASTLOCK),
+    .HPROT      (cpu_ss_ahb_s_if_HPROT),
+    .HSIZE      (cpu_ss_ahb_s_if_HSIZE),
+    .HTRANS     (cpu_ss_ahb_s_if_HTRANS),
+    .HWDATA     (cpu_ss_ahb_s_if_HWDATA),
+    .HWRITE     (cpu_ss_ahb_s_if_HWRITE),
+    .HRDATA     (cpu_ss_ahb_s_if_HRDATA),
+    .HREADY     (cpu_ss_ahb_s_if_HREADY),
+    .HRESP      (cpu_ss_ahb_s_if_HRESP),
     .irq        ({
       uart_rx_error_irq,
       uart_rx_irq
-    })
+    }),
+
+    // Instruction trace (all zeroes unless ENABLE_TRACE)
+    .trace_valid (cpu_trace_valid),
+    .trace_data  (cpu_trace_data)
+  );
+
+  // --- Memory Subsystems --------------------------------------------------------
+  // RAM and ROM directly connected to the CPU subsytem - no AHB interconnect
+
+  rom_ss #(
+    .ADDR_WIDTH (ROM_ADDR_WIDTH)
+  ) u_rom_ss (
+    .clk        (clk),
+    .rst_n      (rst_n),
+    .rom_addr   (rom_addr),
+    .rom_read   (rom_read),
+    .rom_rdata  (rom_rdata)
+  );
+
+  ram_ss #(
+    .ADDR_WIDTH (RAM_ADDR_WIDTH)
+  ) u_ram_ss (
+    .clk        (clk),
+    .rst_n      (rst_n),
+    .ram_addr   (ram_addr),
+    .ram_read   (ram_read),
+    .ram_write  (ram_write),
+    .ram_wdata  (ram_wdata),
+    .ram_wstrb  (ram_wstrb),
+    .ram_rdata  (ram_rdata)
   );
 
   // --- Peripheral Subsystem --------------------------------------------------------
