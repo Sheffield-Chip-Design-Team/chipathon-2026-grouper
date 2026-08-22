@@ -175,6 +175,7 @@ module interconnect_ss #(
   logic [NUM_SLAVES-1:0] hsel;
   logic [NUM_SLAVES-1:0] mux_sel;
   logic                  invalid_addr;
+  logic                  invalid_addr_r;
 
   // --- Address decode --------------------------------------------------------
 
@@ -182,18 +183,10 @@ module interconnect_ss #(
     invalid_addr = '0;
     hsel = '0;
     case (HADDR) inside
-      // Everything sits in the 0x8000_0000 aperture. That is cpu_ss's decode,
-      // not a choice made here: it splits picorv32's address on
-      // mem_la_addr[31:29] and only slice 3'b100 and up becomes an AHB
-      // transfer at all (hw/rtl/cpu_ss.sv). Below it are ROM, RAM and the bank
-      // switch register, served from cpu_ss's own native ports - and they have
-      // to keep the whole low region to themselves, because after a bank
-      // switch RAM answers from 0x0000_0000 and aliases upwards. A peripheral
-      // down there would be shadowed by RAM exactly when the loaded image
-      // starts running.
-      //
-      // The offsets within the aperture are the historical ones. Keep them in
+      
+      // Everything sits in the 0x8000_0000 aperture.
       // step with AHB_*_BASE in sw/src/config.h.
+
       [32'h8000_3000 : 32'h8000_3fff]: hsel[SLOT_UART]       = '1; // UART - 4KiB
       [32'h8000_4000 : 32'h8000_4fff]: hsel[SLOT_GPIO_CTRL]  = '1; // GPIO - 4KiB
       [32'h8000_5000 : 32'h8000_5fff]: hsel[SLOT_QPSI]       = '1; // QPSI - 4KiB
@@ -201,18 +194,22 @@ module interconnect_ss #(
       [32'h8000_7000 : 32'h8000_7fff]: hsel[SLOT_SPI_S]      = '1; // SPI Slave  - 4KiB
       [32'h8001_0000 : 32'h8001_ffff]: hsel[SLOT_EXT_PERIPH] = '1; // External Peripherals - 64KiB
     `ifdef DEBUG_PERIPH
-      [32'hf000_2000 : 32'hf000_2fff]: hsel[SLOT_DEBUG]      = '1; // Debug - 4KiB
+      [32'hf8000_2000 : 32'hf8000_2fff]: hsel[SLOT_DEBUG]      = '1; // Debug - 4KiB
     `endif
       default: invalid_addr = '1;
     endcase
   end
 
+  // The decode belongs to the address phase; the response mux and HRESP belong
+  // to the data phase, so both are registered on the same HREADY beat.
   always_ff @(posedge HCLK, negedge HRESETn) begin
     if (~HRESETn) begin
-      mux_sel <= '0;
+      mux_sel        <= '0;
+      invalid_addr_r <= '0;
     end
     else if (HREADY) begin
-      mux_sel <= hsel;
+      mux_sel        <= hsel;
+      invalid_addr_r <= invalid_addr && HTRANS[1]; // Gate on active Transaction
     end
   end
 
@@ -331,7 +328,7 @@ module interconnect_ss #(
   end
 
   always_comb begin
-    HRESP   = invalid_addr;
+    HRESP   = invalid_addr_r;
     for (int j = 0; j < NUM_SLAVES; j++)
       if (mux_sel[j] == 1'b1) HRESP = slot_HRESP[j];
   end
@@ -344,6 +341,6 @@ module interconnect_ss #(
       end
   end
 
-  // TODO - Add appropriate decoder error response (2 cycle response)
+  // TODO - Add appropriate decoder error response for bad addresses? (2 cycle response)
 
 endmodule
