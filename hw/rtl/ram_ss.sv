@@ -1,11 +1,14 @@
-// TODO - integrate this into the AHB ram  module as an option to use macro ram or not
-
+// RAM
 module ram_ss #(
   parameter int ADDR_WIDTH = 10,
   parameter bit USE_MACRO_RAM = 1
 ) (
   input  logic                  clk,
+  // Only the flop-array path resets its read register; the SRAM macro has no
+  // reset input, so rst_n is unused when USE_MACRO_RAM is set.
+  /* verilator lint_off UNUSEDSIGNAL */
   input  logic                  rst_n,
+  /* verilator lint_on UNUSEDSIGNAL */
   input  logic [ADDR_WIDTH-1:0] ram_addr,
   input  logic                  ram_read,
   input  logic                  ram_write,
@@ -24,7 +27,7 @@ module ram_ss #(
           .CLK  (clk),
           .CEN  (~(ram_read || ram_write)),
           .GWEN (~ram_write),
-          .WEN  ({8{ram_wstrb[j]}}),
+          .WEN  ({8{~ram_wstrb[j]}}),  // WEN is active low, one bit per D bit
           .A    (ram_addr),
           .D    (ram_wdata[j*8 +: 8]),
           .Q    (ram_rdata[j*8 +: 8])
