@@ -23,5 +23,5 @@ sw/fw_id.svh
 *code.vmem
 .vscode/settings.json
 new/*
-!sw/code.hex
-!sw/code.vmem
+!sw/boot/code.hex
+!sw/boot/code.vmem
