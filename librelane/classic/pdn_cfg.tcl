@@ -185,8 +185,10 @@ if { $::env(PDN_MULTILAYER) == 1 } {
     #   core_lly + 14.98 - 5.04/2 = 15.68 + 12.46 = 28.14 ; 28.14 % 0.56 = 0.14
     #
     # This 14.98 is a Y offset measured from core_lly and is NOT coupled to
-    # PDN_VOFFSET, which is an X offset for the vertical straps and is now 4.34.
-    # They shared a value historically; do not "resync" them.
+    # PDN_VOFFSET, which is an X offset for the vertical straps and is now 16.24.
+    # They shared a value historically; do not "resync" them. core_lly is 15.68
+    # on both the portrait and landscape floorplans, so this number survives the
+    # reshape untouched.
     set pdn_rung_layer "Metal3"
     set pdn_rung_width 5.04                  ;#   9 x 0.56, matches PDN_VWIDTH
     set pdn_rung_pitch 299.04                ;# 534 x 0.56

@@ -57,7 +57,6 @@ VERILOG_FILES:
 - dir::../../hw/rtl/common/small_sync_fifo.sv
 - dir::../../hw/rtl/common/sync.sv
 - dir::../../ip/picorv32/picorv32.v
-- dir::../../hw/rtl/gpio/gpio_ctrl_pkg.sv
 - dir::../../hw/rtl/gpio/ahb_gpio_ctrl.sv
 - dir::../../hw/rtl/spi_s/ahb_spi_s.sv
 - dir::../../hw/rtl/uart/uart_clk_div.sv
@@ -68,11 +67,10 @@ VERILOG_FILES:
 - dir::../../hw/rtl/interconnect/ahb_debug.sv
 - dir::../../hw/rtl/interconnect/ahb_conn_buff.sv
 - dir::../../hw/rtl/interconnect/ahb_stub_slave.sv
-- dir::../../hw/rtl/ahb_interconnect_ss.sv
-- dir::../../hw/rtl/memory/ahb_rom.sv
-- dir::../../hw/rtl/memory/ahb_ram.sv
-- dir::../../hw/rtl/memory/ram_ss.sv
-- dir::../../hw/pd/wrappers/sram1024x8_wrapper.sv
+- dir::../../hw/rtl/interconnect_ss.sv
+- dir::../../hw/rtl/rom_ss.sv
+- dir::../../hw/rtl/ram_ss.sv
+- dir::../../hw/pd/wrappers/gf180mcu_ocd_sram_1024x8m8wm1_wrapper.sv
 - dir::../../hw/rtl/io_ss.sv
 - dir::../../hw/rtl/cpu_ss.sv
 - dir::../../hw/rtl/periph_ss.sv
@@ -83,22 +81,24 @@ VERILOG_FILES:
 - dir::../../hw/pd/grouper_soc_chip_core.sv
 
 VERILOG_INCLUDE_DIRS:
-# Supplies code.vmem -- the boot stub built by sw/scripts/build_rom_boot.sh.
-- dir::../../sw/dry_run
+# Supplies code.vmem -- the ROM bootloader image 
+- dir::../../sw/boot
 
 VERILOG_DEFINES:
-# 64 B boot ROM, SPI slave stubbed out. See the header above. The RAM is NOT
-# stubbed here any more -- MACRO_RAM below builds the real macros.
+# Stubs ahb_spi_s out to ahb_stub_slave in periph_ss (periph_ss.sv:436). The
+# RAM is NOT stubbed -- ram_ss builds the real macros unconditionally, see
+# below.
 - DRY_RUN
-# Storage for ahb_ram is four hardened sram1024x8m8wm1 macros (via ram_ss)
-# rather than a behavioural array. This is what puts
-# u_ram_ss.gen_macro_ram.gen_sram[*].u_wrapper.u_sram_macro in the netlist for
-# the MACROS block at the bottom of this file to place
-- MACRO_RAM
 # Build the ROM contents from code.vmem (continuous assigns) rather than
 # $readmemh, which has no synthesisable equivalent - standard cells have no
 # initial-value mechanism, so this is what actually produces a mask ROM.
 - ROM_INIT_CONST
+
+# NOTE: there is no MACRO_RAM define on this branch's RTL. ram_ss.sv gates the
+# macros on a USE_MACRO_RAM *parameter* (ram_ss.sv:4) which defaults to 1, and
+# digital_ss does not override it -- so gen_macro_ram is always taken and the
+# MACROS block below always has something to place. The define this config used
+# to set was inert here and has been removed rather than left to mislead.
 
 #---------------------------------------------------------------------------
 # Elaboration + Synthesis
@@ -126,11 +126,59 @@ SYNTH_ABC_DFF: true
 # SYNTH_ABC_USE_MFS3: true # - this breaks picorv32 synth - leave it disabled
 
 # ---------------------------------------------------------------------------
-# Floorplan: 1100 x 1500.
+# Floorplan: 1650 x 1100 (landscape).
+#
+# Ported wholesale from the landscape branch's
+# config_1650x1100_keepdlyc_fanout32.yaml -- job 4340, the only variant measured
+# with BOTH route DRC 0 and Magic DRC 0. Every number in this section, the
+# MACROS block and the PDN section below came across together; they are one
+# unit and were signed off as one. Do not re-derive them individually.
+#
+# What job 4340 measured (2026-08-13, on that branch's RTL):
+#   route DRC 0 | Magic DRC 0 | setup TNS 0, WNS +12.077ns (nom_tt), +33.233
+#   (min_ff) | hold TNS 0, WNS +0.289ns (min_ff) | power grid 0 violations,
+#   worst IR drop 1.78mV | 10 antenna nets, 97 diodes | 1,341,347um wirelength
+#   | utilisation 0.690 | 8:01 on 8 CPUs
+#
+# This replaces the 1100x1500 portrait floorplan (2x2 macro block, 1.650mm^2).
+# The trade, from the landscape branch's own head-to-head against portrait
+# 1330x1370 on the identical recipe:
+#
+#   die         1.815mm^2 vs 1.822mm^2 portrait -- but +10% on the 1.650mm^2
+#               this config used to be. That area is the price of the reshape.
+#   setup WNS   +13.35 landscape vs +18.86 portrait
+#   wirelength  1,306,990 vs 1,146,800 (+14%)
+#   antennas    9 vs 6
+#   Magic DRC   0 vs 2 (Metal3 spacing at the die edge, x 0.0-0.84, which
+#               persists in EVERY portrait variant and is absent here)
+#
+# The row of 4 is what makes the reshape cheap: it needs 4*301.3 + 3*20 =
+# 1265.2um, and landscape gives a 1636.32um core. Portrait at 1100 wide gives
+# 1086.56um and forces the 2x2 rebuild with its inter-column channel.
+#
+# Core margins are 6.72um in x and 15.68um in y, measured from job 4315's
+# floorplan DEF ("ROW ROW_0 ... 13440 31360 N DO 2351 ... STEP 1120", 2000
+# DBU/um), not assumed:
+#
+#   core        x    6.72 .. 1643.04   (2922 sites)
+#   core        y   15.68 .. 1081.92   (272 rows)
+#   macro band  y  190.00 ..  725.81   (macros at y=200, +/- the 10um halo)
+#
+# leaving three placeable regions:
+#
+#   below macros  1636.3 x 174.2  = 285,200um^2   (44 rows, full width)
+#   above macros  1636.3 x 356.1  = 582,700um^2   (90 rows, full width)
+#   east of them   345.4 x 535.8  = 185,100um^2
+#                                 ---------------
+#                                  1,053,000um^2 gross
+#
+# The height lost off the top band relative to portrait is returned almost
+# exactly by the east strip, so std-cell utilisation lands where it did before
+# and PL_TARGET_DENSITY_PCT below still holds.
 #----------------------------------------------------------------------------
 
 FP_SIZING: absolute
-DIE_AREA: [0.0, 0.0, 1100, 1500]
+DIE_AREA: [0.0, 0.0, 1650, 1100]
 
 # RAM Macro Placement
 MACROS:
@@ -144,80 +192,82 @@ MACROS:
     instances:
       # SIZE 301.300 BY 515.810 ; native (unrotated) footprint: 301.3(X) x 515.81(Y).
       #
-      # 2 x 2 block in the bottom of the 1100x1500 die. A row of 4 does not
-      # fit: 4*301.3 + 3*20 = 1265.2um against a 1086.56um core.
+      # A single row of 4 across the bottom of the 1650x1100 die, at the exact
+      # coordinates job 4340 signed off with. DO NOT NUDGE THEM to "use" the
+      # extra width -- see the note on gaps below, and note that job 4341,
+      # identical but for these four numbers, was measurably worse.
       #
-      #     x      309.12        610.42   668.64        969.94   1093.28 (core)
-      #            +--------------+  gap  +--------------+          |
-      #   1115.57  |   sram[2]    | 58.22 |   sram[3]    |  east    |
-      #    599.76  +--------------+       +--------------+  strip   |
-      #                    row channel 60.43um (10 std cell rows)  113.34
-      #    539.33  +--------------+       +--------------+          |
-      #     23.52  |   sram[0]    |       |   sram[1]    |          |
-      #            +--------------+       +--------------+          |
+      #     x     22.4    343.7     665.0    986.3         1287.6   1643.0
+      #           +-------++-------++-------++-------+                | core
+      #    715.81 | sram0 || sram1 || sram2 || sram3 |   east strip   |
+      #    200.00 +-------++-------++-------++-------+     345.4um    |
+      #              20um gaps, fully eaten by the 10um halos
       #
-      # ~840,000um^2 placeable (a conservative hand count; the flow measured
-      # 750,350 where this method said 692,000, so expect ~910,000): a 303um
-      # strip west of the block, a 359um band across the top, a 103um strip
-      # east of it, and 9 rows in the column gap.
+      # x: 22.4 = 40 sites, and the 321.3um stride (301.3 + 20) keeps every
+      #    macro on the 0.56um site grid, which is the one hard requirement on
+      #    them. The 20um gaps are deliberately too narrow to survive the
+      #    halos: 20 - 2*10 = 0, so no rows are cut between macros at all.
+      #    That is the point. A wider gap would leave a walled channel a few
+      #    sites long, and stranded slivers are what produced DPL-0036 on jobs
+      #    4283/4284 -- "area is a global number, legalisation is a local one"
+      #    (TRIAL_NOTES.md). The 431um of slack landscape hands us is worth far
+      #    more as one contiguous east strip than as three channels nobody can
+      #    legalise into. This is also why there is no FP_OBSTRUCTIONS below:
+      #    there is no channel left to fence off.
       #
-      # x: 309.12 and 668.64 are both multiples of the 0.56um site width, which
-      #    is the one hard requirement on them.
+      #    STRAP PHASE IS NOT A CONSTRAINT ON THESE NUMBERS. The macro exposes
+      #    239 VDD and 195 VSS Metal3 tabs over its entire perimeter rather
+      #    than two edge bands, so any on-grid Metal4 lattice crossing it taps
+      #    both nets -- see constraint 3 in the PDN section. All four macros
+      #    pass check_power_grid at four DIFFERENT phases here (22.4, 163.4,
+      #    124.0 and 84.7 mod the 180.32 pitch). Keep them on the site grid;
+      #    the phase itself is free.
       #
-      #    STRAP PHASE IS NOT A CONSTRAINT ON THESE NUMBERS, contrary to what
-      #    this comment used to claim. It said the 359.52um spacing had to be
-      #    6 x the 59.92um PDN half-period to land a VSS strap on each macro's
-      #    west power band and a VDD strap on its east one, and concluded the
-      #    macros had to move whenever PDN_VOFFSET did. The premise is wrong:
-      #    the macro exposes 239 VDD and 195 VSS Metal3 tabs over its entire
-      #    perimeter rather than two edge bands, so any on-grid Metal4 lattice
-      #    crossing it taps both nets -- see constraint 3 in the PDN section.
-      #
-      #    Both columns did move 10.64um west (from 319.76 / 679.28) when
-      #    PDN_VOFFSET went 14.98 -> 4.34 to fit a 19th strap (constraint 4).
-      #    That move was unnecessary rather than harmful; the coordinates stay
-      #    where they are because they are on-grid and consistent with the
-      #    FP_OBSTRUCTIONS rectangle below, not because phase demands it.
-      #
-      #    NEITHER THE MOVE NOR THE 4.34 OFFSET HAS BEEN RUN. Both were derived
-      #    arithmetically (TRIAL_NOTES.md Session 5 section 8) and the next run
-      #    must confirm design__power_grid_violation__count__net:VSS at the
-      #    *-checker-powergridviolations step, and that the improvised strap at
-      #    x~1016 is gone, before either is trusted.
-      #
-      #    The 123.34um now east of the block is 113.34um of rows after the
-      #    halo -- a real 202-site-wide placeable column, not a stranded sliver,
-      #    and it now carries two real straps instead of one plus an improvised
-      #    one (TRIAL_NOTES.md Session 5 section 7).
-      # y: 23.52 = 6 rows. With FP_MACRO_VERTICAL_HALO=10 the cut starts at
-      #    13.52, below the 15.68 core floor, so no orphan rows survive under
-      #    the macros either. 599.76 = 153 rows leaves a 60.43um channel, wide
-      #    enough for the bottom row's Metal2 pin escape plus 10 std cell rows.
+      # y: 200 leaves 174.24um (44 rows) below after the halo -- a real
+      #    placeable band, which is what gave the bottom edge somewhere to put
+      #    S-side pins and broke the DPL-0036 stranding. The macro top is
+      #    715.81, halo 725.81, and the top band runs to 1081.92 (90 rows).
       #
       # Orientation S (rather than N) so the pin row -- all 32 signal pins sit
-      # on the native y=0 edge of the cell -- faces up into the core: the
-      # bottom row escapes into the channel, the top row into the top band.
+      # on the native y=0 edge of the cell, Metal2, y 0..3 -- faces UP into the
+      # 356um top band rather than down into the narrower one.
       #
-      # Instance names are the full flattened path from grouper_soc_chip_core:
-      #   u_grouper_soc_top      (grouper_soc_top)
-      #   u_grouper_soc_dig_ss   (digital_ss)
-      #   u_periph_ss            (periph_ss)
-      #   u_ram                  (ahb_ram, MACRO_RAM branch)
-      #   u_ram_ss               (ram_ss)
-      # The keys used to start at u_ram_ss, which is four levels too shallow to
-      # match anything. Confirm against the netlist after a synthesis run:
+      # SETTLED, do not re-litigate without a run (landscape branch Session 7):
+      # both alternatives were measured and both lost. Centring the row costs
+      # +5.6% wirelength and 20 route DRCs; corner placement strands the S edge
+      # and half the W edge.
+      #
+      # Instance names are the full flattened path from grouper_soc_chip_core.
+      # Verified against the RTL in this tree, 2026-08-23:
+      #   u_grouper_soc_top      grouper_soc_chip_core.sv:202  (grouper_soc_top)
+      #   u_grouper_soc_dig_ss   grouper_soc_top.sv:78         (digital_ss)
+      #   u_ram_ss               digital_ss.sv:148             (ram_ss)
+      #   gen_macro_ram.gen_sram[j].u_wrapper
+      #                          ram_ss.sv:19-21               (sram1024x8_wrapper)
+      #   u_sram_macro           gf180mcu_ocd_sram_1024x8m8wm1_wrapper.sv:23
+      #
+      # ram_ss hangs directly off digital_ss -- it is a SIBLING of u_cpu_ss and
+      # u_periph_ss, not a child of either. cpu_ss.sv instantiates only picorv32
+      # (u_cpu); it carries the RAM select/routing logic (ram_sel_r) but not the
+      # storage. The keys used to read
+      #   u_periph_ss.u_ram.u_ram_ss...
+      # which was the pre-ram_ss hierarchy, when the array lived inside ahb_ram
+      # inside periph_ss. That path matches nothing here.
+      #
+      # Confirm against the netlist after a synthesis run:
       #   grep -o '[^ ]*u_sram_macro' <run>/*-yosys-synthesis/*.nl.v | sort -u
-      "u_grouper_soc_top.u_grouper_soc_dig_ss.u_periph_ss.u_ram.u_ram_ss.gen_macro_ram.gen_sram[0].u_wrapper.u_sram_macro":
-        location: [309.12, 23.52]
+      # (needs SYNTH_AUTONAME true -- see the note on it above.)
+      "u_grouper_soc_top.u_grouper_soc_dig_ss.u_ram_ss.gen_macro_ram.gen_sram[0].u_wrapper.u_sram_macro":
+        location: [22.4, 200]
         orientation: S
-      "u_grouper_soc_top.u_grouper_soc_dig_ss.u_periph_ss.u_ram.u_ram_ss.gen_macro_ram.gen_sram[1].u_wrapper.u_sram_macro":
-        location: [668.64, 23.52]
+      "u_grouper_soc_top.u_grouper_soc_dig_ss.u_ram_ss.gen_macro_ram.gen_sram[1].u_wrapper.u_sram_macro":
+        location: [343.7, 200]
         orientation: S
-      "u_grouper_soc_top.u_grouper_soc_dig_ss.u_periph_ss.u_ram.u_ram_ss.gen_macro_ram.gen_sram[2].u_wrapper.u_sram_macro":
-        location: [309.12, 599.76]
+      "u_grouper_soc_top.u_grouper_soc_dig_ss.u_ram_ss.gen_macro_ram.gen_sram[2].u_wrapper.u_sram_macro":
+        location: [665, 200]
         orientation: S
-      "u_grouper_soc_top.u_grouper_soc_dig_ss.u_periph_ss.u_ram.u_ram_ss.gen_macro_ram.gen_sram[3].u_wrapper.u_sram_macro":
-        location: [668.64, 599.76]
+      "u_grouper_soc_top.u_grouper_soc_dig_ss.u_ram_ss.gen_macro_ram.gen_sram[3].u_wrapper.u_sram_macro":
+        location: [986.3, 200]
         orientation: S
 
     # One Liberty per corner, matching the STA_CORNERS names 
@@ -236,39 +286,37 @@ PDN_MACRO_CONNECTIONS:
 
 # Halo size around macros while cutting rows.
 # Workaround for: https://github.com/The-OpenROAD-Project/OpenROAD/issues/8868
-FP_MACRO_HORIZONTAL_HALO: 10
+FP_MACRO_HORIZONTAL_HALO: 10   # 20um macro gap => 10 is the max; 36 overlaps
+                               # neighbouring halos and fails DPL-0011 (job 4284)
 FP_MACRO_VERTICAL_HALO: 10
 
 # ---------------------------------------------------------------------------
-# Keep-out over the channel between the two macro columns.
+# NO FP_OBSTRUCTIONS on this floorplan.
 #
-# The 58.22um gap between the columns leaves, after the 10um halos, rows only
-# 38.22um long -- 68 sites, walled by SRAM on both sides. A cell there has
-# essentially nowhere to shuffle, which is what detailed placement needs to do
-# when antenna repair drops a diode next to a pin: DPL-0036, and the failing
-# instances were repair buffers (wire*, load_slew*), the cells most likely to
-# be sitting in leftover slivers.
+# The portrait 2x2 block needed a keep-out over its 58.22um inter-column
+# channel: after the halos those rows were 38.22um long, walled by SRAM on both
+# sides, and detailed placement could not shuffle a cell out of them when
+# antenna repair dropped a diode next to a pin (DPL-0036, and the failing
+# instances were repair buffers). The row of 4 has no such channel -- the 20um
+# gaps are fully consumed by the halos, so no rows are generated between the
+# macros at all.
 #
-# FP_OBSTRUCTIONS stops sites being generated there at all, so nothing is ever
-# placed somewhere it cannot later be legalised. Routing over the area is
-# unaffected. Cost is ~42,400um^2, about 4.7% of placeable area, and it is the
-# least useful 4.7% in the design.
-#
-# Rectangle is the column gap over the full height of the macro block:
-#   x  610.42 (left column right edge) .. 668.64 (right column left edge)
-#   y   15.68 (core floor)             .. 1125.57 (top macro + halo)
-# Derived from the MACROS coordinates -- move them and this must move too.
-FP_OBSTRUCTIONS:
-  - [610.42, 15.68, 668.64, 1125.57]
+# Do not add one back "for safety": any blockage sharing the macro band trips
+# DPL-0010/0011 on the macros themselves (jobs 4283, 4289).
 
-# I/O pins: north, south and west edges; east is left clear of the SRAM column.
+# I/O pins: all four edges. The macro row sits along the bottom, so the east
+# edge is free here -- on the portrait floorplan it was the SRAM column and had
+# to be left clear.
 #
-# bidir_out was on the north edge until it collided with the PDN there: with
-# PDN_EXTEND_TO boundary the VSS stripes run to y=1500 (the die edge), and pin
-# escape routing shorted to them at the stripe right edges - x=323.82 and
-# x=1042.86, both exactly a VSS stripe's 318.78/1037.82 + PDN_VWIDTH. Moved to
-# the south edge, which was empty. See TRIAL_NOTES.md Session 5.
-IO_PIN_ORDER_CFG: dir::pin_order.cfg
+# WATCH THE NORTH EDGE. On portrait, bidir_out sat there until pin escape
+# routing shorted to the PDN: with PDN_EXTEND_TO boundary the VSS stripes run
+# to the die edge, and escapes hit them at the stripe right edges (x=323.82 and
+# x=1042.86, each exactly a stripe origin + PDN_VWIDTH). See TRIAL_NOTES.md
+# Session 5.4. This file follows the landscape branch's edge assignment, which
+# puts bidir_in on north and measured clean at route DRC 0 -- but that was with
+# its own port naming, so if north-edge shorts reappear, this is the known
+# mechanism and the fix is to move the group south.
+IO_PIN_ORDER_CFG: dir::pin_order_row4.cfg
 
 #---------------------------------------------------------------------------
 # Constraints
@@ -320,28 +368,42 @@ PDN_HORIZONTAL_LAYER: Metal5
 #    lower-left to the *centre* of the first stripe, and cuts the stripe at
 #    centre +/- width/2 (OpenROAD src/pdn/src/straps.cpp, Straps::makeStraps).
 #    So a stripe's left edge is core_llx + PDN_VOFFSET - PDN_VWIDTH/2 =
-#    6.72 + 4.34 - 2.52 = 8.54, and because the pitch is a whole number of
-#    tracks every other column shares that edge phase: 8.54 mod 0.56 = 0.14.
-#    At 0.14 the track on one side of the stripe sits exactly 0.28um (Metal2
-#    minimum spacing) away -- legal and usable; at 0.00 both neighbouring
-#    tracks would be 0.14um away, i.e. illegal to route on. Re-derive this
-#    number if PDN_VWIDTH or PDN_VPITCH changes. PDN_VOFFSET must keep
-#    residue 0.42 mod 0.56 for the left edge to land on 0.14.
+#    6.72 + 16.24 - 2.52 = 20.44, and because the pitch is a whole number of
+#    tracks every stripe shares that edge phase.
 #
-# 4. FITTING THE LAST STRAP. Straps run while centre + PDN_VWIDTH/2 <= core_urx
-#    (1093.28). At the old PDN_VOFFSET 14.98 the lattice was 21.70 + n*59.92 and
-#    stopped at n=17 (1040.34), leaving 50.42um of core east of it with no
-#    strap -- the standard-cell strip east of the SRAM column. pdngen covered
-#    for that gap by improvising a VDD strap at x~1016 whose Metal2 and Metal4
-#    halves were 0.56um apart instead of coincident (TRIAL_NOTES.md Session 5
-#    section 7). Dropping the offset to 4.34 shifts the lattice 10.64um west and
-#    fits a 19th strap at 1089.62, so the east strip gets two real straps and
-#    pdngen has nothing to improvise. Margins are tight but legal: 1.82um of
-#    core west of the first stripe, 1.14um east of the last.
+#    Metal2 tracks are at 0.28 + n*0.56 (DEF: "TRACKS X 560 ... STEP 1120"), so
+#    what matters is the edge's offset from a track centre. A wire on a track
+#    needs 0.28um (Metal2 minimum spacing) edge-to-edge, i.e. its centre must be
+#    >= 0.42um from the stripe edge. 20.44 - 0.28 = 20.16 = 36 x 0.56 exactly:
+#    a track centre lands ON the stripe edge. That track is unusable (a wire on
+#    it would overlap the stripe), but the next one out is a full 0.56um away,
+#    so nothing is DRC-illegal -- it costs one track per stripe edge.
 #
-#    The macros were shifted 10.64um west at the same time, to hold their phase
-#    relative to the lattice. Per the correction in constraint 3 that was not
-#    actually required -- the shift is retained, not defended. See MACROS.
+#    The portrait offset 4.34 put the edge at residue 0.42 from the nearest
+#    track, which wastes nothing. 16.24 is kept anyway because it is what job
+#    4340 measured clean at; do not "improve" it to reclaim two tracks without
+#    a run. The value to avoid is residue 0.28 (e.g. offset 10.92), where BOTH
+#    neighbouring tracks sit 0.14um from the stripe edge and are illegal to
+#    route on -- that is the defect constraint 1 describes.
+#
+# 4. FITTING THE LAST STRAP. Straps run while centre + PDN_VWIDTH/2 <= core_urx.
+#    Here the lattice is 22.96 + n*90.16 (VDD/VSS alternate every half period)
+#    against core_urx 1643.04, so it stops at n=17 (1555.68): 18 stripes, 13.72um
+#    of core west of the first and 84.84um east of the last.
+#
+#    THAT EASTERN GAP IS THE THING TO CHECK ON THE FIRST RUN. On portrait, a
+#    50.42um gap in the same position made pdngen improvise a VDD strap whose
+#    Metal2 and Metal4 halves were 0.56um apart instead of coincident, and that
+#    cost 17 unroutable Metal2 spacing violations (TRIAL_NOTES.md Session 5.7).
+#    Job 4340 reported a clean power grid with this exact lattice, so it is
+#    probably fine here -- but dump the vertical straps and confirm a clean
+#    18-entry alternating ladder with nothing off-lattice before trusting it.
+#
+#    IF an improvised strap does appear, the fix is the portrait one: shift the
+#    lattice west to fit a 19th. PDN_VOFFSET 10.64 is the nearest legal phase
+#    that does it -- first centre 17.36, last 1640.24, 19 stripes, 8.12um west
+#    margin and 0.28um east. Tight, untested, and a deviation from the measured
+#    config, so only reach for it if the ladder is actually dirty.
 #
 # 3. SRAM TAPPING. gf180mcu_ocd_ip_sram__sram1024x8m8wm1 obstructs
 #    Metal1-Metal3 over its interior (LEF OBS: 3.0 3.0 .. 298.3 512.81), so the
@@ -361,15 +423,15 @@ PDN_HORIZONTAL_LAYER: Metal5
 #    So macro x is free apart from the 0.56um site grid, and the macros are NOT
 #    welded to PDN_VOFFSET. See TRIAL_NOTES.md, landscape branch Session 6.6.
 #
-#    119.84 is kept because it is on-grid and has run, not because that
-#    derivation supports it. It is not a proven number on this floorplan either:
-#    the 4.34 offset and the macro positions it implies (constraint 4) have only
-#    ever been checked arithmetically.
+#    The portrait 119.84 came out of that derivation. It is gone with the rest
+#    of the portrait lattice; 180.32 below is the value job 4340 measured clean
+#    with this macro row.
 #
 #    WHAT DOES STILL MATTER IS DRIFT ACROSS THE MACRO ROW, which is a grid
-#    problem rather than a phase one: at 179.2 the lattice walks -5.6um over the
-#    7 periods spanning a row of macros, the straps step off the 3um-wide tabs,
-#    and the power-grid checker reports 28,227 VSS violations; 180.32 drifts
+#    problem rather than a phase one, and it bites harder here than on portrait
+#    because four macros sit in a line: at 179.2 the lattice walks -5.6um over
+#    the 7 periods spanning the row, the straps step off the 3um-wide tabs, and
+#    the power-grid checker reports 28,227 VSS violations; 180.32 drifts
 #    +2.24um and holds. Always confirm
 #    design__power_grid_violation__count__net:VSS at the
 #    *-checker-powergridviolations step before trusting ANY pitch or macro-x
@@ -377,16 +439,18 @@ PDN_HORIZONTAL_LAYER: Metal5
 #    lattice. `check_power_grid -net VDD` / `-net VSS` is the interactive form.
 #
 # Metal5 (horizontal) never touches the macros, so PDN_HPITCH only has to obey
-# constraint 1: 360 = 400 x 0.90, width 6 x 0.90, offset 15 x 0.90.
+# constraint 1: 180 = 200 x 0.90, width 6 x 0.90, offset 18 x 0.90.
 # ---------------------------------------------------------------------------
-PDN_VWIDTH:    5.04      # 9 x 0.56  (Metal2/Metal4 track pitch)
-PDN_HWIDTH:    5.4       # 6 x 0.90  (Metal5 track pitch)
-PDN_VPITCH:    119.84    # 214 x 0.56; 2 x 59.92, and 5 x 59.92 ~= 298.3
-PDN_HPITCH:    360       # 400 x 0.90; no SRAM constraint, so relaxed
-PDN_VSPACING:  54.88     # 119.84/2 - 5.04 = 98 x 0.56
-PDN_HSPACING:  174.6     # (360 - 2*5.4) / 2 = 194 x 0.90
-PDN_VOFFSET:   4.34      # stripe centre; puts the left edge at 8.54 (see 2 and 4)
-PDN_HOFFSET:   13.5      # 15 x 0.90
+PDN_VWIDTH:   5.04    # 9 x 0.56
+PDN_HWIDTH:   5.4     # 6 x 0.90
+PDN_VPITCH:   180.32  # 322 x 0.56 AND 161 x 1.12, so BOTH the VDD and VSS stripe
+                      # of each pair land on the grid. Drifts +2.24um across the
+                      # macro row and holds -- see constraint 3.
+PDN_HPITCH:   180     # 200 x 0.90
+PDN_VSPACING: 85.12   # 180.32/2 - 5.04 = 152 x 0.56
+PDN_HSPACING: 84.6    # (180 - 2*5.4)/2 = 94 x 0.90
+PDN_VOFFSET:  16.24   # 29 x 0.56 (was 16.32 = 29.14, off-grid). Left edge 20.44
+PDN_HOFFSET:  16.2    # 18 x 0.90 (was 16.65 = 18.5, off-grid)
 PDN_EXTEND_TO: boundary
 
 PDN_ENABLE_PINS:     true    # Metal3/Metal4 pins for the parent to grab
