@@ -118,7 +118,7 @@ SYNTH_HIERARCHY_MODE: deferred_flatten
 # check recommended in the MACROS block below only works against a run made
 # while this was still true. Confirm the macro instance paths from an older run
 # rather than re-deriving them after this change.
-SYNTH_AUTONAME: true
+SYNTH_AUTONAME: false
 
 SYNTH_STRATEGY: "AREA 0"
 SYNTH_SIZING: true
@@ -256,7 +256,14 @@ MACROS:
       #
       # Confirm against the netlist after a synthesis run:
       #   grep -o '[^ ]*u_sram_macro' <run>/*-yosys-synthesis/*.nl.v | sort -u
-      # (needs SYNTH_AUTONAME true -- see the note on it above.)
+      # This does NOT need SYNTH_AUTONAME -- verified on job 4850, which ran
+      # the full flow with it false and still emitted all four paths below
+      # verbatim (Yosys escapes them with a leading backslash in the .nl.v;
+      # strip it before matching against these keys). They are RTL instance
+      # and generate-block names, so autoname, which only renames Yosys'
+      # invented $auto$ nets, has no bearing on them. Do not turn autoname on
+      # to make this grep work -- ON crashes Magic streamout, see the note on
+      # it above.
       "u_grouper_soc_top.u_grouper_soc_dig_ss.u_ram_ss.gen_macro_ram.gen_sram[0].u_wrapper.u_sram_macro":
         location: [22.4, 200]
         orientation: S
@@ -308,14 +315,26 @@ FP_MACRO_VERTICAL_HALO: 10
 # edge is free here -- on the portrait floorplan it was the SRAM column and had
 # to be left clear.
 #
-# WATCH THE NORTH EDGE. On portrait, bidir_out sat there until pin escape
-# routing shorted to the PDN: with PDN_EXTEND_TO boundary the VSS stripes run
-# to the die edge, and escapes hit them at the stripe right edges (x=323.82 and
-# x=1042.86, each exactly a stripe origin + PDN_VWIDTH). See TRIAL_NOTES.md
-# Session 5.4. This file follows the landscape branch's edge assignment, which
-# puts bidir_in on north and measured clean at route DRC 0 -- but that was with
-# its own port naming, so if north-edge shorts reappear, this is the known
-# mechanism and the fix is to move the group south.
+# N AND S PINS LAND ON METAL2, AND METAL2 CARRIES PDN STRAPS. This has now bitten
+# twice, on both horizontal edges, and the fix is in pdn_cfg.tcl rather than here.
+#
+#   Portrait, north edge: bidir_out escapes shorted to the VSS straps at the
+#     stripe right edges (x=323.82 and x=1042.86, each a stripe origin +
+#     PDN_VWIDTH). TRIAL_NOTES.md Session 5.4; worked around by moving the group.
+#
+#   Landscape, south edge (job 4850): the PIN SHAPES themselves overlapped the
+#     Metal2 VDD straps -- gpio_15_bidir_ie, gpio_10_bidir_cs, gpio_6_bidir_cs --
+#     for 7 LVS errors, with route DRC still 0 because a fixed pin terminal is
+#     not something DRT places.
+#
+# Both are the same defect: PDN_EXTEND_TO boundary ran the Metal2 intermediate
+# straps out through the 15.68um I/O band, where the pins live. Those straps now
+# stop at the core (pdn_cfg.tcl -- see the long note on the Metal2 add_pdn_stripe
+# for why Metal2 in particular loses nothing by it), so the edge assignment below
+# is free again and moving a group is NOT the fix if this reappears.
+#
+# PDN_EXTEND_TO below stays `boundary`: Metal4 and Metal5 still need it, since
+# PDN_ENABLE_PINS hands the parent its power on exactly those two layers.
 #
 # THE .cfg FILE MUST CARRY NO COMMENTS. Odb.CustomIOPlacement has no comment
 # syntax: '#' introduces a direction marker (#N/#E/#S/#W) and nothing else, so
@@ -470,7 +489,10 @@ PDN_VSPACING: 85.12   # 180.32/2 - 5.04 = 152 x 0.56
 PDN_HSPACING: 84.6    # (180 - 2*5.4)/2 = 94 x 0.90
 PDN_VOFFSET:  16.24   # 29 x 0.56 (was 16.32 = 29.14, off-grid). Left edge 20.44
 PDN_HOFFSET:  16.2    # 18 x 0.90 (was 16.65 = 18.5, off-grid)
-PDN_EXTEND_TO: boundary
+PDN_EXTEND_TO: boundary   # Metal4/Metal5 only -- pdn_cfg.tcl withholds this from
+                          # the Metal2 straps, which would otherwise cross the
+                          # I/O band and short the N/S pins. See the I/O pins
+                          # note above.
 
 PDN_ENABLE_PINS:     true    # Metal3/Metal4 pins for the parent to grab
 PDN_CORE_RING:       false   # hierarchical integration; coordinate Metal5 use with parent

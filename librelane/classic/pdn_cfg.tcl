@@ -153,6 +153,46 @@ if { $::env(PDN_MULTILAYER) == 1 } {
     # harmless -- sram_grid bridges the macro band on Metal4.
     #
     # Cost: PDN_VWIDTH every PDN_VPITCH of Metal2, ~7% of the layer.
+    #
+    # NOTE: deliberately NO {*}$arg_list here, i.e. no -extend_to_boundary --
+    # same reasoning as the Metal3 rungs below, but this one is the harder
+    # failure, so it is worth spelling out.
+    #
+    # THE NORTH/SOUTH I/O PINS ARE ON METAL2. Odb.CustomIOPlacement puts every
+    # N and S pin on the vertical routing layer, which in this stack is Metal2:
+    # a 1.12 x 1.12um square centred 0.28um in from the die edge (DEF: "+ LAYER
+    # Metal2 ( -560 -560 ) ( 560 560 ) + PLACED ( x 560 ) N", 2000 DBU/um).
+    # core_lly is 15.68, so those pins sit 15.4um OUTSIDE the core, in a band no
+    # stdcell_grid stripe has any reason to enter.
+    #
+    # With -extend_to_boundary set, these Metal2 straps ran the full die height
+    # (y 0..1100) and swept straight through that band. Any pin whose x fell
+    # within PDN_VWIDTH/2 = 2.52um of a strap centre was then physically
+    # overlapping a power strap -- a dead short from a functional output to VDD.
+    # Job 4850 lost LVS to exactly that, 3 pins on the south edge:
+    #
+    #   gpio_15_bidir_ie  x= 381.08  VDD strap 381.08..386.12  (pin on the edge)
+    #   gpio_10_bidir_cs  x= 923.16  VDD strap 922.04..927.08
+    #   gpio_6_bidir_cs   x=1465.24  VDD strap 1463.00..1468.04
+    #
+    # netgen reported them as "(no pin, node is VDD)" against the extracted
+    # layout, net count 18083 vs 18086, "Top level cell failed pin matching",
+    # 7 LVS errors. NOTHING EARLIER IN THE FLOW CATCHES THIS: the pin shape is a
+    # fixed terminal, not something detailed routing places, so DRT routes
+    # around the strap (gpio_6_bidir_cs got a Metal3 jog off the pin to escape)
+    # and reports route DRC 0. Magic is the first step that sees the geometry.
+    #
+    # Do not "fix" this by nudging pins instead. IO_PIN_ORDER_CFG assigns edges
+    # and order, not coordinates -- the placer distributes within an edge, so
+    # which pins collide is a function of pin COUNT, and any port-list change
+    # reshuffles the whole edge onto a fresh set of straps.
+    #
+    # Metal2 loses nothing by stopping at the core: it is a bridge from the
+    # Metal1 rails up to the Metal3 rungs (see the note above), it carries no
+    # current out of the core, and it is not a pin layer -- PDN_ENABLE_PINS
+    # hands the parent "$PDN_VERTICAL_LAYER $PDN_HORIZONTAL_LAYER", i.e. Metal4
+    # and Metal5, and those two keep -extend_to_boundary. This also gives DRT
+    # the whole 15.68um I/O band on Metal2 back for pin escapes.
     add_pdn_stripe \
         -grid stdcell_grid \
         -layer $pdn_intermediate_layer \
@@ -160,8 +200,7 @@ if { $::env(PDN_MULTILAYER) == 1 } {
         -pitch $::env(PDN_VPITCH) \
         -offset $::env(PDN_VOFFSET) \
         -spacing $::env(PDN_VSPACING) \
-        -starts_with POWER \
-        {*}$arg_list
+        -starts_with POWER
 
     # Sparse Metal3 rungs. Real perpendicular crossings with the Metal2 and
     # Metal4 vertical stripes -- see the "why the Metal3 rungs exist" note
