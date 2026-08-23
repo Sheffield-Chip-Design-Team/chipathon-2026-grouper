@@ -31,24 +31,22 @@ if { [info exists ::env(MAX_CAPACITANCE_CONSTRAINT)] } {
 
 set clocks [get_clocks $clock_port]
 
-# Inputs: async reset plus the pad-side input values coming back from the
-# padring. bidir_in is an input to chip_core even though the pad is bidirectional.
+# External asynchronous inputs.
 #
-# Trailing `*` rather than `[*]`: this design is elaborated standalone, so it
-# takes chip_core's own NUM_INPUT_PADS default of 1 rather than the 12 that
-# slot_defines.svh gives chip_top. A one-bit port is emitted as a scalar
-# `input_in`, which `input_in[*]` does not match - STA reports
-# "[STA-0366] port 'input_in[*]' not found" and the port silently ends up with
-# no input delay at all. `input_in*` matches the scalar and every bit of a
-# bussed version, so the same constraints hold whatever the pad count is.
-set core_input_ports [get_ports {
+# rst_n is the asynchronous external reset.
+# input_in* contains UART RX.
+# bidir_in* contains GPIO inputs and the serial peripheral input paths.
+#
+# These signals do not have a defined phase relationship to the system clock,
+# so timing them as synchronous inputs to clk would produce meaningless
+# setup/hold requirements.
+set async_input_ports [get_ports {
     rst_n
     input_in*
     bidir_in*
 }]
 
-set_input_delay -min 0                   -clock $clocks $core_input_ports
-set_input_delay -max $input_delay_value  -clock $clocks $core_input_ports
+set_false_path -from $async_input_ports
 
 # Outputs: everything chip_core drives towards the padring - the bidir pad
 # value and its seven control lines, plus the input pads' pull configuration.
