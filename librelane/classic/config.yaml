@@ -729,6 +729,5 @@ KLAYOUT_FILLER_OPTIONS:
 # Because we have multiple power pads for one power domain
 MAGIC_EXT_UNIQUE: notopports
 
-
 # Slightly smaller file sizes
-# PRIMARY_GDSII_STREAMOUT_TOOL: klayout
+PRIMARY_GDSII_STREAMOUT_TOOL: klayout
