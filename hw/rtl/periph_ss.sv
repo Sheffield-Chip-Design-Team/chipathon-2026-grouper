@@ -72,34 +72,6 @@ module periph_ss #(
   // are flat because an interface cannot cross a hierarchy boundary in a
   // Verilog netlist - see the header of ahb_interconnect_ss.sv.
 
-  logic [ADDR_WIDTH-1:0] rom_HADDR;
-  logic [2:0]            rom_HBURST;
-  logic                  rom_HMASTLOCK;
-  logic [3:0]            rom_HPROT;
-  logic [2:0]            rom_HSIZE;
-  logic [1:0]            rom_HTRANS;
-  logic [DATA_WIDTH-1:0] rom_HWDATA;
-  logic                  rom_HWRITE;
-  logic                  rom_HREADYIN;
-  logic                  rom_HSEL;
-  logic [DATA_WIDTH-1:0] rom_HRDATA;
-  logic                  rom_HREADYOUT;
-  logic                  rom_HRESP;
-
-  logic [ADDR_WIDTH-1:0] ram_HADDR;
-  logic [2:0]            ram_HBURST;
-  logic                  ram_HMASTLOCK;
-  logic [3:0]            ram_HPROT;
-  logic [2:0]            ram_HSIZE;
-  logic [1:0]            ram_HTRANS;
-  logic [DATA_WIDTH-1:0] ram_HWDATA;
-  logic                  ram_HWRITE;
-  logic                  ram_HREADYIN;
-  logic                  ram_HSEL;
-  logic [DATA_WIDTH-1:0] ram_HRDATA;
-  logic                  ram_HREADYOUT;
-  logic                  ram_HRESP;
-
   logic [ADDR_WIDTH-1:0] uart_HADDR;
   logic [2:0]            uart_HBURST;
   logic                  uart_HMASTLOCK;
@@ -128,7 +100,7 @@ module periph_ss #(
   logic                  gpio_ctrl_HREADYOUT;
   logic                  gpio_ctrl_HRESP;
 
-  // FIXME - slot wired to ahb_stub_slave
+  // FIXME - slot wired to a sized, pad-connected ahb_stub_slave, not ahb_qspi
   logic [ADDR_WIDTH-1:0] qpsi_HADDR;
   logic [2:0]            qpsi_HBURST;
   logic                  qpsi_HMASTLOCK;
@@ -143,7 +115,7 @@ module periph_ss #(
   logic                  qpsi_HREADYOUT;
   logic                  qpsi_HRESP;
 
-  // FIXME - slot wired to ahb_stub_slave
+  // FIXME - slot wired to a sized, pad-connected ahb_stub_slave, not ahb_spi_m
   logic [ADDR_WIDTH-1:0] spi_m_HADDR;
   logic [2:0]            spi_m_HBURST;
   logic                  spi_m_HMASTLOCK;
@@ -172,6 +144,10 @@ module periph_ss #(
   logic                  spi_s_HREADYOUT;
   logic                  spi_s_HRESP;
 
+  // Only the low EXT_*_WIDTH bits of HADDR/HWDATA leave the block, and HSEL
+  // and HREADYIN have no external port at all - see the external peripheral
+  // section at the bottom of this file.
+  /* verilator lint_off UNUSEDSIGNAL */
   logic [ADDR_WIDTH-1:0] ext_periph_HADDR;
   logic [2:0]            ext_periph_HBURST;
   logic                  ext_periph_HMASTLOCK;
@@ -182,6 +158,7 @@ module periph_ss #(
   logic                  ext_periph_HWRITE;
   logic                  ext_periph_HREADYIN;
   logic                  ext_periph_HSEL;
+  /* verilator lint_on UNUSEDSIGNAL */
   logic [DATA_WIDTH-1:0] ext_periph_HRDATA;
   logic                  ext_periph_HREADYOUT;
   logic                  ext_periph_HRESP;
@@ -209,9 +186,20 @@ logic mux_spi_s_sck_i;     // internal signal for SPI slave clock
 logic mux_spi_s_mosi_i;    // internal signal for SPI slave master out slave in
 logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
 
+logic mux_spi_m_sck_o;     // internal signal for SPI master clock
+logic mux_spi_m_mosi_o;    // internal signal for SPI master master out slave in
+logic mux_spi_m_miso_i;    // internal signal for SPI master master in slave out
+logic mux_spi_m_ss_o;      // internal signal for SPI master chip select
+
+logic       mux_qspi_sck_o;   // internal signal for QSPI clock
+logic [1:0] mux_qspi_ce_n_o;  // internal signal for QSPI chip enables
+logic [3:0] mux_qspi_sio_i;   // internal signal for QSPI data in
+logic [3:0] mux_qspi_sio_o;   // internal signal for QSPI data out
+logic [3:0] mux_qspi_sio_oe;  // internal signal for QSPI data output enable
+
 //--- Interconnect ----------------------------------------------------------------------
 
-  ahb_interconnect_ss #(
+  interconnect_ss #(
     .ADDR_WIDTH (ADDR_WIDTH),
     .DATA_WIDTH (DATA_WIDTH)
   ) u_interconnect (
@@ -234,34 +222,8 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
     .HRESP            (HRESP),
 
     // Peripheral master ports
-    .rom_HADDR              (rom_HADDR),
-    .rom_HBURST             (rom_HBURST),
-    .rom_HMASTLOCK          (rom_HMASTLOCK),
-    .rom_HPROT              (rom_HPROT),
-    .rom_HSIZE              (rom_HSIZE),
-    .rom_HTRANS             (rom_HTRANS),
-    .rom_HWDATA             (rom_HWDATA),
-    .rom_HWRITE             (rom_HWRITE),
-    .rom_HREADYIN           (rom_HREADYIN),
-    .rom_HSEL               (rom_HSEL),
-    .rom_HRDATA             (rom_HRDATA),
-    .rom_HREADYOUT          (rom_HREADYOUT),
-    .rom_HRESP              (rom_HRESP),
-
-    .ram_HADDR              (ram_HADDR),
-    .ram_HBURST             (ram_HBURST),
-    .ram_HMASTLOCK          (ram_HMASTLOCK),
-    .ram_HPROT              (ram_HPROT),
-    .ram_HSIZE              (ram_HSIZE),
-    .ram_HTRANS             (ram_HTRANS),
-    .ram_HWDATA             (ram_HWDATA),
-    .ram_HWRITE             (ram_HWRITE),
-    .ram_HREADYIN           (ram_HREADYIN),
-    .ram_HSEL               (ram_HSEL),
-    .ram_HRDATA             (ram_HRDATA),
-    .ram_HREADYOUT          (ram_HREADYOUT),
-    .ram_HRESP              (ram_HRESP),
-
+    // ROM and RAM are not fabric slots: cpu_ss reaches them over its own
+    // native memory ports and never puts their addresses on HADDR.
     .uart_HADDR             (uart_HADDR),
     .uart_HBURST            (uart_HBURST),
     .uart_HMASTLOCK         (uart_HMASTLOCK),
@@ -364,52 +326,6 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
   `endif
   );
 
-//--- ROM ------------------------------------------------------------------------------
-
-  ahb_rom #(
-    .ADDR_WIDTH (ADDR_WIDTH),
-    .DATA_WIDTH (DATA_WIDTH)
-  ) u_rom (
-    .HCLK         (HCLK),
-    .HRESETn      (HRESETn),
-    .HADDR        (rom_HADDR),
-    .HBURST       (rom_HBURST),
-    .HMASTLOCK    (rom_HMASTLOCK),
-    .HPROT        (rom_HPROT),
-    .HSIZE        (rom_HSIZE),
-    .HTRANS       (rom_HTRANS),
-    .HWDATA       (rom_HWDATA),
-    .HWRITE       (rom_HWRITE),
-    .HRDATA       (rom_HRDATA),
-    .HREADYOUT    (rom_HREADYOUT),
-    .HRESP        (rom_HRESP),
-    .HREADYIN     (rom_HREADYIN),
-    .HSEL         (rom_HSEL)
-  );
-
-  //--- RAM ------------------------------------------------------------------------------
-
-  ahb_ram #(
-    .ADDR_WIDTH (ADDR_WIDTH),
-    .DATA_WIDTH (DATA_WIDTH)
-  ) u_ram (
-    .HCLK         (HCLK),
-    .HRESETn      (HRESETn),
-    .HADDR        (ram_HADDR),
-    .HBURST       (ram_HBURST),
-    .HMASTLOCK    (ram_HMASTLOCK),
-    .HPROT        (ram_HPROT),
-    .HSIZE        (ram_HSIZE),
-    .HTRANS       (ram_HTRANS),
-    .HWDATA       (ram_HWDATA),
-    .HWRITE       (ram_HWRITE),
-    .HRDATA       (ram_HRDATA),
-    .HREADYOUT    (ram_HREADYOUT),
-    .HRESP        (ram_HRESP),
-    .HREADYIN     (ram_HREADYIN),
-    .HSEL         (ram_HSEL)
-  );
-
   //--- UART ------------------------------------------------------------------------------
 
   ahb_uart #(
@@ -441,10 +357,19 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
 
   //--- QSPI -----------------------------------------------------------------------------
 
-  // FIXME - replace with actual QSPI peripheral
+  // FIXME - replace with hw/rtl/qspi/ahb_qspi.sv, whose ports already match the
+  // io_ss signals below. Until then the stub holds the slot at a representative
+  // size: 3368 GE, from `make measure-ge` (ahb_qspi synthesizes to 18,481.4
+  // um^2 = 1684 GE) x2.0 for the features still missing (arbitrary-command
+  // interface, real register map, byte-lane addressing, wait-state handling,
+  // and the GRPR-QSPI-021 init FSM). See librelane/classic/TRIAL_NOTES.md.
   ahb_stub_slave #(
     .ADDR_WIDTH (ADDR_WIDTH),
-    .DATA_WIDTH (DATA_WIDTH)
+    .DATA_WIDTH (DATA_WIDTH),
+    .TARGET_GE  (3368),
+    .PAD_OUT_W  (7),
+    .PAD_OE_W   (4),
+    .PAD_IN_W   (4)
   ) u_qspi_stub (
     .HCLK         (HCLK),
     .HRESETn      (HRESETn),
@@ -460,15 +385,29 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
     .HREADYOUT    (qpsi_HREADYOUT),
     .HRESP        (qpsi_HRESP),
     .HREADYIN     (qpsi_HREADYIN),
-    .HSEL         (qpsi_HSEL)
+    .HSEL         (qpsi_HSEL),
+
+    .pad_in       (mux_qspi_sio_i),
+    .pad_out      ({mux_qspi_sio_o, mux_qspi_ce_n_o, mux_qspi_sck_o}),
+    .pad_oe       (mux_qspi_sio_oe)
   );
 
   //--- SPI Master ------------------------------------------------------------------------
   
-  // FIXME - replace with actual SPI Master peripheral
+  // FIXME - replace with hw/rtl/spi_m/ahb_spi_m.sv, whose pad ports are named
+  // SPI_MOSI/SPI_SCK/SPI_CS_N/SPI_MISO and will need mapping onto the io_ss
+  // names below. Until then the stub holds the slot at a representative size:
+  // 1706 GE, from `make measure-ge` (ahb_spi_m synthesizes to 14,402.7 um^2 =
+  // 1312 GE) x1.3 for the one remaining open item (GRPR-SPIM-005). That lands
+  // inside GRPR-SPIM-015's 1,500-2,000 GE estimate, which the spec flagged as
+  // unconfirmed by synthesis - it is now confirmed. See
+  // librelane/classic/TRIAL_NOTES.md.
   ahb_stub_slave #(
     .ADDR_WIDTH (ADDR_WIDTH),
-    .DATA_WIDTH (DATA_WIDTH)
+    .DATA_WIDTH (DATA_WIDTH),
+    .TARGET_GE  (1706),
+    .PAD_OUT_W  (3),
+    .PAD_IN_W   (1)
   ) u_spi_m_stub (
     .HCLK         (HCLK),
     .HRESETn      (HRESETn),
@@ -484,7 +423,12 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
     .HREADYOUT    (spi_m_HREADYOUT),
     .HRESP        (spi_m_HRESP),
     .HREADYIN     (spi_m_HREADYIN),
-    .HSEL         (spi_m_HSEL)
+    .HSEL         (spi_m_HSEL),
+
+    // io_ss drives these pads' output enables high itself, so pad_oe is unused.
+    .pad_in       (mux_spi_m_miso_i),
+    .pad_out      ({mux_spi_m_mosi_o, mux_spi_m_sck_o, mux_spi_m_ss_o}),
+    .pad_oe       ()
   );
 
   //--- SPI Slave -------------------------------------------------------------------------
@@ -494,9 +438,17 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
   // The SPI slave is out of scope for the dry run - occupy its fabric slot
   // with the same placeholder the not-yet-implemented peripherals use, so the
   // interconnect still sees eight slaves.
+  //
+  // Sized at 635 GE, from `make measure-ge` (ahb_spi_s synthesizes to 3,483.8
+  // um^2 = 317 GE) x2.0 for what it still has to grow (two-cycle error
+  // response, IRQs, and the FIFOs that GRPR-SPIS-012's 1.25 MB/s firmware load
+  // needs). See librelane/classic/TRIAL_NOTES.md.
   ahb_stub_slave #(
     .ADDR_WIDTH (ADDR_WIDTH),
-    .DATA_WIDTH (DATA_WIDTH)
+    .DATA_WIDTH (DATA_WIDTH),
+    .TARGET_GE  (635),
+    .PAD_OUT_W  (1),
+    .PAD_IN_W   (3)
   ) u_spi_s_stub (
     .HCLK         (HCLK),
     .HRESETn      (HRESETn),
@@ -512,12 +464,17 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
     .HREADYOUT    (spi_s_HREADYOUT),
     .HRESP        (spi_s_HRESP),
     .HREADYIN     (spi_s_HREADYIN),
-    .HSEL         (spi_s_HSEL)
-  );
+    .HSEL         (spi_s_HSEL),
 
-  // io_ss still drives mux_spi_s_{ss,sck,mosi}_i towards the (absent) slave;
-  // with no consumer those three pad-input paths fall out in synthesis.
-  assign mux_spi_s_miso_o = 1'b0;
+    // Same pad signals the real ahb_spi_s takes below, so the SPI slave's four
+    // pad paths through io_ss exist in the netlist either way. spi_sck arrives
+    // here as plain data into an HCLK-clocked register, so the stub adds no
+    // clock domain of its own. io_ss drives this pad's output enable high
+    // itself, so pad_oe is unused.
+    .pad_in       ({mux_spi_s_mosi_i, mux_spi_s_sck_i, mux_spi_s_ss_i}),
+    .pad_out      (mux_spi_s_miso_o),
+    .pad_oe       ()
+  );
 
 `else
 
@@ -583,17 +540,25 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
     .spi_s_mosi_i    (mux_spi_s_mosi_i),
     .spi_s_miso_o    (mux_spi_s_miso_o),
 
-    // FIXME - tied off until the SPI master and QSPI peripherals are implemented
-    .spi_m_sck_o     (1'b0),
-    .spi_m_mosi_o    (1'b0),
-    .spi_m_miso_i    (),
-    .spi_m_ss_o      (1'b1),
+    // Driven by the placeholders above until the real peripherals land. They
+    // are deliberately not tied off: constants here let synthesis fold away the
+    // alternate-function path for pads 4-14, which would hide the routing and
+    // congestion those eleven pads actually cost.
+    //
+    // The placeholders free-run, so with ALTSEL set these pads - including the
+    // QSPI data pads' output enables - toggle continuously and mean nothing.
+    // GPIO_ALTSEL resets to 0, so pads come up under GPIO control and firmware
+    // has to opt in; a DRY_RUN build is not functional silicon in any case.
+    .spi_m_sck_o     (mux_spi_m_sck_o),
+    .spi_m_mosi_o    (mux_spi_m_mosi_o),
+    .spi_m_miso_i    (mux_spi_m_miso_i),
+    .spi_m_ss_o      (mux_spi_m_ss_o),
 
-    .qspi_sck_o      (1'b0),
-    .qspi_ce_n_o     (2'b11),
-    .qspi_sio_i      (),
-    .qspi_sio_o      (4'b0),
-    .qspi_sio_oe     (4'b0),
+    .qspi_sck_o      (mux_qspi_sck_o),
+    .qspi_ce_n_o     (mux_qspi_ce_n_o),
+    .qspi_sio_i      (mux_qspi_sio_i),
+    .qspi_sio_o      (mux_qspi_sio_o),
+    .qspi_sio_oe     (mux_qspi_sio_oe),
 
     // GPIO pin control interface
     .gpio_in         (gpio_in),
@@ -608,16 +573,28 @@ logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
   );
 
   //--- External Peripheral -------------------------------------------------------------------------
+  
+  // FIXME - bridge this to an external interface
+  //
+  // The external port is deliberately narrower than the fabric slot
+  // (EXT_ADDR_WIDTH / EXT_DATA_WIDTH, both 8 by default) to keep the wire
+  // count out of the block down, so the address and write data are truncated
+  // and the read data zero-extended. Note the consequence: the slot decodes a
+  // 64 KiB window but an 8-bit address only reaches its first 256 bytes.
+  //
+  // ext_periph_HSEL and ext_periph_HREADYIN have nowhere to go until the
+  // bridge above exists - an external slave cannot tell it is selected
+  // without them.
 
-  assign ext_HADDR     = ext_periph_HADDR;
+  assign ext_HADDR     = ext_periph_HADDR[EXT_ADDR_WIDTH-1:0];
   assign ext_HBURST    = ext_periph_HBURST;
   assign ext_HMASTLOCK = ext_periph_HMASTLOCK;
   assign ext_HPROT     = ext_periph_HPROT;
   assign ext_HSIZE     = ext_periph_HSIZE;
   assign ext_HTRANS    = ext_periph_HTRANS;
-  assign ext_HWDATA    = ext_periph_HWDATA;
+  assign ext_HWDATA    = ext_periph_HWDATA[EXT_DATA_WIDTH-1:0];
   assign ext_HWRITE    = ext_periph_HWRITE;
-  assign ext_periph_HRDATA    = ext_HRDATA;
+  assign ext_periph_HRDATA    = {{(DATA_WIDTH-EXT_DATA_WIDTH){1'b0}}, ext_HRDATA};
   assign ext_periph_HREADYOUT = ext_HREADY;
   assign ext_periph_HRESP     = ext_HRESP;
 

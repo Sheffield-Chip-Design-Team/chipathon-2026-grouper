@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: © 2025 Project Template Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-// Example chip_top : This module instantiates the core design and connects it to the I/O pads.
-
-
 `default_nettype none
 
 `include "slot_defines.svh"
@@ -31,6 +28,13 @@ module chip_top #(
     
     inout  wire [NUM_ANALOG_PADS-1:0] analog_PAD
 );
+
+    // Pad assignment. CORE_GPIO_PADS is fixed in grouper_soc_chip_core.sv (a
+    // flat port list cannot be parameterised) and must be kept in step with the
+    // NUM_GPIO the dig top uses; the two UART pads are placed here.
+    localparam int unsigned CORE_GPIO_PADS = 16;
+    localparam int unsigned UART_RX_PAD    = 0;                // input pad
+    localparam int unsigned UART_TX_PAD    = CORE_GPIO_PADS;   // bidir pad
 
     wire clk_PAD2CORE;
     wire rst_n_PAD2CORE;
@@ -75,7 +79,10 @@ module chip_top #(
 
     // Signal IO pad instances
 
-    // Schmitt trigger
+    // Schmitt trigger. Hysteresis costs a constant delay CTS absorbs, and the
+    // duty-cycle skew it introduces is harmless here - nothing in the design
+    // clocks on a falling edge. In exchange it will not double-clock on a slow
+    // or noisy edge, which a bring-up clock over a jumper wire can produce.
     gf180mcu_fd_io__in_s clk_pad (
         `ifdef USE_POWER_PINS
         .DVDD   (VDD),
@@ -91,8 +98,10 @@ module chip_top #(
         .PD     (1'b0)
     );
     
-    // Normal input
-    gf180mcu_fd_io__in_c rst_n_pad (
+    // Schmitt trigger. The reset comes off a push button (see async_rst_n in
+    // grouper_soc_top), so its edge is slow enough that a plain CMOS buffer
+    // could oscillate crossing the threshold and issue a burst of resets.
+    gf180mcu_fd_io__in_s rst_n_pad (
         `ifdef USE_POWER_PINS
         .DVDD   (VDD),
         .DVSS   (VSS),
@@ -169,37 +178,203 @@ module chip_top #(
     endgenerate
 
     // Core design
+    //
+    // grouper_soc_chip_core exposes a pad-control interface for the GPIO pads
+    // only - they are the only pads the SoC configures at run time. uart_rx and
+    // uart_tx come out as plain signals, so putting them on pads is this
+    // module's job, as is every pad the core does not reach:
+    //
+    //   bidir_PAD[CORE_GPIO_PADS-1:0]     gpio[15:0], driven by the core
+    //   input_PAD[UART_RX_PAD]            uart_rx, pulls off
+    //   bidir_PAD[UART_TX_PAD]            uart_tx, permanent output, input buffer off
+    //   input_PAD[NUM_INPUT_PADS-1:1]     spare, tied off
+    //   bidir_PAD[NUM_BIDIR_PADS-1:17]    spare, tied off
+    //
+    // The core's budget is the pads it configures and nothing more, so this
+    // holds for every slot in slot_defines.svh - only the number of pads tied
+    // off below changes.
 
-    chip_core #(
-        .NUM_INPUT_PADS  (NUM_INPUT_PADS),
-        .NUM_BIDIR_PADS  (NUM_BIDIR_PADS)
-    ) i_chip_core (    
+    grouper_soc_chip_core i_chip_core (
         .clk        (clk_PAD2CORE),
         .rst_n      (rst_n_PAD2CORE),
-    
-        .input_in   (input_PAD2CORE),
-        .input_pu   (input_CORE2PAD_PU),
-        .input_pd   (input_CORE2PAD_PD),
 
-        .bidir_in   (bidir_PAD2CORE),
-        .bidir_out  (bidir_CORE2PAD),
-        .bidir_oe   (bidir_CORE2PAD_OE),
-        .bidir_cs   (bidir_CORE2PAD_CS),
-        .bidir_sl   (bidir_CORE2PAD_SL),
-        .bidir_ie   (bidir_CORE2PAD_IE),
-        .bidir_pu   (bidir_CORE2PAD_PU),
-        .bidir_pd   (bidir_CORE2PAD_PD)
+        .uart_rx    (input_PAD2CORE[UART_RX_PAD]),
+        .uart_tx    (bidir_CORE2PAD[UART_TX_PAD]),
+
+        .gpio_0_bidir_in   (bidir_PAD2CORE[0]),         // gpio0
+        .gpio_0_bidir_out  (bidir_CORE2PAD[0]),
+        .gpio_0_bidir_oe   (bidir_CORE2PAD_OE[0]),
+        .gpio_0_bidir_cs   (bidir_CORE2PAD_CS[0]),
+        .gpio_0_bidir_sl   (bidir_CORE2PAD_SL[0]),
+        .gpio_0_bidir_ie   (bidir_CORE2PAD_IE[0]),
+        .gpio_0_bidir_pu   (bidir_CORE2PAD_PU[0]),
+        .gpio_0_bidir_pd   (bidir_CORE2PAD_PD[0]),
+
+        .gpio_1_bidir_in   (bidir_PAD2CORE[1]),         // gpio1
+        .gpio_1_bidir_out  (bidir_CORE2PAD[1]),
+        .gpio_1_bidir_oe   (bidir_CORE2PAD_OE[1]),
+        .gpio_1_bidir_cs   (bidir_CORE2PAD_CS[1]),
+        .gpio_1_bidir_sl   (bidir_CORE2PAD_SL[1]),
+        .gpio_1_bidir_ie   (bidir_CORE2PAD_IE[1]),
+        .gpio_1_bidir_pu   (bidir_CORE2PAD_PU[1]),
+        .gpio_1_bidir_pd   (bidir_CORE2PAD_PD[1]),
+
+        .gpio_2_bidir_in   (bidir_PAD2CORE[2]),         // gpio2
+        .gpio_2_bidir_out  (bidir_CORE2PAD[2]),
+        .gpio_2_bidir_oe   (bidir_CORE2PAD_OE[2]),
+        .gpio_2_bidir_cs   (bidir_CORE2PAD_CS[2]),
+        .gpio_2_bidir_sl   (bidir_CORE2PAD_SL[2]),
+        .gpio_2_bidir_ie   (bidir_CORE2PAD_IE[2]),
+        .gpio_2_bidir_pu   (bidir_CORE2PAD_PU[2]),
+        .gpio_2_bidir_pd   (bidir_CORE2PAD_PD[2]),
+
+        .gpio_3_bidir_in   (bidir_PAD2CORE[3]),         // gpio3
+        .gpio_3_bidir_out  (bidir_CORE2PAD[3]),
+        .gpio_3_bidir_oe   (bidir_CORE2PAD_OE[3]),
+        .gpio_3_bidir_cs   (bidir_CORE2PAD_CS[3]),
+        .gpio_3_bidir_sl   (bidir_CORE2PAD_SL[3]),
+        .gpio_3_bidir_ie   (bidir_CORE2PAD_IE[3]),
+        .gpio_3_bidir_pu   (bidir_CORE2PAD_PU[3]),
+        .gpio_3_bidir_pd   (bidir_CORE2PAD_PD[3]),
+
+        .gpio_4_bidir_in   (bidir_PAD2CORE[4]),         // gpio4
+        .gpio_4_bidir_out  (bidir_CORE2PAD[4]),
+        .gpio_4_bidir_oe   (bidir_CORE2PAD_OE[4]),
+        .gpio_4_bidir_cs   (bidir_CORE2PAD_CS[4]),
+        .gpio_4_bidir_sl   (bidir_CORE2PAD_SL[4]),
+        .gpio_4_bidir_ie   (bidir_CORE2PAD_IE[4]),
+        .gpio_4_bidir_pu   (bidir_CORE2PAD_PU[4]),
+        .gpio_4_bidir_pd   (bidir_CORE2PAD_PD[4]),
+
+        .gpio_5_bidir_in   (bidir_PAD2CORE[5]),         // gpio5
+        .gpio_5_bidir_out  (bidir_CORE2PAD[5]),
+        .gpio_5_bidir_oe   (bidir_CORE2PAD_OE[5]),
+        .gpio_5_bidir_cs   (bidir_CORE2PAD_CS[5]),
+        .gpio_5_bidir_sl   (bidir_CORE2PAD_SL[5]),
+        .gpio_5_bidir_ie   (bidir_CORE2PAD_IE[5]),
+        .gpio_5_bidir_pu   (bidir_CORE2PAD_PU[5]),
+        .gpio_5_bidir_pd   (bidir_CORE2PAD_PD[5]),
+
+        .gpio_6_bidir_in   (bidir_PAD2CORE[6]),         // gpio6
+        .gpio_6_bidir_out  (bidir_CORE2PAD[6]),
+        .gpio_6_bidir_oe   (bidir_CORE2PAD_OE[6]),
+        .gpio_6_bidir_cs   (bidir_CORE2PAD_CS[6]),
+        .gpio_6_bidir_sl   (bidir_CORE2PAD_SL[6]),
+        .gpio_6_bidir_ie   (bidir_CORE2PAD_IE[6]),
+        .gpio_6_bidir_pu   (bidir_CORE2PAD_PU[6]),
+        .gpio_6_bidir_pd   (bidir_CORE2PAD_PD[6]),
+
+        .gpio_7_bidir_in   (bidir_PAD2CORE[7]),         // gpio7
+        .gpio_7_bidir_out  (bidir_CORE2PAD[7]),
+        .gpio_7_bidir_oe   (bidir_CORE2PAD_OE[7]),
+        .gpio_7_bidir_cs   (bidir_CORE2PAD_CS[7]),
+        .gpio_7_bidir_sl   (bidir_CORE2PAD_SL[7]),
+        .gpio_7_bidir_ie   (bidir_CORE2PAD_IE[7]),
+        .gpio_7_bidir_pu   (bidir_CORE2PAD_PU[7]),
+        .gpio_7_bidir_pd   (bidir_CORE2PAD_PD[7]),
+
+        .gpio_8_bidir_in   (bidir_PAD2CORE[8]),         // gpio8
+        .gpio_8_bidir_out  (bidir_CORE2PAD[8]),
+        .gpio_8_bidir_oe   (bidir_CORE2PAD_OE[8]),
+        .gpio_8_bidir_cs   (bidir_CORE2PAD_CS[8]),
+        .gpio_8_bidir_sl   (bidir_CORE2PAD_SL[8]),
+        .gpio_8_bidir_ie   (bidir_CORE2PAD_IE[8]),
+        .gpio_8_bidir_pu   (bidir_CORE2PAD_PU[8]),
+        .gpio_8_bidir_pd   (bidir_CORE2PAD_PD[8]),
+
+        .gpio_9_bidir_in   (bidir_PAD2CORE[9]),         // gpio9
+        .gpio_9_bidir_out  (bidir_CORE2PAD[9]),
+        .gpio_9_bidir_oe   (bidir_CORE2PAD_OE[9]),
+        .gpio_9_bidir_cs   (bidir_CORE2PAD_CS[9]),
+        .gpio_9_bidir_sl   (bidir_CORE2PAD_SL[9]),
+        .gpio_9_bidir_ie   (bidir_CORE2PAD_IE[9]),
+        .gpio_9_bidir_pu   (bidir_CORE2PAD_PU[9]),
+        .gpio_9_bidir_pd   (bidir_CORE2PAD_PD[9]),
+
+        .gpio_10_bidir_in  (bidir_PAD2CORE[10]),        // gpio10
+        .gpio_10_bidir_out (bidir_CORE2PAD[10]),
+        .gpio_10_bidir_oe  (bidir_CORE2PAD_OE[10]),
+        .gpio_10_bidir_cs  (bidir_CORE2PAD_CS[10]),
+        .gpio_10_bidir_sl  (bidir_CORE2PAD_SL[10]),
+        .gpio_10_bidir_ie  (bidir_CORE2PAD_IE[10]),
+        .gpio_10_bidir_pu  (bidir_CORE2PAD_PU[10]),
+        .gpio_10_bidir_pd  (bidir_CORE2PAD_PD[10]),
+
+        .gpio_11_bidir_in  (bidir_PAD2CORE[11]),        // gpio11
+        .gpio_11_bidir_out (bidir_CORE2PAD[11]),
+        .gpio_11_bidir_oe  (bidir_CORE2PAD_OE[11]),
+        .gpio_11_bidir_cs  (bidir_CORE2PAD_CS[11]),
+        .gpio_11_bidir_sl  (bidir_CORE2PAD_SL[11]),
+        .gpio_11_bidir_ie  (bidir_CORE2PAD_IE[11]),
+        .gpio_11_bidir_pu  (bidir_CORE2PAD_PU[11]),
+        .gpio_11_bidir_pd  (bidir_CORE2PAD_PD[11]),
+
+        .gpio_12_bidir_in  (bidir_PAD2CORE[12]),        // gpio12
+        .gpio_12_bidir_out (bidir_CORE2PAD[12]),
+        .gpio_12_bidir_oe  (bidir_CORE2PAD_OE[12]),
+        .gpio_12_bidir_cs  (bidir_CORE2PAD_CS[12]),
+        .gpio_12_bidir_sl  (bidir_CORE2PAD_SL[12]),
+        .gpio_12_bidir_ie  (bidir_CORE2PAD_IE[12]),
+        .gpio_12_bidir_pu  (bidir_CORE2PAD_PU[12]),
+        .gpio_12_bidir_pd  (bidir_CORE2PAD_PD[12]),
+
+        .gpio_13_bidir_in  (bidir_PAD2CORE[13]),        // gpio13
+        .gpio_13_bidir_out (bidir_CORE2PAD[13]),
+        .gpio_13_bidir_oe  (bidir_CORE2PAD_OE[13]),
+        .gpio_13_bidir_cs  (bidir_CORE2PAD_CS[13]),
+        .gpio_13_bidir_sl  (bidir_CORE2PAD_SL[13]),
+        .gpio_13_bidir_ie  (bidir_CORE2PAD_IE[13]),
+        .gpio_13_bidir_pu  (bidir_CORE2PAD_PU[13]),
+        .gpio_13_bidir_pd  (bidir_CORE2PAD_PD[13]),
+
+        .gpio_14_bidir_in  (bidir_PAD2CORE[14]),        // gpio14
+        .gpio_14_bidir_out (bidir_CORE2PAD[14]),
+        .gpio_14_bidir_oe  (bidir_CORE2PAD_OE[14]),
+        .gpio_14_bidir_cs  (bidir_CORE2PAD_CS[14]),
+        .gpio_14_bidir_sl  (bidir_CORE2PAD_SL[14]),
+        .gpio_14_bidir_ie  (bidir_CORE2PAD_IE[14]),
+        .gpio_14_bidir_pu  (bidir_CORE2PAD_PU[14]),
+        .gpio_14_bidir_pd  (bidir_CORE2PAD_PD[14]),
+
+        .gpio_15_bidir_in  (bidir_PAD2CORE[15]),        // gpio15
+        .gpio_15_bidir_out (bidir_CORE2PAD[15]),
+        .gpio_15_bidir_oe  (bidir_CORE2PAD_OE[15]),
+        .gpio_15_bidir_cs  (bidir_CORE2PAD_CS[15]),
+        .gpio_15_bidir_sl  (bidir_CORE2PAD_SL[15]),
+        .gpio_15_bidir_ie  (bidir_CORE2PAD_IE[15]),
+        .gpio_15_bidir_pu  (bidir_CORE2PAD_PU[15]),
+        .gpio_15_bidir_pd  (bidir_CORE2PAD_PD[15])
     );
 
-// `ifdef USE_POWER_PINS
-//     generate
-//         for (genvar i = 0; i < 4; i++) begin : gen_power_assign
-//             assign i_chip_core.u_hello_top.u_core.u_periph_ss.u_ram.gen_macro_ram.gen_sram[i].u_wrapper.VDD = VDD;
-//             assign i_chip_core.u_hello_top.u_core.u_periph_ss.u_ram.gen_macro_ram.gen_sram[i].u_wrapper.VSS = VSS;
-//         end
-//     endgenerate
-// `endif
-    
+    // --- Pads the core does not configure ------------------------------------
+
+    // uart_rx: input-only pad, pulls off. Every other input pad is spare, and
+    // spare input pads want exactly the same thing, so this covers the lot.
+    assign input_CORE2PAD_PU = '0;
+    assign input_CORE2PAD_PD = '0;
+
+    // uart_tx: permanent output, input buffer off. Its value comes straight
+    // from the core's uart_tx port, connected above.
+    assign bidir_CORE2PAD_OE[UART_TX_PAD] = 1'b1;
+    assign bidir_CORE2PAD_CS[UART_TX_PAD] = 1'b0;
+    assign bidir_CORE2PAD_SL[UART_TX_PAD] = 1'b0;
+    assign bidir_CORE2PAD_IE[UART_TX_PAD] = 1'b0;
+    assign bidir_CORE2PAD_PU[UART_TX_PAD] = 1'b0;
+    assign bidir_CORE2PAD_PD[UART_TX_PAD] = 1'b0;
+
+    // Spare bidir pads: driven low so they never float, input buffer off.
+    generate
+    if (NUM_BIDIR_PADS > UART_TX_PAD + 1) begin : gen_spare_bidir_pads
+        assign bidir_CORE2PAD   [NUM_BIDIR_PADS-1:UART_TX_PAD+1] = '0;
+        assign bidir_CORE2PAD_OE[NUM_BIDIR_PADS-1:UART_TX_PAD+1] = '1;
+        assign bidir_CORE2PAD_CS[NUM_BIDIR_PADS-1:UART_TX_PAD+1] = '0;
+        assign bidir_CORE2PAD_SL[NUM_BIDIR_PADS-1:UART_TX_PAD+1] = '0;
+        assign bidir_CORE2PAD_IE[NUM_BIDIR_PADS-1:UART_TX_PAD+1] = '0;
+        assign bidir_CORE2PAD_PU[NUM_BIDIR_PADS-1:UART_TX_PAD+1] = '0;
+        assign bidir_CORE2PAD_PD[NUM_BIDIR_PADS-1:UART_TX_PAD+1] = '0;
+    end
+    endgenerate
+
     // Chip ID - do not remove, necessary for tapeout
     (* keep *)
     gf180mcu_ws_ip__id chip_id ();
@@ -207,7 +382,6 @@ module chip_top #(
     // wafer.space logo - can be removed
     (* keep *)
     gf180mcu_ws_ip__logo wafer_space_logo ();
-
 endmodule
 
 `default_nettype wire

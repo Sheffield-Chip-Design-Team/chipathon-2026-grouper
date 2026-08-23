@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Merge every metrics-<target>.json produced by report_target.py (one per
-CI job, downloaded into --results-dir) into a single metrics.json/metrics.csv
-pair for the sim-metrics artifact. Runs once, in the final always() job, so it
-still produces output even when some simulation jobs failed.
+CI job, downloaded into --results-dir) into the sim-metrics artifact:
+metrics.json, metrics.csv and summary.md. Runs once, in the final always()
+job, so it still produces output even when some simulation jobs failed.
+
+Targets are emitted grouped - lint, then directed + TB, then pyUVM (see
+report_target.GROUPS) - and alphabetically within each group, so the CSV
+rows and the summary page read in the same order every run.
 """
 import argparse
 import csv
@@ -11,7 +15,8 @@ import json
 import os
 from pathlib import Path
 
-from report_target import COVERAGE_CATEGORIES
+from report_target import COVERAGE_CATEGORIES, GROUPS
+from summary_page import render_summary
 
 
 def _coverage_cell(value):
@@ -21,6 +26,16 @@ def _coverage_cell(value):
     or "N/A" verbatim.
     """
     return value["pct"] if isinstance(value, dict) else value
+
+
+def sort_key(target: dict):
+    """Group order first (lint, directed_tb, pyuvm), then target name. A
+    group this script doesn't know sorts after the known ones rather than
+    crashing, so adding one to sim-ci-targets.yaml can't lose its rows.
+    """
+    group = target.get("group")
+    rank = GROUPS.index(group) if group in GROUPS else len(GROUPS)
+    return (rank, group or "", target["target"])
 
 
 def default_run_metadata():
@@ -58,7 +73,7 @@ def main():
     if not target_files:
         raise SystemExit(f"No metrics-*.json files found under {args.results_dir}")
 
-    targets = [json.loads(f.read_text()) for f in target_files]
+    targets = sorted((json.loads(f.read_text()) for f in target_files), key=sort_key)
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -85,7 +100,11 @@ def main():
                 *[_coverage_cell(coverage.get(cat, "N/A")) for cat in COVERAGE_CATEGORIES],
             ])
 
-    print(f"Wrote {args.out_dir / 'metrics.json'} and {csv_path} for {len(targets)} target(s)")
+    summary_path = args.out_dir / "summary.md"
+    summary_path.write_text(render_summary(run_meta, targets, GROUPS))
+
+    print(f"Wrote {args.out_dir / 'metrics.json'}, {csv_path} and {summary_path} "
+          f"for {len(targets)} target(s)")
 
 
 if __name__ == "__main__":

@@ -19,5 +19,9 @@ hw/rtl/.DS_Store
 *.egg-info/
 sw/build/
 sw/fw_id.svh
-sw/code.hex
-sw/code.vmem
+*code.hex
+*code.vmem
+.vscode/settings.json
+new/*
+!sw/boot/code.hex
+!sw/boot/code.vmem

@@ -3,6 +3,10 @@
 # matrix entries GitHub Actions builds via fromJson() have a uniform shape.
 #
 #   name:            short label used for the metrics/artifact/job name
+#   group:           lint | directed_tb | pyuvm - which section of the aggregated
+#                       metrics.csv/summary.md this target's row lands in. Groups are
+#                       emitted in that order (see report_target.GROUPS), targets
+#                       sorted by name within a group.
 #   core:            FuseSoC CAPI2 VLNV, e.g. sharc:comms_ip:ahb_uart
 #   fusesoc_target:  target within that core's .core file
 #   kind:            cocotb | log-grep | exit-code (see .github/scripts/ci/report_target.py)
@@ -26,6 +30,7 @@ targets:
   # Cheap, and catches an unelaboratable block before any of the slow legs run.
 
   - name: grouper_soc_lint
+    group: lint
     core: sharc:soc_ip:grouper_soc
     fusesoc_target: lint
     kind: exit-code
@@ -36,6 +41,7 @@ targets:
     fw_test: ""
 
   - name: ahb_uart_lint
+    group: lint
     core: sharc:comms_ip:ahb_uart
     fusesoc_target: lint
     kind: exit-code
@@ -46,6 +52,7 @@ targets:
     fw_test: ""
 
   - name: ahb_gpio_ctrl_lint
+    group: lint
     core: sharc:comms_ip:ahb_gpio_ctrl
     fusesoc_target: lint
     kind: exit-code
@@ -56,6 +63,7 @@ targets:
     fw_test: ""
 
   - name: ahb_qspi_lint
+    group: lint
     core: sharc:comms_ip:ahb_qspi
     fusesoc_target: lint
     kind: exit-code
@@ -66,6 +74,7 @@ targets:
     fw_test: ""
 
   - name: ahb_spi_m_lint
+    group: lint
     core: sharc:comms_ip:ahb_spi_m
     fusesoc_target: lint
     kind: exit-code
@@ -76,6 +85,7 @@ targets:
     fw_test: ""
 
   - name: ahb_spi_s_lint
+    group: lint
     core: sharc:comms_ip:ahb_spi_s
     fusesoc_target: lint
     kind: exit-code
@@ -85,9 +95,10 @@ targets:
     coverage_scope: none
     fw_test: ""
 
-  # --- Peripheral block-level DV -------------------------------------------
+  # --- Peripheral block-level directed tests -------------------------------------------
 
   - name: ahb_uart_directed
+    group: directed_tb
     core: sharc:comms_ip:ahb_uart_directed
     fusesoc_target: default
     kind: cocotb
@@ -98,6 +109,7 @@ targets:
     fw_test: ""
 
   - name: ahb_uart_mdv
+    group: pyuvm
     core: sharc:comms_ip:ahb_uart_pyuvm
     fusesoc_target: default
     kind: cocotb
@@ -109,8 +121,8 @@ targets:
     coverage_scope: full
     fw_test: ""
 
-  # 19/19 passing when this was added.
   - name: ahb_gpio_ctrl_directed
+    group: directed_tb
     core: sharc:comms_ip:ahb_gpio_ctrl_directed
     fusesoc_target: default
     kind: cocotb
@@ -120,11 +132,8 @@ targets:
     coverage_scope: full
     fw_test: ""
 
-  # QSPI and SPI-slave DV has not been run green end-to-end in CI yet, and the
-  # RTL for both is still a stub in the fabric (periph_ss.sv wires their slots
-  # to ahb_stub_slave). Recorded in the metrics from day one, but not blocking
-  # until they have a known-good baseline - flip to false then.
   - name: ahb_qspi_directed
+    group: directed_tb
     core: sharc:comms_ip:ahb_qspi_directed
     fusesoc_target: default
     kind: cocotb
@@ -135,6 +144,7 @@ targets:
     fw_test: ""
 
   - name: ahb_spi_s_directed
+    group: directed_tb
     core: sharc:comms_ip:ahb_spi_s_directed
     fusesoc_target: default
     kind: cocotb
@@ -160,6 +170,7 @@ targets:
   # so this leg exercises a 9-slave fabric, not the 8-slave one that tapes out.
   # Switch to tb_top for a run that matches the shipping configuration.
   - name: grouper_soc_tb_top
+    group: directed_tb
     core: sharc:soc_ip:grouper_soc_tb
     fusesoc_target: tb_top_trace
     kind: log-grep
@@ -180,6 +191,7 @@ targets:
   # it a scratch repro for the stdlib_str bus error, not a regression test.
 
   - name: sw_fibonnaci
+    group: directed_tb
     core: sharc:soc_ip:grouper_soc_directed
     fusesoc_target: trace
     kind: cocotb
@@ -190,6 +202,7 @@ targets:
     fw_test: "fibonnaci"
 
   - name: sw_stdlib_fmt
+    group: directed_tb
     core: sharc:soc_ip:grouper_soc_directed
     fusesoc_target: trace
     kind: cocotb
@@ -203,6 +216,7 @@ targets:
   # sw/tests/test_busfault_repro.c was written to narrow down. Tracked here so
   # the fix is visible in the metrics, but not blocking until it lands.
   - name: sw_stdlib_str
+    group: directed_tb
     core: sharc:soc_ip:grouper_soc_directed
     fusesoc_target: trace
     kind: cocotb
@@ -213,6 +227,7 @@ targets:
     fw_test: "stdlib_str"
 
   - name: sw_uart_echo
+    group: directed_tb
     core: sharc:soc_ip:grouper_soc_directed
     fusesoc_target: trace
     kind: cocotb
@@ -223,6 +238,7 @@ targets:
     fw_test: "uart_echo"
 
   - name: sw_gpio
+    group: directed_tb
     core: sharc:soc_ip:grouper_soc_directed
     fusesoc_target: trace
     kind: cocotb

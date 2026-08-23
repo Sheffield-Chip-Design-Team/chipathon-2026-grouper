@@ -2,7 +2,7 @@
 # Chip: picorv32_hello_top
 # Clock: 16 MHz 62.5 ns period
 
-current_design picorv32_hello_top
+current_design grouper_soc_chip_core
 set_units -time ns
 
 create_clock -name clk -period $::env(CLOCK_PERIOD) [get_ports clk]

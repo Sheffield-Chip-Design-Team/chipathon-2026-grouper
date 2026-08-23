@@ -1,5 +1,5 @@
-module spi_master #(
-  parameter int CLK_DIV_BITS = 10,
+module spi_m_core #(
+  parameter int CLK_DIV_BITS = 8,
   parameter int DATA_WIDTH = 8,
   parameter int FIFO_DEPTH = 4
 ) (
@@ -30,7 +30,7 @@ module spi_master #(
   output logic                    done,
   
   // FIFO interfaces
-  input  logic                   flush_tx_fifo,
+  input  logic                    flush_tx_fifo,
   input  logic [DATA_WIDTH-1:0]   tx_data,
   input  logic                    tx_write,
   output logic                    tx_full,
@@ -49,6 +49,7 @@ module spi_master #(
 );
  
   logic spi_clk_en;
+  logic received;
 
   spi_clk_div #(
     .CLK_DIV_BITS(CLK_DIV_BITS)
@@ -64,10 +65,10 @@ module spi_master #(
     .DATA_WIDTH (DATA_WIDTH),
     .FIFO_DEPTH (FIFO_DEPTH)
     
-  ) u_spi_tx (
+  ) u_spi_m_tx (
     .clk            (clk),
     .rst_n          (rst_n),
-    .spi_clk_en    (spi_clk_en),
+    .spi_clk_en     (spi_clk_en),
 
     .enable         (enable),
     .start          (start),
@@ -105,17 +106,14 @@ module spi_master #(
     .DATA_WIDTH (DATA_WIDTH),
     .FIFO_DEPTH (FIFO_DEPTH)
     
-  ) u_spi_rx (
+ ) u_spi_m_rx (
     .clk            (clk),
     .rst_n          (rst_n),
     .spi_clk_en    (spi_clk_en),
 
     .enable         (enable),
-    .start          (start),
+    .received       (received),
 
-    .dir            (dir),
-    .data_en        (data_en),
-    .data_len       (data_len),
     .flush_rx_fifo  (flush_rx_fifo),
     .rx_read        (rx_read),
     .rx_full        (rx_full),

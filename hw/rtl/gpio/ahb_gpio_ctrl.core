@@ -6,7 +6,6 @@ description: AHB-Lite GPIO mux control registers (RTL only, no testbench)
 filesets:
   rtl:
     files:
-      - gpio_ctrl_pkg.sv:     {file_type: systemVerilogSource}
       - ahb_gpio_ctrl.sv:     {file_type: systemVerilogSource}
     depend:
       - sharc:common_ip:common:0.0.1

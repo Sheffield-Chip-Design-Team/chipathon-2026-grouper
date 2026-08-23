@@ -1,0 +1,56 @@
+CAPI=2:
+
+name: ocd:mem_ip:gf180_mcu_sram1024x8:1.0.0
+description: >
+  1024 x 8 b SRAM macro (gf180mcu_ocd_ip_sram__sram1024x8m8wm1) plus the
+  sram1024x8_wrapper that ram_ss instantiates, in one of two flavours:
+  `generic` (behavioural, timing-free, Verilator-friendly) or `gate` (the
+  vendor model with its specify-block timing checks, Icarus only). Exactly one
+  model fileset may be in a build - both define the same module name.
+
+filesets:
+  wrapper:
+    files:
+      - ../../pd/wrappers/gf180mcu_ocd_sram_1024x8m8wm1_wrapper.sv:   {file_type: systemVerilogSource}
+
+  generic_model:
+    files:
+      - gf180mcu_ocd_sram_1024x8m8wm1_rtl_model.v:  {file_type: verilogSource}
+
+  gate_model:
+    files:
+      -  ../../pd/gl/gf180mcu_ocd_ip_sram_1024x8m8wm1_gl_model.v: {file_type: verilogSource}
+
+targets:
+  # Dependents of this core always resolve to `default`, so the generic model
+  # is what an RTL simulation picks up. A gate-level flow has to select the
+  # gate_model fileset itself (or run --target=gate here).
+  default: &generic
+    description: Wrapper + generic behavioural macro model.
+    filesets: [generic_model, wrapper]
+    toplevel: sram1024x8_wrapper
+
+  # fusesoc run --no-export --target=generic sharc:mem_ip:sram1024x8
+  generic:
+    <<: *generic
+    description: Lint the wrapper against the generic model (no simulation).
+    flow: sim
+    flow_options:
+      tool: verilator
+      mode: lint-only
+      verilator_options:
+        - --sv
+        - -Wall
+        - -Wno-fatal
+        - -Wno-TIMESCALEMOD
+
+  # fusesoc run --no-export --target=gate sharc:mem_ip:sram1024x8
+  gate:
+    description: Elaborate the wrapper against the vendor timing model (Icarus).
+    filesets: [gate_model, wrapper]
+    toplevel: sram1024x8_wrapper
+    flow: sim
+    flow_options:
+      tool: icarus
+      iverilog_options:
+        - -g2012

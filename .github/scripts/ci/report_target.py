@@ -32,6 +32,31 @@ _COVERAGE_SUMMARY_RE = re.compile(
 COVERAGE_CATEGORIES = ["line", "toggle", "branch", "expr", "fsm_state", "fsm_arc"]
 COVERAGE_SCOPES = ["full", "line", "none"]
 
+# Every test record carries exactly one of these. "skipped" is a distinct
+# outcome, not a flavour of "failed": cocotb emits <skipped/> both for
+# @cocotb.test(skip=...) and for a test excluded by a filter (e.g. the
+# FW_TEST legs of hw/tb/top/test_soc.py, where two of the three tests are
+# excluded by design), so folding those into tests_failed would report a
+# healthy run as mostly-failing. A <failure> is never counted as anything
+# but a failure.
+PASSED, FAILED, SKIPPED = "passed", "failed", "skipped"
+
+# Group a target belongs to in the aggregated CSV/summary, in report order.
+# Kept here (rather than in aggregate_metrics.py) so run_target.py can
+# validate --group against it at submission time.
+GROUPS = ["lint", "directed_tb", "pyuvm"]
+
+
+def _test_record(name, status, classname=None, sim_time_ns=None, wall_time_s=None, error_msg=None):
+    return {
+        "name": name,
+        "classname": classname,
+        "status": status,
+        "sim_time_ns": sim_time_ns,
+        "wall_time_s": wall_time_s,
+        "error_msg": error_msg,
+    }
+
 
 def parse_cocotb_results(results_xml: Path):
     """Three states, not two: a cocotb <skipped/> testcase neither passed nor
@@ -48,6 +73,14 @@ def parse_cocotb_results(results_xml: Path):
     for testcase in root.iter("testcase"):
         failure = testcase.find("failure")
         skipped = testcase.find("skipped")
+        # A testcase should never carry both, but if it somehow does, the
+        # failure wins - a reported failure is never downgraded to a skip.
+        if failure is not None:
+            status, error_msg = FAILED, failure.get("error_msg")
+        elif skipped is not None:
+            status, error_msg = SKIPPED, None
+        else:
+            status, error_msg = PASSED, None
         tests.append(
             {
                 "name": testcase.get("name"),
@@ -145,7 +178,8 @@ def apply_coverage_scope(full_breakdown: dict | None, coverage_scope: str) -> di
 
 
 def write_metrics(
-    target: str, kind: str, tests: list, coverage_dat: Path | None, coverage_scope: str, out_dir: Path
+    target: str, kind: str, tests: list, coverage_dat: Path | None, coverage_scope: str, out_dir: Path,
+    group: str = "directed_tb", fail_ok: bool = False,
 ) -> int:
     """Write metrics-<target>.json and return the process exit code to use
     (0 unless a test actually failed). Shared by report_target's own CLI
@@ -168,8 +202,11 @@ def write_metrics(
 
     metrics = {
         "target": target,
+        "group": group,
         "kind": kind,
+        "fail_ok": fail_ok,
         "tests_total": tests_total,
+        "tests_run": tests_run,
         "tests_passed": tests_passed,
         "tests_failed": tests_failed,
         "tests_skipped": tests_skipped,
@@ -189,7 +226,12 @@ def write_metrics(
     skip_summary = f" ({tests_skipped} skipped)" if tests_skipped else ""
     print(f"Wrote {out_file}: {tests_passed}/{tests_run} passed{skip_summary}{cov_summary}")
 
-    return 1 if tests_failed else 0
+    if tests_failed:
+        return 1
+    if not tests_run:
+        print(f"error: {target} ran no tests at all ({tests_total} skipped)", file=sys.stderr)
+        return 1
+    return 0
 
 
 def main():
@@ -205,6 +247,11 @@ def main():
     ap.add_argument("--coverage-scope", default="full", choices=COVERAGE_SCOPES,
                      help="full = report every category, line = only line (rest N/A), "
                           "none = no coverage at all (all categories N/A)")
+    ap.add_argument("--group", default="directed_tb", choices=GROUPS,
+                     help="Reporting group this target belongs to in the aggregated CSV/summary")
+    ap.add_argument("--fail-ok", action="store_true",
+                     help="Target's failures don't block CI - recorded in the metrics so the "
+                          "summary can show them as known/non-blocking")
     args = ap.parse_args()
 
     if args.kind == "cocotb":
@@ -239,7 +286,10 @@ def main():
             ap.error("--kind exit-code requires --exit-code")
         tests = parse_exit_code(args.exit_code)
 
-    return write_metrics(args.target, args.kind, tests, args.coverage_dat, args.coverage_scope, args.out_dir)
+    return write_metrics(
+        args.target, args.kind, tests, args.coverage_dat, args.coverage_scope, args.out_dir,
+        group=args.group, fail_ok=args.fail_ok,
+    )
 
 
 if __name__ == "__main__":

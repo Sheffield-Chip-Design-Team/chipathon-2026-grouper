@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "soc.h"
+#include "config.h"
 
 // Cycle counting and delays.
 //

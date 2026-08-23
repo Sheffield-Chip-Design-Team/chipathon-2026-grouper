@@ -94,11 +94,11 @@ firmware report as skipped, which is expected and is not a failure.
 Each block has its own cocotb suite, independent of the SoC:
 
 ```bash
-fusesoc run --no-export sharc:comms_ip:ahb_uart_directed        # UART, directed
-fusesoc run --no-export sharc:comms_ip:ahb_uart_pyuvm           # UART, pyuvm
-fusesoc run --no-export sharc:comms_ip:ahb_gpio_ctrl_directed   # GPIO
-fusesoc run --no-export sharc:comms_ip:ahb_qspi_directed        # QSPI
-fusesoc run --no-export sharc:comms_ip:ahb_spi_s_directed       # SPI slave
+fusesoc run ahb_uart_directed        # UART, directed
+fusesoc run ahb_uart_pyuvm           # UART, pyuvm
+fusesoc run ahb_gpio_ctrl_directed   # GPIO, directed
+fusesoc run ahb_qspi_directed        # QSPI, directed
+fusesoc run ahb_spi_s_directed       # SPI slave
 ```
 
 These are exactly what CI runs — see `.github/sim-ci-targets.yaml` for the
