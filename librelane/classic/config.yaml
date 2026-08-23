@@ -118,7 +118,7 @@ SYNTH_HIERARCHY_MODE: deferred_flatten
 # check recommended in the MACROS block below only works against a run made
 # while this was still true. Confirm the macro instance paths from an older run
 # rather than re-deriving them after this change.
-SYNTH_AUTONAME: false
+SYNTH_AUTONAME: true
 
 SYNTH_STRATEGY: "AREA 0"
 SYNTH_SIZING: true
@@ -316,6 +316,25 @@ FP_MACRO_VERTICAL_HALO: 10
 # puts bidir_in on north and measured clean at route DRC 0 -- but that was with
 # its own port naming, so if north-edge shorts reappear, this is the known
 # mechanism and the fix is to move the group south.
+#
+# THE .cfg FILE MUST CARRY NO COMMENTS. Odb.CustomIOPlacement has no comment
+# syntax: '#' introduces a direction marker (#N/#E/#S/#W) and nothing else, so
+# a prose line reduces to the token '#' and the step dies with
+#   identifier/regex '#' requires a direction to be set first
+# (run RUN_2026-08-23_05-01-39, stage 24). That is why the explanation lives
+# here in the YAML instead of next to the patterns.
+#
+# Edge assignment in pin_order_row4.cfg:
+#   N  clk, rst_n, *_bidir_in          E  *_bidir_out, *_bidir_oe
+#   S  uart_tx, *_bidir_ie, *_bidir_cs W  uart_rx, *_bidir_sl/_pu/_pd
+#
+# The PATTERNS are this repo's, not the landscape branch's. chip_core's
+# pad-facing ports are flat scalars -- one net per pad line, named
+# <function>_<pad kind>_<signal> -- so `.*_bidir_in` matches `gpio_0_bidir_in`.
+# Bussed patterns like `bidir_in\[\d+\]` match nothing here and would silently
+# leave every group unplaced. uart_rx/uart_tx are plain signals rather than pad
+# interfaces (chip_top maps them onto pads), so they sit with the inputs and
+# outputs respectively.
 IO_PIN_ORDER_CFG: dir::pin_order_row4.cfg
 
 #---------------------------------------------------------------------------
