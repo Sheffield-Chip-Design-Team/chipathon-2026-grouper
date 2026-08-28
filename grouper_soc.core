@@ -83,8 +83,8 @@ filesets:
 
   sw:
     files:
-      - sw/code.vmem:                                     {file_type: systemVerilogSource, is_include_file: true}
-      - sw/code.hex:                                      {file_type: systemVerilogSource, is_include_file: true}
+      - sw/boot/code.vmem:                                     {file_type: systemVerilogSource, is_include_file: true}
+      - sw/boot/code.hex:                                      {file_type: systemVerilogSource, is_include_file: true}
 
 targets:
   default: &rtl
