@@ -21,6 +21,19 @@ parameters:
       testbench decodes them into cpu_trace.dis.
       Consumed with `ifdef, so only list it in targets that want it on.
     default: false
+  MACRO_RAM:
+    datatype: bool
+    paramtype: vlogdefine
+    description: >
+      Build ahb_ram's 4 KiB of storage from four hardened
+      gf180mcu_ocd_ip_sram__sram1024x8m8wm1 macros (via ram_ss) instead of a
+      behavioural array. This is what the chip actually contains, and it
+      changes the bus timing: a read presented while a write is still using the
+      single SRAM port costs one wait state.
+      Needs the ocd:mem_ip:gf180_mcu_sram1024x8 core for the macro RTL and its
+      simulation model - the define alone leaves ram_ss unresolved.
+      Consumed with `ifdef, so only list it in targets that want it on.
+    default: false
   ROM_INIT_CONST:
     datatype: bool
     paramtype: vlogdefine
@@ -43,6 +56,8 @@ filesets:
       - sharc:comms_ip:ahb_uart:0.0.1
       - sharc:comms_ip:ahb_spi_s:0.0.1
       - sharc:comms_ip:ahb_gpio_ctrl:0.0.1
+      - sharc:comms_ip:ahb_qspi:0.0.1
+      - ocd:mem_ip:gf180_mcu_sram1024x8:1.0.0
 
     files:
       - hw/rtl/verilator_waivers.vlt:                     {file_type: vlt}
@@ -50,20 +65,26 @@ filesets:
       - hw/rtl/interconnect/ahb_debug.sv:                 {file_type: systemVerilogSource}
       - hw/rtl/interconnect/ahb_conn_buff.sv:             {file_type: systemVerilogSource}
       - hw/rtl/interconnect/ahb_stub_slave.sv:            {file_type: systemVerilogSource}
-      - hw/rtl/ahb_interconnect_ss.sv:                    {file_type: systemVerilogSource}
+      - hw/rtl/interconnect_ss.sv:                        {file_type: systemVerilogSource}
 
-      - hw/rtl/memory/ahb_rom.sv:                         {file_type: systemVerilogSource}
-      - hw/rtl/memory/ahb_ram.sv:                         {file_type: systemVerilogSource}
+      - hw/rtl/cpu_ss.sv:                                 {file_type: systemVerilogSource}
+      - hw/rtl/rom_ss.sv:                                 {file_type: systemVerilogSource}
+      - hw/rtl/ram_ss.sv:                                 {file_type: systemVerilogSource}
 
       - hw/rtl/io_ss.sv:                                  {file_type: systemVerilogSource}
-      - hw/rtl/cpu_ss.sv:                                 {file_type: systemVerilogSource}
       - hw/rtl/periph_ss.sv:                              {file_type: systemVerilogSource}
       - hw/rtl/digital_ss.sv:                             {file_type: systemVerilogSource}
       - hw/rtl/grouper_soc_top.sv:                        {file_type: systemVerilogSource}
+  
+  ram_macro:
+    # Pair with MACRO_RAM=true
+    depend:
+      - ocd:mem_ip:gf180_mcu_sram1024x8:1.0.0
+
   sw:
     files:
-      - sw/code.vmem:                                     {file_type: systemVerilogSource, is_include_file: true}
-      - sw/code.hex:                                      {file_type: systemVerilogSource, is_include_file: true}
+      - sw/boot/code.vmem:                                     {file_type: systemVerilogSource, is_include_file: true}
+      - sw/boot/code.hex:                                      {file_type: systemVerilogSource, is_include_file: true}
 
 targets:
   default: &rtl
@@ -71,7 +92,7 @@ targets:
     filesets: [rtl, sw]
     toplevel: grouper_soc_top
 
-  lint:
+  lint: &lint
     <<: *rtl
     description: Verilator lint-only check of the whole SoC (no simulation)
     flow: sim
@@ -83,3 +104,10 @@ targets:
         - -Wall
         - -Wno-fatal
         - -Wno-TIMESCALEMOD
+
+  lint_macro_ram:
+    <<: *lint
+    description: As lint, with ahb_ram built from the SRAM macros.
+    filesets: [rtl, sw, ram_macro]
+    parameters:
+      - MACRO_RAM=true

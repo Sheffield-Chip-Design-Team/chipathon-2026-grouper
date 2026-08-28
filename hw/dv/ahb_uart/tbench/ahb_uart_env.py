@@ -1,12 +1,19 @@
 from pyuvm import ConfigDB, uvm_env
 
+# Auto-prediction is read out of *this* module's namespace, not
+# s24_uvm_reg_includes' - s21 does `from ... import enable_auto_predict`, which
+# binds the value (False) at import time, so patching s24 has no effect.
+import pyuvm.s21_uvm_reg_map as uvm_reg_map_module
+
 from hw.dv.uvc.ahb3lite import AHB3LiteAgent
 from hw.dv.uvc.uart import UartAgent, UartConfig
 
 from ..uart_clk_math import pick_random_baud_rate
-from ..uart_reg_model import Ahb3LiteRegAdapter, UartRegBlock
+from ..reg_model.uart_reg_model import Ahb3LiteRegAdapter, UartRegBlock
+from ..reg_model.uart_reg_predictor import UartRegPredictor
+from ..scoreboard.ahb_uart_scbd import UartAhbScoreboard
 from .ahb_config import AhbConfig
-
+from ..sequencer.ahb_uart_vseqr import AHBUartVirtualSequencer
 
 class UartAhbEnv(uvm_env):
     def __init__(self, name, parent, randomize_baud: bool = False):
@@ -21,6 +28,14 @@ class UartAhbEnv(uvm_env):
         self.uart_rx_agent = UartAgent("uart_rx_agent", self, is_active=True)
         # Passive agent to monitor the UART tx pin.
         self.uart_tx_agent = UartAgent("uart_tx_agent", self, is_active=False)
+
+        self.vseq = AHBUartVirtualSequencer("vsqr", self, ahb_agent=self.ahb_agent, uart_agent=self.uart_rx_agent)
+
+        # Passive: predicts UART wire traffic from monitored AHB transactions
+        # and vice-versa. See ahb_uart_scbd.py for the split of
+        # responsibilities with UartRegPredictor below.
+        self.scbd = UartAhbScoreboard("scbd", self)
+
 
         ahb_cfg = AhbConfig()
         # Computed once and reused across all three UartConfig registrations
@@ -71,10 +86,15 @@ class UartAhbEnv(uvm_env):
         # __init__, so it must be called explicitly here.
         self.reg_model = UartRegBlock("reg_model")
         self.reg_model.build()
+        # configure() records each field's reset value but does not install it
+        # - the mirrors come up at 0 until reset() is called. Do it here so the
+        # model matches the DUT out of reset even if the first access is a read.
+        self.reg_model.reset()
 
     def connect_phase(self):
         ConfigDB().set(None, "*", "UART_AHB_SEQR", self.ahb_agent.sequencer)
-        ConfigDB().set(None, "*", "UART_SEQR", self.uart_rx_agent.sequencer)
+        ConfigDB().set(None, "*", "UART_SEQR",     self.uart_rx_agent.sequencer)
+        ConfigDB().set(None, "*", "AHB_UART_VSEQR", self.vseq)
 
         # The register model's map needs the adapter (translates
         # uvm_reg_bus_op <-> AHB3LiteSeqItem) and the real sequencer wired up
@@ -83,6 +103,23 @@ class UartAhbEnv(uvm_env):
         reg_map.set_adapter(Ahb3LiteRegAdapter("ahb3lite_reg_adapter"))
         reg_map.set_sequencer(self.ahb_agent.sequencer)
         ConfigDB().set(None, "*", "UART_REG_MODEL", self.reg_model)
+
+        # Auto-prediction: uvm_reg_map calls predictor.predict(bus_op, check)
+        # at the end of every frontdoor access, which is both what keeps the
+        # mirrors current and the only place pyuvm ever consults the `check`
+        # argument - so check_t.CHECK on a read means whatever
+        # UartRegPredictor._check_read does, and nothing without it.
+        self.predictor = UartRegPredictor("uart_reg_predictor", reg_map, logger=self.scbd.logger)
+        reg_map.set_predictor(self.predictor)
+        uvm_reg_map_module.enable_auto_predict = True
+
+        # The scoreboard owns the pass/fail verdict for both mechanisms: the
+        # predictor is a uvm_object, outside the component hierarchy, so it has
+        # no phase of its own to fail in.
+        self.scbd.predictor = self.predictor
+        self.ahb_agent.monitor.ap.connect(self.scbd.ahb_fifo.analysis_export)
+        self.uart_tx_agent.monitor.ap.connect(self.scbd.uart_tx_fifo.analysis_export)
+        self.uart_rx_agent.monitor.ap.connect(self.scbd.uart_rx_fifo.analysis_export)
 
         # The passive uart_tx_agent's monitor is the only witness for "did
         # the DUT actually transmit what was written to TXDATA" - nothing

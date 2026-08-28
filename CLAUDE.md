@@ -51,7 +51,7 @@ fusesoc run --no-export --target=tb_top sharc:soc_ip:grouper_soc_tb
 fusesoc run --no-export sharc:soc_ip:grouper_soc_directed
 
 # pick a firmware top level from sw/tests (build_fw.sh --list shows them)
-FW_TEST=gpio fusesoc run --no-export sharc:soc_ip:grouper_soc_directed
+FW_TEST=gpio_regs fusesoc run --no-export sharc:soc_ip:grouper_soc_directed
 ```
 
 `grouper_soc` is **RTL-only** (`default`, `lint`). The testbenches are separate cores: `sharc:soc_ip:grouper_soc_tb` (`hw/tb/top/grouper_soc_tb.core` — `tb_top`, `tb_top_debug`, `tb_top_trace`) and `sharc:soc_ip:grouper_soc_directed` (`hw/tb/top/grouper_soc_directed.core` — `default`, `debug`, `trace`).
@@ -70,7 +70,7 @@ fusesoc run ahb_qspi_directed
 fusesoc run ahb_spi_s_directed
 ```
 
-`.github/sim-ci-targets.yaml` is the authoritative matrix — it lists every core/target CI runs and which legs are `fail_ok: true` (currently `ahb_uart_mdv`, `ahb_qspi_directed`, `ahb_spi_s_directed`, `sw_stdlib_str`). Add a new block's legs there.
+`.github/sim-ci-targets.yaml` is the authoritative matrix — it lists every core/target CI runs and which legs are `fail_ok: true` (currently `ahb_uart_mdv` and `ahb_spi_s_directed`). Add a new block's legs there.
 
 `hw/dv/` holds the pyuvm layer: reusable UVCs (`hw/dv/uvc/{ahb3lite,uart,gpio}`) and the `hw/dv/ahb_uart/` suite. `hw/tb/` holds the lighter directed cocotb tests plus shared helpers in `hw/tb/tb_utils/`.
 
@@ -79,6 +79,34 @@ fusesoc run ahb_spi_s_directed
 Firmware images consumed by the ROM (`hw/rtl/memory/ahb_rom.sv`, default `code.hex`/`code.vmem`, overridable via `` `PROG_FILE_HEX``/`` `PROG_FILE_VMEM` `` defines) live in `sw/`. `sw/scripts/build_fw.sh` rebuilds them; `sw/scripts/build_rom_boot.sh` builds the separate 64-byte dry-run boot ROM in `sw/dry_run/`.
 
 Anything at the top level runs `build_fw.sh` as a pre-build hook, so it needs a bare-metal RISC-V GCC on `PATH` supporting `-march=rv32emc -mabi=ilp32e`. Default prefix `riscv64-unknown-elf-`, override with `CROSS`. Lint and block-level targets need no toolchain.
+
+#### The 4 KiB RAM budget for `sw/tests`
+
+The CI software legs run the `default` target, which links a **RAM-resident**
+image (`sw/boot/ram.ld`): code, rodata, data, bss *and* the stack share one
+4 KiB region. That is the binding constraint on anything in `sw/tests`, and it
+is much tighter than it looks, because the fixed cost is most of it:
+
+| | bytes |
+|---|---|
+| library + startup + `g_test_*` harness (mostly the `printf` formatter, ~1.2 KiB) | ~2330 |
+| `.irq` — `irq_regs` (48) + IRQ stack (384) | 432 |
+| main stack — measured worst case is ~250 (`g_check_eq_str` → `printf` → `g_vfprintf` → `emit_num`) | ≥320 |
+| **left for the test itself** | **~1000** |
+
+So a test file gets roughly **1 KiB** of its own code and rodata. Each
+`G_CHECK*` costs ~75 bytes — the call site plus the stringified expression in
+rodata — so ~13 checks is a full image. When one stops fitting, the linker
+says `region 'RAM' overflowed by N bytes`; split it into two more specific
+tests and give each its own CI leg rather than trimming checks.
+
+To check a test without running a simulation:
+
+```bash
+FW_TEST=<name> ./sw/scripts/build_fw.sh --link ram --baud 625000 --no-disasm
+grep -E '_eirq|_estack' sw/build/firmware.map     # stack = _estack - _eirq
+```
+
 
 ### Physical design
 

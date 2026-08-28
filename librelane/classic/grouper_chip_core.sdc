@@ -1,30 +1,20 @@
+# Constraints for the LibreLane dry run (dry_run_config.yaml).
+#
+# The top level is `chip_core` (hw/pd/grouper_soc_chip_core.sv), which is the
+# core *inside* the padring - its ports are the SoC-side signals (clk, rst_n,
+# input_in/pu/pd, bidir_in/out/oe/cs/sl/ie/pu/pd), not the *_PAD ports of
+# chip_top. grouper_chip_core.sdc constrains the chip_top names and does not
+# match this design; this file is the chip_core equivalent.
+
 current_design $::env(DESIGN_NAME)
 set_units -time ns
 
-set clock_port __VIRTUAL_CLK__
-if { [info exists ::env(CLOCK_PORT)] } {
-    set port_count [llength $::env(CLOCK_PORT)]
-
-    if { $port_count == "0" } {
-        puts "\[WARNING] No CLOCK_PORT found. A dummy clock will be used."
-    } elseif { $port_count != "1" } {
-        puts "\[WARNING] Multi-clock files are not currently supported by the base SDC file. Only the first clock will be constrained."
-    }
-
-    if { $port_count > "0" } {
-        set ::clock_port [lindex $::env(CLOCK_PORT) 0]
-    }
-}
-
-if { $::env(CLOCK_PORT) == $::env(CLOCK_NET) } {
-    set port_args [get_ports $clock_port]
-} else {
-    # This should actually use CLOCK_PIN?
-    set port_args [get_pins [lindex $::env(CLOCK_NET) 0]]
-}
+# clk is a real port on chip_core - no I/O pad in this flow, so no CLOCK_NET
+# indirection (the config sets none, and dereferencing it would throw).
+set clock_port [lindex $::env(CLOCK_PORT) 0]
 
 puts "\[INFO] Using clock $clock_port…"
-create_clock {*}$port_args -name $clock_port -period $::env(CLOCK_PERIOD)
+create_clock [get_ports $clock_port] -name $clock_port -period $::env(CLOCK_PERIOD)
 
 set input_delay_value [expr $::env(CLOCK_PERIOD) * $::env(IO_DELAY_CONSTRAINT) / 100]
 set output_delay_value [expr $::env(CLOCK_PERIOD) * $::env(IO_DELAY_CONSTRAINT) / 100]
@@ -41,23 +31,38 @@ if { [info exists ::env(MAX_CAPACITANCE_CONSTRAINT)] } {
 
 set clocks [get_clocks $clock_port]
 
-# Bidirectional pads
-set clk_core_inout_ports [get_ports { 
-    bidir_PAD[*]
-}] 
+# Inputs: async reset, uart_rx, and the pad-side input values coming back from
+# the padring. gpio_*_bidir_in is an input to chip_core even though the pad is
+# bidirectional.
+#
+# chip_core's pad-facing ports are flat scalars named
+# <function>_<pad kind>_<signal> - `gpio_0_bidir_in` - so these are name globs,
+# not bus selects, and the leading `*` is what catches every function prefix.
+# `bidir_in[*]` would match nothing and STA would report "[STA-0366] port
+# 'bidir_in[*]' not found", leaving the ports with no input delay at all.
+set core_input_ports [get_ports {
+    rst_n
+    uart_rx
+    *_bidir_in
+}]
 
-set_input_delay -min 0 -clock $clocks $clk_core_inout_ports
-set_input_delay -max $input_delay_value -clock $clocks $clk_core_inout_ports
-set_output_delay $output_delay_value -clock $clocks $clk_core_inout_ports
+set_input_delay -min 0                   -clock $clocks $core_input_ports
+set_input_delay -max $input_delay_value  -clock $clocks $core_input_ports
 
-# Input-only pads
-set clk_core_input_ports [get_ports { 
-    rst_n_PAD
-    input_PAD[*]
-}] 
+# Outputs: everything chip_core drives towards the padring - uart_tx, plus each
+# GPIO pad's value and its six control lines.
+set core_output_ports [get_ports {
+    uart_tx
+    *_bidir_out
+    *_bidir_oe
+    *_bidir_cs
+    *_bidir_sl
+    *_bidir_ie
+    *_bidir_pu
+    *_bidir_pd
+}]
 
-set_input_delay -min 0 -clock $clocks $clk_core_input_ports
-set_input_delay -max $input_delay_value -clock $clocks $clk_core_input_ports
+set_output_delay $output_delay_value -clock $clocks $core_output_ports
 
 # Output load
 set cap_load [expr $::env(OUTPUT_CAP_LOAD) / 1000.0]
@@ -79,4 +84,3 @@ if { [info exists ::env(OPENLANE_SDC_IDEAL_CLOCKS)] && $::env(OPENLANE_SDC_IDEAL
 } else {
     set_propagated_clock [all_clocks]
 }
-

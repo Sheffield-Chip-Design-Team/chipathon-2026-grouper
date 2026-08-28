@@ -153,6 +153,46 @@ if { $::env(PDN_MULTILAYER) == 1 } {
     # harmless -- sram_grid bridges the macro band on Metal4.
     #
     # Cost: PDN_VWIDTH every PDN_VPITCH of Metal2, ~7% of the layer.
+    #
+    # NOTE: deliberately NO {*}$arg_list here, i.e. no -extend_to_boundary --
+    # same reasoning as the Metal3 rungs below, but this one is the harder
+    # failure, so it is worth spelling out.
+    #
+    # THE NORTH/SOUTH I/O PINS ARE ON METAL2. Odb.CustomIOPlacement puts every
+    # N and S pin on the vertical routing layer, which in this stack is Metal2:
+    # a 1.12 x 1.12um square centred 0.28um in from the die edge (DEF: "+ LAYER
+    # Metal2 ( -560 -560 ) ( 560 560 ) + PLACED ( x 560 ) N", 2000 DBU/um).
+    # core_lly is 15.68, so those pins sit 15.4um OUTSIDE the core, in a band no
+    # stdcell_grid stripe has any reason to enter.
+    #
+    # With -extend_to_boundary set, these Metal2 straps ran the full die height
+    # (y 0..1100) and swept straight through that band. Any pin whose x fell
+    # within PDN_VWIDTH/2 = 2.52um of a strap centre was then physically
+    # overlapping a power strap -- a dead short from a functional output to VDD.
+    # Job 4850 lost LVS to exactly that, 3 pins on the south edge:
+    #
+    #   gpio_15_bidir_ie  x= 381.08  VDD strap 381.08..386.12  (pin on the edge)
+    #   gpio_10_bidir_cs  x= 923.16  VDD strap 922.04..927.08
+    #   gpio_6_bidir_cs   x=1465.24  VDD strap 1463.00..1468.04
+    #
+    # netgen reported them as "(no pin, node is VDD)" against the extracted
+    # layout, net count 18083 vs 18086, "Top level cell failed pin matching",
+    # 7 LVS errors. NOTHING EARLIER IN THE FLOW CATCHES THIS: the pin shape is a
+    # fixed terminal, not something detailed routing places, so DRT routes
+    # around the strap (gpio_6_bidir_cs got a Metal3 jog off the pin to escape)
+    # and reports route DRC 0. Magic is the first step that sees the geometry.
+    #
+    # Do not "fix" this by nudging pins instead. IO_PIN_ORDER_CFG assigns edges
+    # and order, not coordinates -- the placer distributes within an edge, so
+    # which pins collide is a function of pin COUNT, and any port-list change
+    # reshuffles the whole edge onto a fresh set of straps.
+    #
+    # Metal2 loses nothing by stopping at the core: it is a bridge from the
+    # Metal1 rails up to the Metal3 rungs (see the note above), it carries no
+    # current out of the core, and it is not a pin layer -- PDN_ENABLE_PINS
+    # hands the parent "$PDN_VERTICAL_LAYER $PDN_HORIZONTAL_LAYER", i.e. Metal4
+    # and Metal5, and those two keep -extend_to_boundary. This also gives DRT
+    # the whole 15.68um I/O band on Metal2 back for pin escapes.
     add_pdn_stripe \
         -grid stdcell_grid \
         -layer $pdn_intermediate_layer \
@@ -160,8 +200,7 @@ if { $::env(PDN_MULTILAYER) == 1 } {
         -pitch $::env(PDN_VPITCH) \
         -offset $::env(PDN_VOFFSET) \
         -spacing $::env(PDN_VSPACING) \
-        -starts_with POWER \
-        {*}$arg_list
+        -starts_with POWER
 
     # Sparse Metal3 rungs. Real perpendicular crossings with the Metal2 and
     # Metal4 vertical stripes -- see the "why the Metal3 rungs exist" note
@@ -174,18 +213,55 @@ if { $::env(PDN_MULTILAYER) == 1 } {
     # general current, so it should stay a small fraction of Metal3's
     # routing resource. Trimmed where the SRAMs obstruct Metal3, same as
     # the old full mesh.
+    #
+    # These do NOT reuse PDN_HWIDTH / PDN_HOFFSET: those are whole numbers of
+    # 0.90um Metal5 tracks, and Metal3 is on the 0.56um grid like Metal2 and
+    # Metal4. Using them here would put every Metal3 rung edge off-grid, which
+    # is the exact defect that produced the Metal2 spacing violations at the
+    # old 180um pitch (see the Straps note in config.yaml). All four numbers
+    # below are 0.56um multiples, and the offset puts the rung edges on the same
+    # 0.14 residue the vertical straps use:
+    #   core_lly + 14.98 - 5.04/2 = 15.68 + 12.46 = 28.14 ; 28.14 % 0.56 = 0.14
+    #
+    # This 14.98 is a Y offset measured from core_lly and is NOT coupled to
+    # PDN_VOFFSET, which is an X offset for the vertical straps and is now 16.24.
+    # They shared a value historically; do not "resync" them. core_lly is 15.68
+    # on both the portrait and landscape floorplans, so this number survives the
+    # reshape untouched.
     set pdn_rung_layer "Metal3"
-    set pdn_rung_pitch 300
-    set pdn_rung_spacing [expr {($pdn_rung_pitch - 2 * $::env(PDN_HWIDTH)) / 2}]
+    set pdn_rung_width 5.04                  ;#   9 x 0.56, matches PDN_VWIDTH
+    set pdn_rung_pitch 299.04                ;# 534 x 0.56
+    set pdn_rung_offset 14.98                ;# stripe centre, as PDN_VOFFSET
+    set pdn_rung_spacing [expr {$pdn_rung_pitch / 2 - $pdn_rung_width}] ;# 258 x 0.56
+    #
+    # NOTE: deliberately NO {*}$arg_list here, i.e. no -extend_to_boundary.
+    #
+    # The grid-alignment reasoning above constrains the rungs' Y edges, which is
+    # the dimension a horizontal stripe's own spacing depends on. Nothing
+    # constrains their X endpoints -- those come from -extend_to_boundary and
+    # from wherever the SRAM Metal3 obstruction happens to trim them. With
+    # -extend_to_boundary set, the trimmed rungs left orphan fragments running
+    # from x=1013.60 out to the die edge at x=1100.00, past core_urx (1093.12):
+    #
+    #   NEW Metal3 10080 + SHAPE STRIPE ( 2027200 1855560 ) ( 2200000 1855560 )
+    #
+    # 1013.60 is 1810 x 0.56 exactly -- residue 0.00, the phase constraint 1 in
+    # config.yaml calls out as illegal ("both neighbouring tracks would be
+    # 0.14um away"). Signal nets on the track immediately west sat 0.14um from
+    # the via enclosures stacking down off those ends, giving 17 permanently
+    # unroutable Metal2 spacing violations and the detailed-routing plateau.
+    #
+    # These rungs exist only to give Metal2-Metal4 a real perpendicular
+    # crossing inside the core (see the note above); they carry no current and
+    # gain nothing from reaching the die boundary. See TRIAL_NOTES.md Session 5.
     add_pdn_stripe \
         -grid stdcell_grid \
         -layer $pdn_rung_layer \
-        -width $::env(PDN_HWIDTH) \
+        -width $pdn_rung_width \
         -pitch $pdn_rung_pitch \
-        -offset $::env(PDN_HOFFSET) \
+        -offset $pdn_rung_offset \
         -spacing $pdn_rung_spacing \
-        -starts_with POWER \
-        {*}$arg_list
+        -starts_with POWER
 
     # Metal4-Metal5: adjacent, single Via4. The top of the general mesh.
     add_pdn_connect \
@@ -287,8 +363,8 @@ if { $::env(PDN_CORE_RING) == 1 } {
 # ---------------------------------------------------------------------------
 # SRAM macro grid
 #
-# Four instances of gf180mcu_ocd_ip_sram__sram1024x8m8wm1, in a row along the
-# bottom of the die, orientation S.
+# Four instances of gf180mcu_ocd_ip_sram__sram1024x8m8wm1, in a 2x2 block in
+# the bottom-right of the die, orientation S.
 #
 # Matched by -cells rather than -instances: Yosys escapes the generate-block
 # indices, so the DB names contain literal backslashes
@@ -308,11 +384,20 @@ if { $::env(PDN_CORE_RING) == 1 } {
 # Decoupled so PDN_HORIZONTAL_LAYER can be Metal5 without breaking this tap.
 #
 # WARNING: vias only form where a Metal4 stripe physically crosses a Metal3
-# pin tab. The native bottom edge of the LEF (= the placed *top* edge, given
-# orientation S) has a ~36.6um gap in its VSS tabs between x=187 and x=224
-# (macro-relative). Verify PDN_VOFFSET does not park a VSS stripe in that
-# band for any of the four macro origins. Confirm with:
-# check_power_grid -net VSS
+# pin tab, and the tabs are NOT uniformly distributed. The dense, reliable
+# ones are the two vertical bands in the 3um frame at the macro's own x=0..3
+# and x=298.3..301.3, which carry VDD and VSS in alternating y slices for the
+# full height. The top and bottom tab rows are sparse by comparison -- the
+# VSS row in particular has a ~36.6um hole -- so a stripe that crosses the
+# macro interior instead of a frame band can produce zero vias: at the old
+# 180um pitch the right-hand macros had no VSS tap at all.
+#
+# PDN_VPITCH and the macro x-coordinates in config.yaml are chosen together so
+# that a VSS stripe lands on every macro's west band and a VDD stripe on its
+# east band (constraint 3 in that file's Straps section). Re-verify after ANY
+# change to either, with:
+#   check_power_grid -net VDD
+#   check_power_grid -net VSS
 # ---------------------------------------------------------------------------
 define_pdn_grid \
     -macro \

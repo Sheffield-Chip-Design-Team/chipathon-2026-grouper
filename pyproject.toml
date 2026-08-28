@@ -11,7 +11,8 @@ dependencies = [
   "cocotb==2.0.1",
   "pyuvm==4.0.1",
   "edalize==0.6.8",
-  "pyyaml==6.0.3"
+  "pyyaml==6.0.3",
+  "pyserial==3.5" # unused for now
 ]
 
 [tool.setuptools.packages.find]

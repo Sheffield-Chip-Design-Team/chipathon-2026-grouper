@@ -17,3 +17,83 @@ project:
   discord:     "James AK"                   
   description: "RV32EMC CPU SoC with SPI, QPSI UART and 4KiB SRAM." 
   lvs_config:  "librelane/classic/lvs_config.json"
+
+pins: 
+  # ==== Power/Ground pins ================================
+
+  - name: VSS
+    io_type: ground  # the first pin must be a ground connection
+  
+  - name: VDD
+    io_type: power  # subsequent power/ground cells cause a break in the I/O power rails
+
+  # === Clock/reset pins ====================================
+  # Both Schmitt: rst_n comes off a push button, and nothing in the design
+  # clocks on a falling edge, so the hysteresis costs the clock nothing.
+
+  - name: clk
+    io_type: input_schmitt
+
+  - name: rst_n
+    io_type: input_schmitt
+
+  # === UART pins ============================================
+
+  - name: uart_tx
+    io_type: bidirectional # configured as output only
+
+  - name: uart_rx
+    io_type: input_cmos
+
+  # === GPIO pins ==========================================
+  # One chip pin per GPIO. The GPIO controller's per-pad control lines
+  # (oe/cs/sl/ie/pu/pd) drive the pad cell inside the padring and never leave
+  # the die, so they are not pins.
+
+  - name: gpio_0
+    io_type: bidirectional
+
+  - name: gpio_1
+    io_type: bidirectional
+
+  - name: gpio_2
+    io_type: bidirectional
+
+  - name: gpio_3
+    io_type: bidirectional
+
+  - name: gpio_4
+    io_type: bidirectional
+
+  - name: gpio_5
+    io_type: bidirectional
+
+  - name: gpio_6
+    io_type: bidirectional
+
+  - name: gpio_7
+    io_type: bidirectional
+
+  - name: gpio_8
+    io_type: bidirectional
+
+  - name: gpio_9
+    io_type: bidirectional
+
+  - name: gpio_10
+    io_type: bidirectional
+
+  - name: gpio_11
+    io_type: bidirectional
+
+  - name: gpio_12
+    io_type: bidirectional
+
+  - name: gpio_13
+    io_type: bidirectional
+
+  - name: gpio_14
+    io_type: bidirectional
+
+  - name: gpio_15
+    io_type: bidirectional

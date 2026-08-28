@@ -56,7 +56,8 @@ VERILOG_FILES:
 - dir::../../hw/rtl/periph_ss.sv
 - dir::../../hw/rtl/digital_ss.sv
 - dir::../../hw/rtl/grouper_soc_top.sv
-# Padring + core wrapper
+# Padring + core wrapper. chip_top instantiates grouper_soc_chip_core, which
+# has one port per pad line and holds the GPIO pad map.
 - dir::../../hw/pd/grouper_soc_chip_top.sv
 - dir::../../hw/pd/grouper_soc_chip_core.sv
 

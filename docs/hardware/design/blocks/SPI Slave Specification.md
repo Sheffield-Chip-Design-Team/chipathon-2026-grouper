@@ -9,14 +9,14 @@
 
 ## Purpose
 
-SPI slave interface that lets an external SPI master (a host controller — device not named in the source) communicate with the SoC through the AHB-Lite bus, including a dedicated firmware-load path into RAM (`fw_ld_addr`/`fw_ld_wdata`/`fw_ld_we` signals appear in the block diagram description). This block references the APS6404L datasheet the same way SPI Master and QSPI do — the most consistent reading (not explicitly stated in the source, flagged as inferred) is that this block presents an APS6404L-compatible command interface *to* the external host, so a host that already speaks the PSRAM SPI protocol can read/write GrouperSoC's memory without a bespoke protocol.
+SPI slave interface that lets an external SPI master a host controller — device not. This block presents an APS6404L-compatible command interface *to* the external host, so a host that already speaks the PSRAM SPI protocol can read/write GrouperSoC's memory without a bespoke protocol.
 
 ## Protocols / Standards Conformity
 
 | ID | Requirement |
 |---|---|
 | `GRPR-SPIS-001` | AHB-Lite subordinate interface on the CPU side. |
-| `GRPR-SPIS-002` | Custom SPI slave interface on the external side: CPOL/CPHA mode 0/3, MSB-first transfer on MISO. |
+| `GRPR-SPIS-002` | Motorolas SPI slave interface on the external side: CPOL/CPHA mode 0/3, MSB-first transfer on MISO. |
 | `GRPR-SPIS-003` | Command set shall be compatible with the APS6404L datasheet's SPI-mode commands (see Purpose note on the inferred host-facing PSRAM-emulation role). |
 
 ## Key Functionality

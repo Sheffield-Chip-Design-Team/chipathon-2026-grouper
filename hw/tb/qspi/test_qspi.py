@@ -1,47 +1,91 @@
-"""Tests for the arbitrary-command quad QSPI controller.
-
-The controller supports:
-
-- aligned 32-bit AHB accesses;
-- an arbitrary 8-bit opcode;
-- an arbitrary 24-bit address;
-- one-byte quad read or write;
-"""
+"""Directed tests for the reviewed AHB QSPI implementation"""
 
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import FallingEdge, RisingEdge, Timer, ValueChange
+from cocotb.utils import get_sim_time
 
 from hw.tb.tb_utils.ahb_utils import (
+    HSIZE_BYTE,
+    HSIZE_HALF,
     HSIZE_WORD,
     HTRANS_IDLE,
+    HTRANS_NONSEQ,
     ahb_read,
     ahb_write,
 )
 
-# Register offsets
+# Register map
 REG_CTRL = 0x00
-REG_STATUS = 0x04
-REG_OPCODE = 0x08
-REG_ADDRESS = 0x0C
+REG_CMD = 0x04
+REG_STATUS = 0x08
+REG_ADDR = 0x0C
 REG_DATA = 0x10
 
-# CTRL fields
-CTRL_START = 1 << 0
-CTRL_DIR = 1 << 1
-CTRL_TARGET = 1 << 2
+# CTRL
+CTRL_CPHA = 1 << 0
+CTRL_CPOL = 1 << 1
+CTRL_QUAD_MODE = 1 << 2
+CTRL_FLASH_WRITE_EN = 1 << 3
+CTRL_IE_DONE = 1 << 4
+CTRL_IE_ERR = 1 << 5
 CTRL_CLKDIV_SHIFT = 8
 
-# STATUS fields
+# CMD
+CMD_START = 1 << 0
+CMD_DIR = 1 << 1
+CMD_ADDR_EN = 1 << 2
+CMD_DATA_EN = 1 << 3
+CMD_TARGET = 1 << 4
+CMD_DUMMY_SHIFT = 8
+CMD_OPCODE_SHIFT = 16
+
+# STATUS
 STATUS_BUSY = 1 << 0
-STATUS_DONE = 1 << 1
-STATUS_RX_VALID = 1 << 2
+STATUS_INIT_DONE = 1 << 1
+STATUS_DONE = 1 << 2
+STATUS_RX_VALID = 1 << 3
+STATUS_CFG_ERR = 1 << 4
+STATUS_WRITE_BLOCKED = 1 << 5
+STATUS_ADDR_ERR = 1 << 6
 
 HCLK_PERIOD_NS = 10
 
-async def reset_dut(dut):
-    """Reset the controller and initialise all external inputs."""
 
+def make_cmd(
+    opcode,
+    *,
+    start=False,
+    read=False,
+    addr_en=False,
+    data_en=False,
+    target=0,
+    dummy=0,
+):
+    value = (
+        ((opcode & 0xFF) << CMD_OPCODE_SHIFT)
+        | ((dummy & 0xFF) << CMD_DUMMY_SHIFT)
+    )
+
+    if start:
+        value |= CMD_START
+
+    if read:
+        value |= CMD_DIR
+
+    if addr_en:
+        value |= CMD_ADDR_EN
+
+    if data_en:
+        value |= CMD_DATA_EN
+
+    if target:
+        value |= CMD_TARGET
+
+    return value
+
+
+async def reset_dut(dut):
     dut.HRESETn.value = 0
 
     dut.HADDR.value = 0
@@ -66,46 +110,39 @@ async def reset_dut(dut):
     await Timer(1, unit="ps")
 
 
- # TODO these should be moved to ahb_utils.py
-async def write_register(
+async def write_reg(
     dut,
     address,
     value,
+    size=HSIZE_WORD,
     expected_hresp=0,
 ):
-    """Perform one aligned 32-bit AHB write."""
-
     hresp = await ahb_write(
         dut,
         address,
         value,
+        size=size,
     )
 
-    assert hresp == expected_hresp, (
-        f"write 0x{address:02x}: "
-        f"expected HRESP={expected_hresp}, got {hresp}"
-    )
+    assert hresp == expected_hresp
 
     await RisingEdge(dut.HCLK)
     await Timer(1, unit="ps")
 
 
-async def read_register(
+async def read_reg(
     dut,
     address,
+    size=HSIZE_WORD,
     expected_hresp=0,
 ):
-    """Perform one aligned 32-bit AHB read."""
-
     value, hresp = await ahb_read(
         dut,
         address,
+        size=size,
     )
 
-    assert hresp == expected_hresp, (
-        f"read 0x{address:02x}: "
-        f"expected HRESP={expected_hresp}, got {hresp}"
-    )
+    assert hresp == expected_hresp
 
     await RisingEdge(dut.HCLK)
     await Timer(1, unit="ps")
@@ -113,137 +150,236 @@ async def read_register(
     return value
 
 
-async def wait_for_chip_select(
+async def wait_status(
     dut,
-    expected_value,
+    mask,
+    expected,
+    max_reads=300,
 ):
-    """Wait until the two-bit chip-select vector reaches a value."""
+    last = 0
 
-    while int(dut.qspi_ce_n_o.value) != expected_value:
+    for _ in range(max_reads):
+        last = await read_reg(
+            dut,
+            REG_STATUS,
+        )
+
+        if (last & mask) == (expected & mask):
+            return last
+
+    raise AssertionError(
+        f"STATUS timeout: mask=0x{mask:08x} "
+        f"expected=0x{expected:08x} "
+        f"last=0x{last:08x}"
+    )
+
+
+async def wait_ce(dut, value):
+    while int(dut.qspi_ce_n_o.value) != value:
         await ValueChange(dut.qspi_ce_n_o)
 
     await Timer(1, unit="ps")
 
 
-async def wait_for_done(dut):
-    """Poll STATUS until the transaction has completed."""
-
-    for _ in range(100):
-        status = await read_register(
-            dut,
-            REG_STATUS,
-        )
-
-        if status & STATUS_DONE:
-            return status
-
-    raise AssertionError("QSPI transaction did not complete")
-
-
-def nibbles_to_integer(nibbles):
-    """Combine an MS-nibble-first sequence into one integer."""
-
+def groups_to_int(groups, width):
     value = 0
+    mask = (1 << width) - 1
 
-    for nibble in nibbles:
-        value = (value << 4) | nibble
+    for group in groups:
+        value = (
+            (value << width)
+            | (group & mask)
+        )
 
     return value
 
 
-async def capture_quad_write(
+async def capture_tx_groups(
     dut,
-    expected_chip_select,
+    count,
+    *,
+    quad,
+    ce_value,
+    mode3=False,
 ):
-    """Capture the ten nibbles of one quad write transaction."""
+    """Capture one transmitted command/address/data stream"""
 
-    await wait_for_chip_select(
+    await wait_ce(
         dut,
-        expected_chip_select,
+        ce_value,
     )
 
-    assert int(dut.qspi_sck_o.value) == 0
+    groups = []
 
-    nibbles = []
+    for index in range(count):
+        if mode3:
+            await FallingEdge(dut.qspi_sck_o)
+        else:
+            await RisingEdge(dut.qspi_sck_o)
 
-    for _ in range(10):
+        await Timer(1, unit="ps")
+
+        assert int(dut.qspi_ce_n_o.value) == ce_value
+
+        if quad:
+            assert int(dut.qspi_sio_oe.value) == 0b1111
+
+            groups.append(
+                int(dut.qspi_sio_o.value) & 0xF
+            )
+        else:
+            assert int(dut.qspi_sio_oe.value) == 0b0001
+
+            groups.append(
+                int(dut.qspi_sio_o.value) & 0x1
+            )
+
+        if (
+            (not mode3)
+            and (index != (count - 1))
+        ):
+            await FallingEdge(dut.qspi_sck_o)
+
+    return groups
+
+
+async def respond_read(
+    dut,
+    *,
+    opcode_groups,
+    address_groups,
+    dummy_cycles,
+    response,
+    quad,
+    ce_value,
+):
+    """Capture a mode-0 command/address and drive its read response"""
+
+    await wait_ce(
+        dut,
+        ce_value,
+    )
+
+    sent = []
+
+    for _ in range(
+        opcode_groups + address_groups
+    ):
         await RisingEdge(dut.qspi_sck_o)
         await Timer(1, unit="ps")
 
-        assert int(dut.qspi_ce_n_o.value) == expected_chip_select
-        assert int(dut.qspi_sio_oe.value) == 0b1111
+        if quad:
+            assert int(dut.qspi_sio_oe.value) == 0b1111
 
-        nibbles.append(
-            int(dut.qspi_sio_o.value) & 0xF
-        )
+            sent.append(
+                int(dut.qspi_sio_o.value) & 0xF
+            )
+        else:
+            assert int(dut.qspi_sio_oe.value) == 0b0001
+
+            sent.append(
+                int(dut.qspi_sio_o.value) & 0x1
+            )
 
         await FallingEdge(dut.qspi_sck_o)
 
-    await wait_for_chip_select(
+    # Dummy cycles: controller releases the SIO bus
+    for _ in range(dummy_cycles):
+        assert int(dut.qspi_sio_oe.value) == 0
+
+        await RisingEdge(dut.qspi_sck_o)
+        await FallingEdge(dut.qspi_sck_o)
+
+    if quad:
+        response_groups = [
+            (response >> 4) & 0xF,
+            response & 0xF,
+        ]
+    else:
+        response_groups = [
+            (response >> bit) & 1
+            for bit in range(7, -1, -1)
+        ]
+
+    for index, group in enumerate(
+        response_groups
+    ):
+        dut.qspi_sio_i.value = (
+            group
+            if quad
+            else (group << 1)
+        )
+
+        await RisingEdge(dut.qspi_sck_o)
+        await Timer(1, unit="ps")
+
+        assert int(dut.qspi_sio_oe.value) == 0
+
+        if index != (len(response_groups) - 1):
+            await FallingEdge(dut.qspi_sck_o)
+
+    await wait_ce(
         dut,
         0b11,
     )
 
-    return nibbles
+    return sent
 
 
-async def respond_to_quad_read(
+async def write_expect_two_cycle_error(
     dut,
-    response_byte,
-    expected_chip_select,
+    address,
+    data,
+    size=HSIZE_WORD,
 ):
-    """Capture command/address and provide one quad read byte."""
+    """Verify the required AHB-Lite two-cycle ERROR response"""
 
-    await wait_for_chip_select(
-        dut,
-        expected_chip_select,
+    await RisingEdge(dut.HCLK)
+
+    dut.HADDR.value = address
+    dut.HSIZE.value = size
+    dut.HTRANS.value = HTRANS_NONSEQ
+    dut.HWRITE.value = 1
+    dut.HWDATA.value = data
+    dut.HSEL.value = 1
+    dut.HREADYIN.value = 1
+
+    await RisingEdge(dut.HCLK)
+
+    dut.HTRANS.value = HTRANS_IDLE
+    dut.HSEL.value = 0
+    dut.HWRITE.value = 0
+
+    await FallingEdge(dut.HCLK)
+
+    first = (
+        int(dut.HRESP.value),
+        int(dut.HREADYOUT.value),
     )
 
-    transmitted_nibbles = []
+    dut.HREADYIN.value = int(
+        dut.HREADYOUT.value
+    )
 
-    # Capture two opcode nibbles and six address nibbles.
-    for _ in range(8):
-        await RisingEdge(dut.qspi_sck_o)
-        await Timer(1, unit="ps")
+    await RisingEdge(dut.HCLK)
+    await FallingEdge(dut.HCLK)
 
-        assert int(dut.qspi_sio_oe.value) == 0b1111
+    second = (
+        int(dut.HRESP.value),
+        int(dut.HREADYOUT.value),
+    )
 
-        transmitted_nibbles.append(
-            int(dut.qspi_sio_o.value) & 0xF
-        )
+    dut.HREADYIN.value = 1
 
-        await FallingEdge(dut.qspi_sck_o)
-
+    await RisingEdge(dut.HCLK)
     await Timer(1, unit="ps")
 
-    # The controller must release all four lines for read data.
-    assert int(dut.qspi_sio_oe.value) == 0
-
-    high_nibble = (response_byte >> 4) & 0xF
-    low_nibble = response_byte & 0xF
-
-    dut.qspi_sio_i.value = high_nibble
-
-    await RisingEdge(dut.qspi_sck_o)
-    await FallingEdge(dut.qspi_sck_o)
-
-    dut.qspi_sio_i.value = low_nibble
-
-    await RisingEdge(dut.qspi_sck_o)
-    await FallingEdge(dut.qspi_sck_o)
-
-    await wait_for_chip_select(
-        dut,
-        0b11,
-    )
-
-    return transmitted_nibbles
+    assert first == (1, 0)
+    assert second == (1, 1)
 
 
 @cocotb.test()
-async def test_registers(dut):
-    """Verify the small AHB register block."""
-
+async def test_register_map_sizes_and_ahb_error(dut):
     cocotb.start_soon(
         Clock(
             dut.HCLK,
@@ -254,140 +390,339 @@ async def test_registers(dut):
 
     await reset_dut(dut)
 
-    assert await read_register(dut, REG_CTRL) == 0
-    assert await read_register(dut, REG_STATUS) == 0
-    assert await read_register(dut, REG_OPCODE) == 0
-    assert await read_register(dut, REG_ADDRESS) == 0
-    assert await read_register(dut, REG_DATA) == 0
+    assert await read_reg(dut, REG_CTRL) == 0
+    assert await read_reg(dut, REG_CMD) == 0
+    assert await read_reg(dut, REG_STATUS) == 0
+    assert await read_reg(dut, REG_ADDR) == 0
+    assert await read_reg(dut, REG_DATA) == 0
 
-    ctrl_value = (
-        CTRL_DIR
-        | CTRL_TARGET
-        | (3 << CTRL_CLKDIV_SHIFT)
-    )
-
-    await write_register(
+    # Byte write: CTRL byte zero
+    await write_reg(
         dut,
         REG_CTRL,
-        ctrl_value,
+        CTRL_QUAD_MODE
+        | CTRL_IE_DONE
+        | CTRL_IE_ERR,
+        size=HSIZE_BYTE,
     )
 
-    await write_register(
+    # Byte write: CTRL byte one / CLKDIV
+    await write_reg(
         dut,
-        REG_OPCODE,
+        REG_CTRL + 1,
+        3 << 8,
+        size=HSIZE_BYTE,
+    )
+
+    # CMD byte zero
+    await write_reg(
+        dut,
+        REG_CMD,
+        CMD_ADDR_EN | CMD_DATA_EN,
+        size=HSIZE_BYTE,
+    )
+
+    # CMD byte one / DUMMY
+    await write_reg(
+        dut,
+        REG_CMD + 1,
+        4 << 8,
+        size=HSIZE_BYTE,
+    )
+
+    # CMD byte two / OPCODE
+    await write_reg(
+        dut,
+        REG_CMD + 2,
+        0xA6 << 16,
+        size=HSIZE_BYTE,
+    )
+
+    # Halfword write
+    await write_reg(
+        dut,
+        REG_ADDR,
+        0x0000_BEEF,
+        size=HSIZE_HALF,
+    )
+
+    # Address byte two
+    await write_reg(
+        dut,
+        REG_ADDR + 2,
+        0x12 << 16,
+        size=HSIZE_BYTE,
+    )
+
+    # Word write
+    await write_reg(
+        dut,
+        REG_DATA,
         0xA5,
     )
 
-    await write_register(
+    assert await read_reg(
         dut,
-        REG_ADDRESS,
+        REG_CTRL,
+    ) == (
+        CTRL_QUAD_MODE
+        | CTRL_IE_DONE
+        | CTRL_IE_ERR
+        | (3 << CTRL_CLKDIV_SHIFT)
+    )
+
+    assert await read_reg(
+        dut,
+        REG_CMD,
+    ) == (
+        (0xA6 << CMD_OPCODE_SHIFT)
+        | (4 << CMD_DUMMY_SHIFT)
+        | CMD_ADDR_EN
+        | CMD_DATA_EN
+    )
+
+    assert await read_reg(
+        dut,
+        REG_ADDR,
+    ) == 0x12_BEEF
+
+    assert await read_reg(
+        dut,
+        REG_DATA,
+    ) == 0xA5
+
+    # Byte and halfword reads must not error
+    ctrl_byte1 = await read_reg(
+        dut,
+        REG_CTRL + 1,
+        size=HSIZE_BYTE,
+    )
+
+    assert (
+        (ctrl_byte1 >> 8)
+        & 0xFF
+    ) == 3
+
+    addr_half = await read_reg(
+        dut,
+        REG_ADDR,
+        size=HSIZE_HALF,
+    )
+
+    assert (
+        addr_half
+        & 0xFFFF
+    ) == 0xBEEF
+
+    # Invalid register offset
+    await write_expect_two_cycle_error(
+        dut,
+        0x14,
+        0x1234_5678,
+    )
+
+    # Misaligned halfword
+    await write_expect_two_cycle_error(
+        dut,
+        REG_CTRL + 1,
+        0,
+        size=HSIZE_HALF,
+    )
+
+
+@cocotb.test()
+async def test_single_spi_bare_opcode_and_init_done(dut):
+    cocotb.start_soon(
+        Clock(
+            dut.HCLK,
+            HCLK_PERIOD_NS,
+            unit="ns",
+        ).start()
+    )
+
+    await reset_dut(dut)
+
+    await write_reg(
+        dut,
+        REG_CTRL,
+        1 << CTRL_CLKDIV_SHIFT,
+    )
+
+    monitor = cocotb.start_soon(
+        capture_tx_groups(
+            dut,
+            8,
+            quad=False,
+            ce_value=0b10,
+        )
+    )
+
+    await write_reg(
+        dut,
+        REG_CMD,
+        make_cmd(
+            0x35,
+            start=True,
+        ),
+    )
+
+    bits = await monitor
+
+    assert groups_to_int(
+        bits,
+        1,
+    ) == 0x35
+
+    status = await wait_status(
+        dut,
+        STATUS_DONE | STATUS_INIT_DONE,
+        STATUS_DONE | STATUS_INIT_DONE,
+    )
+
+    assert not (
+        status
+        & STATUS_RX_VALID
+    )
+
+    # DONE is W1C. INIT_DONE is read-only
+    await write_reg(
+        dut,
+        REG_STATUS,
+        STATUS_DONE,
+    )
+
+    status = await read_reg(
+        dut,
+        REG_STATUS,
+    )
+
+    assert not (
+        status
+        & STATUS_DONE
+    )
+
+    assert (
+        status
+        & STATUS_INIT_DONE
+    )
+
+
+@cocotb.test()
+async def test_phase_enables(dut):
+    cocotb.start_soon(
+        Clock(
+            dut.HCLK,
+            HCLK_PERIOD_NS,
+            unit="ns",
+        ).start()
+    )
+
+    await reset_dut(dut)
+
+    await write_reg(
+        dut,
+        REG_CTRL,
+        CTRL_QUAD_MODE
+        | (1 << CTRL_CLKDIV_SHIFT),
+    )
+
+    await write_reg(
+        dut,
+        REG_ADDR,
         0x12_3456,
     )
 
-    await write_register(
+    await write_reg(
         dut,
         REG_DATA,
         0xC3,
     )
 
-    # START is not stored.
-    assert await read_register(dut, REG_CTRL) == ctrl_value
-    assert await read_register(dut, REG_OPCODE) == 0xA5
-    assert await read_register(dut, REG_ADDRESS) == 0x12_3456
-    assert await read_register(dut, REG_DATA) == 0xC3
-
-    # First unimplemented register.
-    await write_register(
-        dut,
-        0x14,
-        0xFFFF_FFFF,
-        expected_hresp=1,
-    )
-
-    invalid_read = await read_register(
-        dut,
-        0x14,
-        expected_hresp=1,
-    )
-
-    assert invalid_read == 0
-
-    assert int(dut.qspi_sck_o.value) == 0
-    assert int(dut.qspi_ce_n_o.value) == 0b11
-    assert int(dut.qspi_sio_oe.value) == 0
-    assert int(dut.irq.value) == 0
-
-
-@cocotb.test()
-async def test_quad_write(dut):
-    """Verify one arbitrary opcode, address and write byte."""
-
-    cocotb.start_soon(
-        Clock(
-            dut.HCLK,
-            HCLK_PERIOD_NS,
-            unit="ns",
-        ).start()
-    )
-
-    await reset_dut(dut)
-
-    opcode     = 0xA5
-    address    = 0x12_3456
-    write_data = 0xC3
-
-    # TARGET=1 selects qspi_ce_n_o[1].
-    ctrl = (CTRL_TARGET | (1 << CTRL_CLKDIV_SHIFT)
-    )
-
-    await write_register(dut, REG_OPCODE, opcode)
-    await write_register(dut, REG_ADDRESS, address)
-    await write_register(dut, REG_DATA, write_data)
-    await write_register(dut, REG_CTRL, ctrl)
-
+    # Opcode + address, no DATA phase
     monitor = cocotb.start_soon(
-        capture_quad_write(
+        capture_tx_groups(
             dut,
-            expected_chip_select=0b01,
+            8,
+            quad=True,
+            ce_value=0b10,
         )
     )
 
-    await write_register(
+    await write_reg(
         dut,
-        REG_CTRL,
-        ctrl | CTRL_START,
+        REG_CMD,
+        make_cmd(
+            0xA1,
+            start=True,
+            addr_en=True,
+        ),
     )
 
-    nibbles = await monitor
+    groups = await monitor
 
-    assert nibbles_to_integer(
-        nibbles[0:2]
-    ) == opcode
+    assert groups_to_int(
+        groups[:2],
+        4,
+    ) == 0xA1
 
-    assert nibbles_to_integer(
-        nibbles[2:8]
-    ) == address
+    assert groups_to_int(
+        groups[2:],
+        4,
+    ) == 0x12_3456
 
-    assert nibbles_to_integer(
-        nibbles[8:10]
-    ) == write_data
-
-    status = await wait_for_done(dut)
-
-    assert not (status & STATUS_BUSY)
-    assert status & STATUS_DONE
-    assert not (status & STATUS_RX_VALID)
-
-    assert await read_register(
+    await wait_status(
         dut,
-        REG_DATA,
-    ) == write_data
+        STATUS_DONE,
+        STATUS_DONE,
+    )
+
+    await write_reg(
+        dut,
+        REG_STATUS,
+        STATUS_DONE,
+    )
+
+    # Opcode + data, no address phase
+    monitor = cocotb.start_soon(
+        capture_tx_groups(
+            dut,
+            4,
+            quad=True,
+            ce_value=0b10,
+        )
+    )
+
+    await write_reg(
+        dut,
+        REG_CMD,
+        make_cmd(
+            0xB2,
+            start=True,
+            data_en=True,
+        ),
+    )
+
+    groups = await monitor
+
+    assert groups_to_int(
+        groups[:2],
+        4,
+    ) == 0xB2
+
+    assert groups_to_int(
+        groups[2:],
+        4,
+    ) == 0xC3
+
+    await wait_status(
+        dut,
+        STATUS_DONE,
+        STATUS_DONE,
+    )
 
 
 @cocotb.test()
-async def test_quad_read(dut):
-    """Verify one arbitrary opcode, address and received byte."""
-
+async def test_quad_read_with_dummy_mode0(dut):
     cocotb.start_soon(
         Clock(
             dut.HCLK,
@@ -398,56 +733,641 @@ async def test_quad_read(dut):
 
     await reset_dut(dut)
 
-    opcode = 0xD2
-    address = 0x65_4321
-    response = 0x5A
+    await write_reg(
+        dut,
+        REG_CTRL,
+        CTRL_QUAD_MODE
+        | CTRL_IE_DONE
+        | (1 << CTRL_CLKDIV_SHIFT),
+    )
 
-    # DIR=1 selects read. TARGET=0 selects qspi_ce_n_o[0].
+    await write_reg(
+        dut,
+        REG_ADDR,
+        0x12_3456,
+    )
+
+    await write_reg(
+        dut,
+        REG_DATA,
+        0xEE,
+    )
+
+    responder = cocotb.start_soon(
+        respond_read(
+            dut,
+            opcode_groups=2,
+            address_groups=6,
+            dummy_cycles=3,
+            response=0x5A,
+            quad=True,
+            ce_value=0b10,
+        )
+    )
+
+    await write_reg(
+        dut,
+        REG_CMD,
+        make_cmd(
+            0xEB,
+            start=True,
+            read=True,
+            addr_en=True,
+            data_en=True,
+            dummy=3,
+        ),
+    )
+
+    sent = await responder
+
+    assert groups_to_int(
+        sent[:2],
+        4,
+    ) == 0xEB
+
+    assert groups_to_int(
+        sent[2:],
+        4,
+    ) == 0x12_3456
+
+    status = await wait_status(
+        dut,
+        STATUS_DONE | STATUS_RX_VALID,
+        STATUS_DONE | STATUS_RX_VALID,
+    )
+
+    assert await read_reg(
+        dut,
+        REG_DATA,
+    ) == 0x5A
+
+    assert int(
+        dut.irq.value
+    ) == 1
+
+    await write_reg(
+        dut,
+        REG_STATUS,
+        STATUS_DONE | STATUS_RX_VALID,
+    )
+
+    assert int(
+        dut.irq.value
+    ) == 0
+
+
+@cocotb.test()
+async def test_single_spi_read_and_mode3_quad_write(dut):
+    cocotb.start_soon(
+        Clock(
+            dut.HCLK,
+            HCLK_PERIOD_NS,
+            unit="ns",
+        ).start()
+    )
+
+    await reset_dut(dut)
+
+    # Single-bit SPI read, mode 0
+    await write_reg(
+        dut,
+        REG_CTRL,
+        1 << CTRL_CLKDIV_SHIFT,
+    )
+
+    responder = cocotb.start_soon(
+        respond_read(
+            dut,
+            opcode_groups=8,
+            address_groups=0,
+            dummy_cycles=0,
+            response=0x96,
+            quad=False,
+            ce_value=0b10,
+        )
+    )
+
+    await write_reg(
+        dut,
+        REG_CMD,
+        make_cmd(
+            0x9F,
+            start=True,
+            read=True,
+            data_en=True,
+        ),
+    )
+
+    sent = await responder
+
+    assert groups_to_int(
+        sent,
+        1,
+    ) == 0x9F
+
+    await wait_status(
+        dut,
+        STATUS_DONE | STATUS_RX_VALID,
+        STATUS_DONE | STATUS_RX_VALID,
+    )
+
+    assert await read_reg(
+        dut,
+        REG_DATA,
+    ) == 0x96
+
+    await write_reg(
+        dut,
+        REG_STATUS,
+        STATUS_DONE | STATUS_RX_VALID,
+    )
+
+    # Mode 3 + quad write
     ctrl = (
-        CTRL_DIR
+        CTRL_CPHA
+        | CTRL_CPOL
+        | CTRL_QUAD_MODE
+        | CTRL_IE_DONE
         | (1 << CTRL_CLKDIV_SHIFT)
     )
 
-    await write_register(dut, REG_OPCODE, opcode)
-    await write_register(dut, REG_ADDRESS, address)
-    await write_register(dut, REG_DATA, 0xEE)
-    await write_register(dut, REG_CTRL, ctrl)
+    await write_reg(
+        dut,
+        REG_CTRL,
+        ctrl,
+    )
 
-    responder = cocotb.start_soon(
-        respond_to_quad_read(
+    assert int(
+        dut.qspi_sck_o.value
+    ) == 1
+
+    await write_reg(
+        dut,
+        REG_ADDR,
+        0x01_2345,
+    )
+
+    await write_reg(
+        dut,
+        REG_DATA,
+        0x6D,
+    )
+
+    monitor = cocotb.start_soon(
+        capture_tx_groups(
             dut,
-            response_byte=response,
-            expected_chip_select=0b10,
+            10,
+            quad=True,
+            ce_value=0b10,
+            mode3=True,
         )
     )
 
-    await write_register(
+    await write_reg(
         dut,
-        REG_CTRL,
-        ctrl | CTRL_START,
+        REG_CMD,
+        make_cmd(
+            0xA5,
+            start=True,
+            addr_en=True,
+            data_en=True,
+        ),
     )
 
-    transmitted_nibbles = await responder
+    groups = await monitor
 
-    assert nibbles_to_integer(
-        transmitted_nibbles[0:2]
-    ) == opcode
+    assert groups_to_int(
+        groups[:2],
+        4,
+    ) == 0xA5
 
-    assert nibbles_to_integer(
-        transmitted_nibbles[2:8]
-    ) == address
+    assert groups_to_int(
+        groups[2:8],
+        4,
+    ) == 0x01_2345
 
-    status = await wait_for_done(dut)
+    assert groups_to_int(
+        groups[8:],
+        4,
+    ) == 0x6D
 
-    assert not (status & STATUS_BUSY)
-    assert status & STATUS_DONE
-    assert status & STATUS_RX_VALID
+    status = await wait_status(
+        dut,
+        STATUS_DONE,
+        STATUS_DONE,
+    )
 
-    assert await read_register(
+    assert not (
+        status
+        & STATUS_RX_VALID
+    )
+
+    assert int(
+        dut.irq.value
+    ) == 1
+
+    await write_reg(
+        dut,
+        REG_STATUS,
+        STATUS_DONE,
+    )
+
+    assert int(
+        dut.irq.value
+    ) == 0
+
+
+@cocotb.test()
+async def test_busy_cfg_error_and_w1c(dut):
+    cocotb.start_soon(
+        Clock(
+            dut.HCLK,
+            HCLK_PERIOD_NS,
+            unit="ns",
+        ).start()
+    )
+
+    await reset_dut(dut)
+
+    original_ctrl = (
+        CTRL_IE_ERR
+        | (2 << CTRL_CLKDIV_SHIFT)
+    )
+
+    await write_reg(
+        dut,
+        REG_CTRL,
+        original_ctrl,
+    )
+
+    await write_reg(
+        dut,
+        REG_CMD,
+        make_cmd(
+            0x03,
+            start=True,
+            read=True,
+            data_en=True,
+            dummy=20,
+        ),
+    )
+
+    await wait_status(
+        dut,
+        STATUS_BUSY,
+        STATUS_BUSY,
+    )
+
+    # CTRL write while BUSY is ignored
+    await write_reg(
+        dut,
+        REG_CTRL,
+        CTRL_CPHA
+        | CTRL_CPOL
+        | CTRL_IE_ERR
+        | (7 << CTRL_CLKDIV_SHIFT),
+    )
+
+    # START while BUSY is rejected
+    await write_reg(
+        dut,
+        REG_CMD,
+        make_cmd(
+            0x99,
+            start=True,
+        ),
+    )
+
+    status = await read_reg(
+        dut,
+        REG_STATUS,
+    )
+
+    assert (
+        status
+        & STATUS_CFG_ERR
+    )
+
+    assert int(
+        dut.irq.value
+    ) == 1
+
+    assert await read_reg(
+        dut,
+        REG_CTRL,
+    ) == original_ctrl
+
+    await write_reg(
+        dut,
+        REG_STATUS,
+        STATUS_CFG_ERR,
+    )
+
+    status = await read_reg(
+        dut,
+        REG_STATUS,
+    )
+
+    assert not (
+        status
+        & STATUS_CFG_ERR
+    )
+
+    assert int(
+        dut.irq.value
+    ) == 0
+
+    await wait_status(
+        dut,
+        STATUS_DONE,
+        STATUS_DONE,
+    )
+
+
+@cocotb.test()
+async def test_flash_write_protection_and_two_cycle_error(dut):
+    cocotb.start_soon(
+        Clock(
+            dut.HCLK,
+            HCLK_PERIOD_NS,
+            unit="ns",
+        ).start()
+    )
+
+    await reset_dut(dut)
+
+    await write_reg(
+        dut,
+        REG_CTRL,
+        CTRL_QUAD_MODE
+        | CTRL_IE_ERR,
+    )
+
+    await write_reg(
         dut,
         REG_DATA,
-    ) == response
+        0x55,
+    )
 
-    assert int(dut.qspi_sck_o.value) == 0
-    assert int(dut.qspi_ce_n_o.value) == 0b11
-    assert int(dut.qspi_sio_oe.value) == 0
+    blocked_cmd = make_cmd(
+        0x02,
+        start=True,
+        data_en=True,
+        target=1,
+    )
+
+    await write_expect_two_cycle_error(
+        dut,
+        REG_CMD,
+        blocked_cmd,
+    )
+
+    status = await read_reg(
+        dut,
+        REG_STATUS,
+    )
+
+    assert not (
+        status
+        & STATUS_BUSY
+    )
+
+    assert (
+        status
+        & STATUS_WRITE_BLOCKED
+    )
+
+    assert int(
+        dut.irq.value
+    ) == 1
+
+    await write_reg(
+        dut,
+        REG_STATUS,
+        STATUS_WRITE_BLOCKED,
+    )
+
+    assert int(
+        dut.irq.value
+    ) == 0
+
+    # Enable NOR writes and retry
+    await write_reg(
+        dut,
+        REG_CTRL,
+        CTRL_QUAD_MODE
+        | CTRL_FLASH_WRITE_EN,
+    )
+
+    monitor = cocotb.start_soon(
+        capture_tx_groups(
+            dut,
+            4,
+            quad=True,
+            ce_value=0b01,
+        )
+    )
+
+    await write_reg(
+        dut,
+        REG_CMD,
+        blocked_cmd,
+    )
+
+    groups = await monitor
+
+    assert groups_to_int(
+        groups[:2],
+        4,
+    ) == 0x02
+
+    assert groups_to_int(
+        groups[2:],
+        4,
+    ) == 0x55
+
+    await wait_status(
+        dut,
+        STATUS_DONE,
+        STATUS_DONE,
+    )
+
+
+@cocotb.test()
+async def test_address_error_and_invalid_spi_mode(dut):
+    cocotb.start_soon(
+        Clock(
+            dut.HCLK,
+            HCLK_PERIOD_NS,
+            unit="ns",
+        ).start()
+    )
+
+    await reset_dut(dut)
+
+    await write_reg(
+        dut,
+        REG_CTRL,
+        CTRL_IE_ERR,
+    )
+
+    await write_reg(
+        dut,
+        REG_ADDR,
+        0x80_0000,
+    )
+
+    await write_reg(
+        dut,
+        REG_CMD,
+        make_cmd(
+            0x03,
+            start=True,
+            addr_en=True,
+        ),
+    )
+
+    status = await read_reg(
+        dut,
+        REG_STATUS,
+    )
+
+    assert not (
+        status
+        & STATUS_BUSY
+    )
+
+    assert (
+        status
+        & STATUS_ADDR_ERR
+    )
+
+    assert int(
+        dut.irq.value
+    ) == 1
+
+    await write_reg(
+        dut,
+        REG_STATUS,
+        STATUS_ADDR_ERR,
+    )
+
+    # CPHA != CPOL is neither mode 0 nor mode 3
+    await write_reg(
+        dut,
+        REG_CTRL,
+        CTRL_CPHA
+        | CTRL_IE_ERR,
+    )
+
+    await write_reg(
+        dut,
+        REG_ADDR,
+        0x01_0000,
+    )
+
+    await write_reg(
+        dut,
+        REG_CMD,
+        make_cmd(
+            0x66,
+            start=True,
+        ),
+    )
+
+    status = await read_reg(
+        dut,
+        REG_STATUS,
+    )
+
+    assert not (
+        status
+        & STATUS_BUSY
+    )
+
+    assert (
+        status
+        & STATUS_CFG_ERR
+    )
+
+    assert int(
+        dut.irq.value
+    ) == 1
+
+    await write_reg(
+        dut,
+        REG_STATUS,
+        STATUS_CFG_ERR,
+    )
+
+    assert int(
+        dut.irq.value
+    ) == 0
+
+
+@cocotb.test()
+async def test_minimum_cs_high_interval(dut):
+    cocotb.start_soon(
+        Clock(
+            dut.HCLK,
+            HCLK_PERIOD_NS,
+            unit="ns",
+        ).start()
+    )
+
+    await reset_dut(dut)
+
+    clkdiv = 1
+
+    await write_reg(
+        dut,
+        REG_CTRL,
+        CTRL_QUAD_MODE
+        | CTRL_IE_DONE
+        | (clkdiv << CTRL_CLKDIV_SHIFT),
+    )
+
+    await write_reg(
+        dut,
+        REG_CMD,
+        make_cmd(0x66),
+    )
+
+    await write_reg(
+        dut,
+        REG_CMD,
+        make_cmd(
+            0x66,
+            start=True,
+        ),
+    )
+
+    await wait_ce(
+        dut,
+        0b10,
+    )
+
+    await wait_ce(
+        dut,
+        0b11,
+    )
+
+    ce_high_time = int(
+        get_sim_time(unit="ns")
+    )
+
+    await RisingEdge(dut.irq)
+
+    done_time = int(
+        get_sim_time(unit="ns")
+    )
+
+    minimum_expected = (
+        2
+        * (clkdiv + 1)
+        * HCLK_PERIOD_NS
+    )
+
+    assert (
+        done_time - ce_high_time
+    ) >= minimum_expected
