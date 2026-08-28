@@ -86,6 +86,15 @@ PAD_MASK = (1 << NUM_GPIO) - 1
 IN_PADS = 0x00FF                      # testbench drives these
 OUT_PADS = 0xFF00                     # firmware drives these
 
+# QSPI alternate-function pad assignment.
+QSPI_SCK   = 8
+QSPI_CE_N0 = 9
+QSPI_CE_N1 = 10
+QSPI_SIO0  = 11
+QSPI_SIO1  = 12
+QSPI_SIO2  = 13
+QSPI_SIO3  = 14
+
 # Must match GPIO_ECHO_COUNT in sw/tests/test_gpio.c.
 GPIO_ECHO_COUNT = 64
 
@@ -435,7 +444,6 @@ async def uart_rx_send_str(dut, text):
     for char in text:
         await uart_rx_send(dut, char)
 
-
 async def uart_rx_send_bytes(dut, data):
     """Send a raw byte string into the DUT's uart_rx, back to back.
 
@@ -445,6 +453,111 @@ async def uart_rx_send_bytes(dut, data):
     """
     for value in data:
         await uart_rx_send(dut, value)
+
+# --------------------------------------------------------------------------
+# QSPI
+# --------------------------------------------------------------------------
+
+def pad_out(dut, pin):
+    return (int(dut.gpio_out.value) >> pin) & 1
+
+
+def pad_oe(dut, pin):
+    return (int(dut.gpio_oe.value) >> pin) & 1
+
+
+async def wait_qspi_select(dut):
+    """Wait until PSRAM CE# is asserted and QSPI owns the pads."""
+
+    while True:
+        await RisingEdge(dut.clk)
+        await Timer(1, unit="ps")
+
+        if (
+            pad_oe(dut, QSPI_SCK)
+            and pad_oe(dut, QSPI_CE_N0)
+            and pad_out(dut, QSPI_CE_N0) == 0
+        ):
+            return
+
+
+async def wait_qspi_deselect(dut):
+    """Wait until PSRAM CE# returns high."""
+
+    while True:
+        await RisingEdge(dut.clk)
+        await Timer(1, unit="ps")
+
+        if pad_out(dut, QSPI_CE_N0) == 1:
+            return
+
+
+async def wait_qspi_rising_edge(dut):
+    """Detect one rising QSPI SCK edge using the SoC clock."""
+
+    previous = pad_out(dut, QSPI_SCK)
+
+    while True:
+        await RisingEdge(dut.clk)
+        await Timer(1, unit="ps")
+
+        current = pad_out(dut, QSPI_SCK)
+
+        if previous == 0 and current == 1:
+            return
+
+        previous = current
+
+
+async def capture_single_spi_byte(dut):
+    """Capture one MSB-first byte transmitted on SIO0 in SPI mode 0."""
+
+    await wait_qspi_select(dut)
+
+    value = 0
+
+    for _ in range(8):
+        await wait_qspi_rising_edge(dut)
+
+        assert pad_oe(dut, QSPI_SIO0) == 1
+
+        value = (
+            (value << 1)
+            | pad_out(dut, QSPI_SIO0)
+        )
+
+    await wait_qspi_deselect(dut)
+
+    return value
+
+
+async def capture_quad_transaction(dut, groups=10):
+    """Capture MSB-first 4-bit groups from SIO[3:0]."""
+
+    await wait_qspi_select(dut)
+
+    values = []
+
+    for _ in range(groups):
+        await wait_qspi_rising_edge(dut)
+
+        sio_oe = (
+            int(dut.gpio_oe.value)
+            >> QSPI_SIO0
+        ) & 0xF
+
+        assert sio_oe == 0xF
+
+        nibble = (
+            int(dut.gpio_out.value)
+            >> QSPI_SIO0
+        ) & 0xF
+
+        values.append(nibble)
+
+    await wait_qspi_deselect(dut)
+
+    return values
 
 # --------------------------------------------------------------------------
 # Bootloader
@@ -525,18 +638,17 @@ async def load_firmware(dut, uart, image="firmware.bin", addr=bootloader.RAM_BAS
 # --------------------------------------------------------------------------
 #
 # Sending the image over the UART costs ~280 ms of simulated time and ~18 minutes of wall
-# clock.
-
-# `boot_preload` writes the image straight into the SRAM macros and then still
-# sends 'B' - the bank switch, the CPU reset and the refetch from RAM all stay
-# under test, and only the bulk transfer is skipped.
+# clock. So the `default` target writes it straight into the SRAM macros and
+# then still sends 'B' - the bank switch, the CPU reset and the refetch from
+# RAM all stay under test, and only the bulk transfer is skipped. `boot` is the
+# target that still does it the honest way.
 
 RAM_LANES = 4
 
 def ram_lane_arrays(dut):
     """Handles to the four byte-lane SRAM macro arrays.
 
-    Needs the signals to be public, which the boot_preload target arranges with
+    Needs the signals to be public, which the `default` target arranges with
     verilator's --public-flat-rw. Without it the traversal fails, so say so
     rather than letting an AttributeError surface with no explanation.
     """
@@ -549,7 +661,7 @@ def ram_lane_arrays(dut):
     except AttributeError as exc:
         raise AssertionError(
             f"cannot reach the SRAM macro arrays for a backdoor preload ({exc}). "
-            f"This needs verilator's --public-flat-rw, which the boot_preload "
+            f"This needs verilator's --public-flat-rw, which the `default` "
             f"target sets, and USE_MACRO_RAM=1 in hw/rtl/ram_ss.sv"
         ) from None
 
@@ -611,8 +723,8 @@ def cpu_state(dut):
     """A snapshot of cpu_ss's bank switch and CPU handshake, or None.
 
     Only reachable when the target made signals public (--public-flat-rw, i.e.
-    boot_preload). Returns None rather than raising so it can be called from an
-    error path without masking the original failure.
+    the `default` target). Returns None rather than raising so it can be called
+    from an error path without masking the original failure.
     """
     try:
         cpu = dut.u_grouper_soc_dig_ss.u_cpu_ss
@@ -854,7 +966,7 @@ async def expect_test_result(uart, name, timeout_ms=SIM_TIMEOUT_MS):
 # Firmware that needs the testbench to do something - drive a console, stream
 # GPIO - has its own test below. Everything else only has to run to completion.
 FW_TEST = os.environ.get("FW_TEST", "")
-DRIVEN_FW = ("uart_echo", "gpio")
+DRIVEN_FW = ("uart_echo", "gpio", "qspi")
 
 # Whether the ROM holds the bootloader rather than an application image, which
 # is what the `boot` target builds. The file's presence and content is the
@@ -867,7 +979,7 @@ DRIVEN_FW = ("uart_echo", "gpio")
 ROM_IS_BOOTLOADER = "bootloader" in firmware_id()
 
 # Whether to skip the UART transfer and write the image into the SRAM macros
-# directly. The boot_preload target drops ram_preload.txt in the work root,
+# directly. The `default` target drops ram_preload.txt in the work root,
 # because that target is also the only one that passes verilator
 # --public-flat-rw - without which the backdoor is not reachable at all. So the
 # marker and the ability to act on it always arrive together.
@@ -922,7 +1034,7 @@ def soc_test(**kwargs):
 async def test_preloaded_boot(dut):
     """The bank switch boots an image that was placed in RAM by the backdoor.
 
-    The `boot_preload` target. Same ending as test_bootloader_load - greeting,
+    The `default` target. Same ending as test_bootloader_load - greeting,
     'B', then the image has to report itself - but the image gets into RAM by
     a direct write to the SRAM macros instead of ~600 UART writes. That trades
     ~18 minutes of wall clock for a few seconds, at the cost of not exercising
@@ -1092,3 +1204,48 @@ async def test_gpio_patterns(dut):
 
     await uart.wait_for("GPIO_ECHO_DONE")
     await expect_test_result(uart, "gpio")
+
+
+@soc_test(skip=FW_TEST != "qspi")
+async def test_qspi(dut):
+    """Verify CPU-driven QSPI traffic reaches the external pads."""
+
+    _, uart = await bring_up(dut)
+
+    # First transaction from test_qspi.c:
+    # bare 0x35 command in single-bit SPI mode.
+    opcode = await capture_single_spi_byte(dut)
+
+    log.info(
+        "QSPI single-bit command: 0x%02x",
+        opcode,
+    )
+
+    assert opcode == 0x35
+
+    # Second transaction:
+    # A5 + 123456 + C3 in quad mode.
+    groups = await capture_quad_transaction(
+        dut,
+        groups=10,
+    )
+
+    log.info(
+        "QSPI quad groups: %s",
+        " ".join(f"{x:x}" for x in groups),
+    )
+
+    expected = [
+        0xA, 0x5,              # opcode A5
+        0x1, 0x2, 0x3,
+        0x4, 0x5, 0x6,        # address 123456
+        0xC, 0x3,              # data C3
+    ]
+
+    assert groups == expected, (
+        f"QSPI transaction mismatch: "
+        f"got {groups}, expected {expected}"
+    )
+
+    await uart.wait_for("QSPI_TRANSACTION_DONE")
+    await expect_test_result(uart, "qspi")

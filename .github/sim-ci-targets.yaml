@@ -139,7 +139,7 @@ targets:
     kind: cocotb
     fusesoc_args: ""
     success_pattern: ""
-    fail_ok: true
+    fail_ok: false
     coverage_scope: full
     fw_test: ""
 

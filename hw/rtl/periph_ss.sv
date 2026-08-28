@@ -100,7 +100,7 @@ module periph_ss #(
   logic                  gpio_ctrl_HREADYOUT;
   logic                  gpio_ctrl_HRESP;
 
-  // FIXME - slot wired to a sized, pad-connected ahb_stub_slave, not ahb_qspi
+  // Now wired to ahb_qspi
   logic [ADDR_WIDTH-1:0] qpsi_HADDR;
   logic [2:0]            qpsi_HBURST;
   logic                  qpsi_HMASTLOCK;
@@ -186,16 +186,11 @@ logic mux_spi_s_sck_i;     // internal signal for SPI slave clock
 logic mux_spi_s_mosi_i;    // internal signal for SPI slave master out slave in
 logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
 
-logic mux_spi_m_sck_o;     // internal signal for SPI master clock
-logic mux_spi_m_mosi_o;    // internal signal for SPI master master out slave in
-logic mux_spi_m_miso_i;    // internal signal for SPI master master in slave out
-logic mux_spi_m_ss_o;      // internal signal for SPI master chip select
-
-logic       mux_qspi_sck_o;   // internal signal for QSPI clock
-logic [1:0] mux_qspi_ce_n_o;  // internal signal for QSPI chip enables
-logic [3:0] mux_qspi_sio_i;   // internal signal for QSPI data in
-logic [3:0] mux_qspi_sio_o;   // internal signal for QSPI data out
-logic [3:0] mux_qspi_sio_oe;  // internal signal for QSPI data output enable
+logic       mux_qspi_sck_o;
+logic [1:0] mux_qspi_ce_n_o;
+logic [3:0] mux_qspi_sio_i;
+logic [3:0] mux_qspi_sio_o;
+logic [3:0] mux_qspi_sio_oe;
 
 //--- Interconnect ----------------------------------------------------------------------
 
@@ -357,23 +352,14 @@ logic [3:0] mux_qspi_sio_oe;  // internal signal for QSPI data output enable
 
   //--- QSPI -----------------------------------------------------------------------------
 
-  // FIXME - replace with hw/rtl/qspi/ahb_qspi.sv, whose ports already match the
-  // io_ss signals below. Until then the stub holds the slot at a representative
-  // size: 3368 GE, from `make measure-ge` (ahb_qspi synthesizes to 18,481.4
-  // um^2 = 1684 GE) x2.0 for the features still missing (arbitrary-command
-  // interface, real register map, byte-lane addressing, wait-state handling,
-  // and the GRPR-QSPI-021 init FSM). See librelane/classic/TRIAL_NOTES.md.
-  ahb_stub_slave #(
-    .ADDR_WIDTH (ADDR_WIDTH),
-    .DATA_WIDTH (DATA_WIDTH),
-    .TARGET_GE  (3368),
-    .PAD_OUT_W  (7),
-    .PAD_OE_W   (4),
-    .PAD_IN_W   (4)
-  ) u_qspi_stub (
+  ahb_qspi #(
+    .ADDR_WIDTH (12),
+    .DATA_WIDTH (DATA_WIDTH)
+  ) u_qspi (
     .HCLK         (HCLK),
     .HRESETn      (HRESETn),
-    .HADDR        (qpsi_HADDR),
+
+    .HADDR        (qpsi_HADDR[11:0]),
     .HBURST       (qpsi_HBURST),
     .HMASTLOCK    (qpsi_HMASTLOCK),
     .HPROT        (qpsi_HPROT),
@@ -381,15 +367,21 @@ logic [3:0] mux_qspi_sio_oe;  // internal signal for QSPI data output enable
     .HTRANS       (qpsi_HTRANS),
     .HWDATA       (qpsi_HWDATA),
     .HWRITE       (qpsi_HWRITE),
+
     .HRDATA       (qpsi_HRDATA),
     .HREADYOUT    (qpsi_HREADYOUT),
     .HRESP        (qpsi_HRESP),
+
     .HREADYIN     (qpsi_HREADYIN),
     .HSEL         (qpsi_HSEL),
 
-    .pad_in       (mux_qspi_sio_i),
-    .pad_out      ({mux_qspi_sio_o, mux_qspi_ce_n_o, mux_qspi_sck_o}),
-    .pad_oe       (mux_qspi_sio_oe)
+    .qspi_sck_o   (mux_qspi_sck_o),
+    .qspi_ce_n_o  (mux_qspi_ce_n_o),
+    .qspi_sio_i   (mux_qspi_sio_i),
+    .qspi_sio_o   (mux_qspi_sio_o),
+    .qspi_sio_oe  (mux_qspi_sio_oe),
+
+    .irq          ()
   );
 
   //--- SPI Master ------------------------------------------------------------------------
@@ -402,6 +394,7 @@ logic [3:0] mux_qspi_sio_oe;  // internal signal for QSPI data output enable
   // inside GRPR-SPIM-015's 1,500-2,000 GE estimate, which the spec flagged as
   // unconfirmed by synthesis - it is now confirmed. See
   // librelane/classic/TRIAL_NOTES.md.
+  
   ahb_stub_slave #(
     .ADDR_WIDTH (ADDR_WIDTH),
     .DATA_WIDTH (DATA_WIDTH),
@@ -540,25 +533,17 @@ logic [3:0] mux_qspi_sio_oe;  // internal signal for QSPI data output enable
     .spi_s_mosi_i    (mux_spi_s_mosi_i),
     .spi_s_miso_o    (mux_spi_s_miso_o),
 
-    // Driven by the placeholders above until the real peripherals land. They
-    // are deliberately not tied off: constants here let synthesis fold away the
-    // alternate-function path for pads 4-14, which would hide the routing and
-    // congestion those eleven pads actually cost.
-    //
-    // The placeholders free-run, so with ALTSEL set these pads - including the
-    // QSPI data pads' output enables - toggle continuously and mean nothing.
-    // GPIO_ALTSEL resets to 0, so pads come up under GPIO control and firmware
-    // has to opt in; a DRY_RUN build is not functional silicon in any case.
-    .spi_m_sck_o     (mux_spi_m_sck_o),
-    .spi_m_mosi_o    (mux_spi_m_mosi_o),
-    .spi_m_miso_i    (mux_spi_m_miso_i),
-    .spi_m_ss_o      (mux_spi_m_ss_o),
+    // FIXME - tied off until the SPI master is implemented
+    .spi_m_sck_o     (1'b0),
+    .spi_m_mosi_o    (1'b0),
+    .spi_m_miso_i    (),
+    .spi_m_ss_o      (1'b1),
 
-    .qspi_sck_o      (mux_qspi_sck_o),
-    .qspi_ce_n_o     (mux_qspi_ce_n_o),
-    .qspi_sio_i      (mux_qspi_sio_i),
-    .qspi_sio_o      (mux_qspi_sio_o),
-    .qspi_sio_oe     (mux_qspi_sio_oe),
+    .qspi_sck_o       (mux_qspi_sck_o),
+    .qspi_ce_n_o      (mux_qspi_ce_n_o),
+    .qspi_sio_i       (mux_qspi_sio_i),
+    .qspi_sio_o       (mux_qspi_sio_o),
+    .qspi_sio_oe      (mux_qspi_sio_oe),
 
     // GPIO pin control interface
     .gpio_in         (gpio_in),
