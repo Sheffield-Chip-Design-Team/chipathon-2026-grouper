@@ -78,7 +78,7 @@ Targets: `default`, `debug`, `trace` — the same three tiers as above.
 (`fibonnaci`, `gpio`, `stdlib_fmt`, `stdlib_str`, `uart_echo`, …).
 
 ```bash
-FW_TEST=gpio fusesoc run --no-export sharc:soc_ip:grouper_soc_directed
+FW_TEST=gpio_regs fusesoc run --no-export sharc:soc_ip:grouper_soc_directed
 ```
 
 `test_soc.py` keys off the same variable: most firmware only has to reach

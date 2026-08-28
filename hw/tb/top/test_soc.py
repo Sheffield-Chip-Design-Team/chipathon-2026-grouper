@@ -6,11 +6,11 @@ model plus GPIO pattern generators the firmware can be scored against.
 
     CORE=sharc:soc_ip:grouper_soc_directed
 
-    FW_TEST=gpio fusesoc run --no-export $CORE                  # plain
-    FW_TEST=gpio fusesoc run --no-export --target=debug $CORE   # + ahb_debug
-    FW_TEST=gpio fusesoc run --no-export --target=trace $CORE   # + instruction trace
+    FW_TEST=gpio_echo fusesoc run --no-export $CORE                  # plain
+    FW_TEST=gpio_echo fusesoc run --no-export --target=debug $CORE   # + ahb_debug
+    FW_TEST=gpio_echo fusesoc run --no-export --target=trace $CORE   # + instruction trace
 
-    COCOTB_LOG_LEVEL=DEBUG FW_TEST=gpio fusesoc run --no-export $CORE
+    COCOTB_LOG_LEVEL=DEBUG FW_TEST=gpio_echo fusesoc run --no-export $CORE
 
 FW_TEST picks the firmware top level from sw/tests. The `trace` target writes
 cpu.trace, which hw/tb/top/trace_decode.py turns into cpu_trace.dis in the
@@ -82,7 +82,7 @@ RX_BIT_PS = round(1e12 / RX_BAUD)
 NUM_GPIO = 16
 PAD_MASK = (1 << NUM_GPIO) - 1
 
-# Pad split agreed with sw/tests/test_gpio.c.
+# Pad split agreed with sw/tests/test_gpio_regs.c and test_gpio_echo.c.
 IN_PADS = 0x00FF                      # testbench drives these
 OUT_PADS = 0xFF00                     # firmware drives these
 
@@ -95,7 +95,7 @@ QSPI_SIO1  = 12
 QSPI_SIO2  = 13
 QSPI_SIO3  = 14
 
-# Must match GPIO_ECHO_COUNT in sw/tests/test_gpio.c.
+# Must match GPIO_ECHO_COUNT in sw/tests/test_gpio_echo.c.
 GPIO_ECHO_COUNT = 64
 
 # A whole test's worth of simulated time. The firmware prints at 19200 baud,
@@ -966,7 +966,7 @@ async def expect_test_result(uart, name, timeout_ms=SIM_TIMEOUT_MS):
 # Firmware that needs the testbench to do something - drive a console, stream
 # GPIO - has its own test below. Everything else only has to run to completion.
 FW_TEST = os.environ.get("FW_TEST", "")
-DRIVEN_FW = ("uart_echo", "gpio", "qspi")
+DRIVEN_FW = ("uart_echo", "gpio_echo", "qspi")
 
 # Whether the ROM holds the bootloader rather than an application image, which
 # is what the `boot` target builds. The file's presence and content is the
@@ -1040,7 +1040,7 @@ async def test_preloaded_boot(dut):
     ~18 minutes of wall clock for a few seconds, at the cost of not exercising
     the bootloader's 'W' path, which the `boot` target still covers.
     """
-    _, uart = await bring_up(dut)
+    pads, uart = await bring_up(dut)
     watch_bus_error(dut)
 
     await uart.wait_for(bootloader.GREETING)
@@ -1089,8 +1089,12 @@ async def test_preloaded_boot(dut):
         previous = cycles
         log_cpu_state(dut, f"+{cycles} clk after bank switch")
 
+    # Driven firmware is handed to its driver here rather than being expected
+    # to report on its own - see score_firmware(). BOOT_TIMEOUT_MS still bounds
+    # the self-reporting case, where the image only has to reach its first
+    # print.
     try:
-        await expect_test_result(uart, "preloaded boot", timeout_ms=BOOT_TIMEOUT_MS)
+        await score_firmware(dut, pads, uart, timeout_ms=BOOT_TIMEOUT_MS)
     except AssertionError:
         log_cpu_state(dut, "at timeout")
         raise
@@ -1111,7 +1115,7 @@ async def test_bootloader_load(dut):
     separated: the first says the link dropped something, the second says the
     image or the bank switch is wrong.
     """
-    _, uart = await bring_up(dut)
+    pads, uart = await bring_up(dut)
 
     # The bootloader prints this once its UART is up and it is ready for a
     # command. Sending before it appears would be dropped.
@@ -1120,7 +1124,7 @@ async def test_bootloader_load(dut):
     await load_firmware(dut, uart, verify=True)
     await bootloader_boot(dut)
 
-    await expect_test_result(uart, "bootloader")
+    await score_firmware(dut, pads, uart)
 
 
 @soc_test(skip=FW_TEST in DRIVEN_FW or ROM_IS_BOOTLOADER)
@@ -1135,8 +1139,28 @@ async def test_firmware_runs(dut):
     await expect_test_result(uart, FW_TEST or "firmware")
 
 
-@soc_test(skip=FW_TEST != "uart_echo" or ROM_IS_BOOTLOADER)
-async def test_uart_echo(dut):
+# --------------------------------------------------------------------------
+# Stimulus drivers
+# --------------------------------------------------------------------------
+#
+# Firmware that needs the testbench to do something lives here rather than
+# inside a single cocotb test, because there are two ways to arrive at a
+# running image:
+#
+#   fw_rom/debug/trace   the application is in the ROM and runs from reset, so
+#                        the per-firmware tests below drive it directly.
+#   default/boot         the ROM holds the bootloader, and an application only
+#                        starts part way through test_preloaded_boot /
+#                        test_bootloader_load, after the bank switch.
+#
+# Both paths score the same image, so each driver is written once and called
+# from either. Before this split the bootloader paths ended in a bare
+# expect_test_result(), which no driven firmware can ever satisfy: uart_echo
+# sits in g_getline() and gpio_echo sits in its echo loop, so neither reaches
+# TEST_RESULT without stimulus, and the leg failed on the boot timeout.
+
+
+async def drive_uart_echo(dut, uart):
     """The interactive echo firmware (sw/tests/test_uart_echo.c).
 
     Replaces the two `uart_rx_send` bursts that grouper_soc_hello_tb.sv keys
@@ -1144,8 +1168,6 @@ async def test_uart_echo(dut):
     count is what makes this robust: the firmware can print as much as it
     likes before asking, and the testbench still waits for the right moment.
     """
-    _, uart = await bring_up(dut)
-
     # The firmware prints no prompt - it starts reading immediately after the
     # harness banner, so that is the sync point.
     await uart.wait_for("TEST_BEGIN: uart_echo")
@@ -1159,17 +1181,14 @@ async def test_uart_echo(dut):
     await expect_test_result(uart, "uart_echo")
 
 
-@soc_test(skip=FW_TEST != "gpio" or ROM_IS_BOOTLOADER)
-async def test_gpio_patterns(dut):
+async def drive_gpio_patterns(dut, pads, uart):
     """Stream GPIO patterns at the CPU and score what it echoes back.
 
     The firmware drives the high byte with whatever it reads on the low byte
-    (sw/tests/test_gpio.c). Each pattern is held until the echo appears, so
-    nothing is dropped and the check is exact rather than statistical.
+    (sw/tests/test_gpio_echo.c). Each pattern is held until the echo appears,
+    so nothing is dropped and the check is exact rather than statistical.
     """
-    pads, uart = await bring_up(dut)
-
-    # Phase 1 of the firmware is self-checking against the pad model above.
+    # The firmware writes the pad-electrical registers before it starts.
     await uart.wait_for("GPIO_ECHO_READY")
 
     # Checked here rather than in its own test: booting the SoC costs ~17 ms
@@ -1203,14 +1222,11 @@ async def test_gpio_patterns(dut):
     log.info("all %d patterns echoed correctly", len(patterns))
 
     await uart.wait_for("GPIO_ECHO_DONE")
-    await expect_test_result(uart, "gpio")
+    await expect_test_result(uart, "gpio_echo")
 
 
-@soc_test(skip=FW_TEST != "qspi")
-async def test_qspi(dut):
+async def drive_qspi(dut, uart):
     """Verify CPU-driven QSPI traffic reaches the external pads."""
-
-    _, uart = await bring_up(dut)
 
     # First transaction from test_qspi.c:
     # bare 0x35 command in single-bit SPI mode.
@@ -1249,3 +1265,53 @@ async def test_qspi(dut):
 
     await uart.wait_for("QSPI_TRANSACTION_DONE")
     await expect_test_result(uart, "qspi")
+
+async def score_firmware(dut, pads, uart, timeout_ms=SIM_TIMEOUT_MS):
+    """Score whatever image is running now.
+
+    Driven firmware gets the stimulus it is waiting for; everything else only
+    has to reach TEST_RESULT on its own. This is the single place that knows
+    which is which, so the ROM-boot tests below and the two bootloader tests
+    above agree on how a given FW_TEST is judged.
+
+    timeout_ms applies only to the self-reporting case - a driven image is
+    paced by its own handshake, and each driver sets whatever bound it needs.
+    """
+    if FW_TEST == "uart_echo":
+        await drive_uart_echo(dut, uart)
+    elif FW_TEST == "gpio_echo":
+        await drive_gpio_patterns(dut, pads, uart)
+    elif FW_TEST == "qspi":
+        await drive_qspi(dut, uart)
+    else:
+        await expect_test_result(uart, FW_TEST or "firmware", timeout_ms=timeout_ms)
+
+
+# --------------------------------------------------------------------------
+# Driven firmware, booted straight from the ROM
+# --------------------------------------------------------------------------
+#
+# The fw_rom/debug/trace targets. Under default/boot the same drivers are
+# reached through score_firmware() instead, so these skip when the ROM holds
+# the bootloader - otherwise they would sit waiting for an application that
+# has not been loaded yet.
+
+@soc_test(skip=FW_TEST != "uart_echo" or ROM_IS_BOOTLOADER)
+async def test_uart_echo(dut):
+    """sw/tests/test_uart_echo.c, running from the ROM."""
+    _, uart = await bring_up(dut)
+    await drive_uart_echo(dut, uart)
+
+
+@soc_test(skip=FW_TEST != "gpio_echo" or ROM_IS_BOOTLOADER)
+async def test_gpio_patterns(dut):
+    """sw/tests/test_gpio_echo.c, running from the ROM."""
+    pads, uart = await bring_up(dut)
+    await drive_gpio_patterns(dut, pads, uart)
+
+
+@soc_test(skip=FW_TEST != "qspi" or ROM_IS_BOOTLOADER)
+async def test_qspi(dut):
+    """sw/tests/test_qspi.c, running from the ROM."""
+    _, uart = await bring_up(dut)
+    await drive_qspi(dut, uart)

@@ -8,15 +8,19 @@
 
 #include "irq.h"
 
-// FIXME - these tests are now much bigger than 4k
-
-// Self-checking exercise of the formatter in sw/src/lib/gio.c. Everything
-// here runs through snprintf and compares against expected strings, so the
-// formatter is verified against buffers rather than against whatever comes
-// out of the UART.
+// Self-checking exercise of the formatter in sw/src/lib/gio.c, part 1 of 2:
+// what each conversion specifier produces, and how snprintf behaves when the
+// result does not fit.
 //
-// Split from test_stdlib_str.c only because of ROM: the two together do not
-// fit the 8 KiB window in sw/soc.ld alongside the library.
+// Field width, precision, flags and the sink plumbing are in
+// test_stdlib_fmt_width.c. The split is a RAM budget, not a taxonomy: the
+// `default` target links a RAM-resident image (sw/boot/ram.ld) and everything
+// - code, rodata, data, bss and the stack - has to fit 4 KiB, which the two
+// halves together no longer did.
+//
+// Everything here runs through snprintf and compares against expected
+// strings, so the formatter is verified against buffers rather than against
+// whatever comes out of the UART.
 
 static char buf[64];
 
@@ -41,30 +45,8 @@ static void test_conversions(void) {
   // Unknown specifiers are echoed back rather than swallowed.
   snprintf(buf, sizeof(buf), "%q");
   G_CHECK_STR(buf, "%q");
-}
 
-static void test_width_and_flags(void) {
-  // The reason width support was added: readable register dumps.
-  snprintf(buf, sizeof(buf), "%08x", 0x1234u);
-  G_CHECK_STR(buf, "00001234");
-
-  snprintf(buf, sizeof(buf), "[%5d][%-5d]", 42, 42);
-  G_CHECK_STR(buf, "[   42][42   ]");
-
-  snprintf(buf, sizeof(buf), "[%5s][%-5s][%.2s]", "ab", "ab", "abcd");
-  G_CHECK_STR(buf, "[   ab][ab   ][ab]");
-
-  snprintf(buf, sizeof(buf), "[%+d][% d][%+d]", 7, 7, -7);
-  G_CHECK_STR(buf, "[+7][ 7][-7]");
-
-  // Zero padding must sit after the sign, never before it.
-  snprintf(buf, sizeof(buf), "%05d", -42);
-  G_CHECK_STR(buf, "-0042");
-
-  // '*' takes the width from the argument list; a negative one left-aligns.
-  snprintf(buf, sizeof(buf), "[%*d][%*d]", 4, 7, -4, 7);
-  G_CHECK_STR(buf, "[   7][7   ]");
-
+  // %p is a conversion, not a width - it always renders 0x + 8 hex digits.
   snprintf(buf, sizeof(buf), "%p", (void *) 0x2000);
   G_CHECK_STR(buf, "0x00002000");
 }
@@ -83,26 +65,15 @@ static void test_snprintf_bounds(void) {
   G_CHECK_STR(small, "ab");
 }
 
-static void test_sinks(void) {
-  g_buf_ctx_t ctx;
-  g_sink_t    sink = g_sink_buf(&ctx, buf, sizeof(buf));
-
-  g_fprintf(&sink, "to a %s", "buffer");
-  G_CHECK_STR(buf, "to a buffer");
-  G_CHECK_EQ(ctx.len, 11);
-}
-
 int main(void) {
   set_irq_mask(0xfffffff8); // Enable system IRQs (not UART or other IRQs)
   debug_str("CPU Ready\n");
   init_uart();
 
-  g_test_begin("stdlib_fmt");
+  g_test_begin("stdlib_fmt_conv");
 
   test_conversions();
-  test_width_and_flags();
   test_snprintf_bounds();
-  test_sinks();
 
   return g_test_end();
 }

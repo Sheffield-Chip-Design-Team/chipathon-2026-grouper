@@ -5,8 +5,8 @@ description: Directed cocotb top-level testbench for the Grouper SoC (hw/tb/top/
 # Drives grouper_soc_top, so the top-level input synchronisers are in the
 # path - the SystemVerilog testbench drives digital_ss, which sits below them.
 #
-#   FW_TEST=gpio fusesoc run --no-export sharc:soc_ip:grouper_soc_directed
-#   FW_TEST=gpio fusesoc run --no-export --target=trace sharc:soc_ip:grouper_soc_directed
+#   FW_TEST=gpio_regs fusesoc run --no-export sharc:soc_ip:grouper_soc_directed
+#   FW_TEST=gpio_regs fusesoc run --no-export --target=trace sharc:soc_ip:grouper_soc_directed
 
 # FW_TEST picks the firmware top level from sw/tests; FW_DEBUG=1 builds it
 # with -DDEBUG. The debug and trace targets set FW_DEBUG for you, because
@@ -142,7 +142,7 @@ targets:
   # so a read landing in a write's data phase takes a wait state here that the
   # behavioural array never produces.
   #
-  #   FW_TEST=gpio fusesoc run --no-export --target=macro_ram sharc:soc_ip:grouper_soc_directed
+  #   FW_TEST=gpio_regs fusesoc run --no-export --target=macro_ram sharc:soc_ip:grouper_soc_directed
   macro_ram:
     description: As default, with ahb_ram built from the four SRAM macros.
     filesets: [rtl, ram_macro]
