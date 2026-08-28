@@ -31,9 +31,8 @@ AHB-Lite-controlled QPI master compatible with the APS6404L PSRAM and Micron N25
 | `GRPR-QSPI-008` | Manual command execution with read-back via a single command/data/control register interface, for both write and read. |
 | `GRPR-QSPI-009` | Programmable clock divider, plus CPHA/CPOL (likely mode 0/3 only). |
 | `GRPR-QSPI-010` | Configuration bit for single/quad SPI mode. |
-| `GRPR-QSPI-011` | A per-transaction `FAST_TXN_EN` field shall select between fixed normal and fast read/write command variants. Command opcodes are selected internally according to the target device and operating mode. |
 | `GRPR-QSPI-012` | Configuration bit to enable AHB writes to flash (in the AHB wrapper) — presumably a write-protect/enable gate distinct from the PSRAM path. |
-| `GRPR-QSPI-013` | Fast-read dummy-cycle count shall be configurable. |
+| `GRPR-QSPI-013` | Dummy-cycle count shall be configurable. |
 
 ## Block Diagram
 
@@ -102,6 +101,8 @@ confirmed. All other control fields reset to zero.
 Writing `CTRL` while `STATUS.BUSY = 1` is ignored and sets
 `STATUS.CFG_ERR`.
 
+# FIXME - This register does not match the RTL
+
 ## CMD — 0x04
 
 Write with `START = 1` to launch one transaction. Single-store kickoff.
@@ -113,7 +114,6 @@ Write with `START = 1` to launch one transaction. Single-store kickoff.
 | `2` | `ADDR_EN` | R/W | Emit the three-byte address phase from `ADDR` |
 | `3` | `DATA_EN` | R/W | Emit a one-byte data phase |
 | `4` | `TARGET` | R/W | `0` = PSRAM, `1` = NOR flash |
-| `5` | `FAST_TXN_EN` | R/W | `0` = normal transaction, `1` = fast transaction |
 | `7:6` | Reserved | — | Write zero, read zero |
 | `15:8` | `DUMMY` | R/W | `0–255` dummy SCK cycles before the data phase |
 | `31:16` | Reserved | — | Write zero, read zero |
@@ -121,32 +121,15 @@ Write with `START = 1` to launch one transaction. Single-store kickoff.
 `DUMMY` occupies the complete byte `[15:8]` and therefore does not cross an
 AHB byte boundary.
 
-The command opcode is selected internally from the supported fixed command set
-using `TARGET`, `DIR`, `FAST_TXN_EN`, and `QUAD_MODE`.
-
-| `DIR` | `FAST_TXN_EN` | Transaction type |
-| --- | --- | --- |
-| `0` | `0` | Normal write |
-| `0` | `1` | Fast write |
-| `1` | `0` | Normal read |
-| `1` | `1` | Fast read |
-
 Phase order:
 
 ```text
 COMMAND → ADDRESS → DUMMY → DATA
 ```
 
-The address and data phases may be omitted using `ADDR_EN` and `DATA_EN`.
-
-`DUMMY` is ignored for transaction types that do not require dummy cycles.
-
 Writing `START = 1` while `STATUS.BUSY = 1` does not begin another
 transaction and sets `STATUS.CFG_ERR`.
 
-`FAST_TXN_EN` implements `GRPR-QSPI-011`.
-
-`DUMMY` implements `GRPR-QSPI-013`.
 
 ## STATUS — 0x08
 
@@ -203,8 +186,11 @@ device. An out-of-range address is rejected and sets `STATUS.ADDR_ERR`.
 
 Bits `31:8` are reserved and read as zero.
 
+# FIXME - specify a FIFO here, without it it is useless for fetching
+
 The initial manual-command interface supports one data byte per transaction.
 FIFO and multi-byte transfer support are outside the initial proposal.
+
 
 
 ## Clocking Strategy
@@ -224,8 +210,8 @@ FIFO and multi-byte transfer support are outside the initial proposal.
 
 | ID | Requirement |
 |---|---|
-| `GRPR-QSPI-019` | QPI clock target 32 MHz (subject to the clock-plan open item). |
-| `GRPR-QSPI-020` | Raw four-bit link bandwidth: 16 MB/s (arithmetic consequence of `GRPR-QSPI-019`, generically true regardless of use case). |
+| `GRPR-QSPI-019` | QPI clock target 16 MHz (subject to the clock-plan open item). |
+| `GRPR-QSPI-020` | Raw four-bit link bandwidth: *** MB/s (arithmetic consequence of `GRPR-QSPI-019`, generically true regardless of use case). |
 | `GRPR-QSPI-021` | Initialisation time ≤ 1 ms. |
 
 ## Size Estimate
@@ -238,9 +224,8 @@ TBD after RTL synthesis (per source).
 - IOs — the "three four-bit SIO buses onto one physical bus" description needs clarification.
 - Clock frequency inconsistency shared with SPI Master (see [SPI Master § Parameters](SPI%20Master.md#parameters-and-configurations)) applies here too.
 - No sustained-throughput / storage-sizing requirement currently exists for QSPI's real (non-replay) use case — needs deriving if one is actually needed.
-- External pin ownership depends on the unresolved [GPIO Mux](GPIO%20Mux.md) pin-sharing scheme.
 - Size estimate not yet available.
-- Device-control commands outside the fixed normal/fast read/write set, including PSRAM entry into QPI mode, require clarification: they may be generated automatically by the initialisation FSM or exposed through a separate control mechanism.
+
 
 ## Verification Cross-Reference
 
