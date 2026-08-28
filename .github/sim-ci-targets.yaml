@@ -172,7 +172,7 @@ targets:
   - name: grouper_soc_tb_top
     group: directed_tb
     core: sharc:soc_ip:grouper_soc_tb
-    fusesoc_target: tb_top_trace
+    fusesoc_target: default
     kind: log-grep
     fusesoc_args: "--no-export"
     success_pattern: "Bye!"
@@ -193,7 +193,7 @@ targets:
   - name: sw_fibonnaci
     group: directed_tb
     core: sharc:soc_ip:grouper_soc_directed
-    fusesoc_target: trace
+    fusesoc_target: default
     kind: cocotb
     fusesoc_args: "--no-export"
     success_pattern: ""
@@ -204,7 +204,7 @@ targets:
   - name: sw_stdlib_fmt
     group: directed_tb
     core: sharc:soc_ip:grouper_soc_directed
-    fusesoc_target: trace
+    fusesoc_target: default
     kind: cocotb
     fusesoc_args: "--no-export"
     success_pattern: ""
@@ -218,7 +218,7 @@ targets:
   - name: sw_stdlib_str
     group: directed_tb
     core: sharc:soc_ip:grouper_soc_directed
-    fusesoc_target: trace
+    fusesoc_target: default
     kind: cocotb
     fusesoc_args: "--no-export"
     success_pattern: ""
@@ -229,7 +229,7 @@ targets:
   - name: sw_uart_echo
     group: directed_tb
     core: sharc:soc_ip:grouper_soc_directed
-    fusesoc_target: trace
+    fusesoc_target: default
     kind: cocotb
     fusesoc_args: "--no-export"
     success_pattern: ""
@@ -240,7 +240,7 @@ targets:
   - name: sw_gpio
     group: directed_tb
     core: sharc:soc_ip:grouper_soc_directed
-    fusesoc_target: trace
+    fusesoc_target: default
     kind: cocotb
     fusesoc_args: "--no-export"
     success_pattern: ""
