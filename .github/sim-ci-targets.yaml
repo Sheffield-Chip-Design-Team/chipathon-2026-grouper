@@ -143,6 +143,17 @@ targets:
     coverage_scope: full
     fw_test: ""
 
+  - name: ahb_spi_m_directed
+    group: directed_tb
+    core: sharc:comms_ip:ahb_spi_m_directed
+    fusesoc_target: default
+    kind: cocotb
+    fusesoc_args: ""
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: ""
+
   - name: ahb_spi_s_directed
     group: directed_tb
     core: sharc:comms_ip:ahb_spi_s_directed
@@ -169,6 +180,7 @@ targets:
   # target it implies DEBUG_PERIPH=true, CPU_TRACE=true and debug firmware -
   # so this leg exercises a 9-slave fabric, not the 8-slave one that tapes out.
   # Switch to tb_top for a run that matches the shipping configuration.
+  
   - name: grouper_soc_tb_top
     group: directed_tb
     core: sharc:soc_ip:grouper_soc_tb
