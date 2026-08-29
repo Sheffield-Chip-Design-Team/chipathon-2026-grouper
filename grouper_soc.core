@@ -54,10 +54,10 @@ filesets:
       - sharc:amba_ip:ahb3lite_pkg:0.0.1
       - yosys:cpu_ip:picorv32:1.0.0
       - sharc:comms_ip:ahb_uart:0.0.1
-      - sharc:comms_ip:ahb_spi_s:0.0.1
-      - sharc:comms_ip:ahb_gpio_ctrl:0.0.1
-      - sharc:comms_ip:ahb_qspi:0.0.1
       - sharc:comms_ip:ahb_spi_m:0.0.1
+      - sharc:comms_ip:ahb_spi_s:0.0.1
+      - sharc:comms_ip:ahb_qspi:0.0.1
+      - sharc:comms_ip:ahb_gpio_ctrl:0.0.1
       - ocd:mem_ip:gf180_mcu_sram1024x8:1.0.0
 
     files:
