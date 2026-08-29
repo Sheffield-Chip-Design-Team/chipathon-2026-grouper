@@ -44,7 +44,6 @@ TODO
 
 TODO
 
-
 ## Parameters and Configurations
 
 | ID | Requirement |
@@ -54,6 +53,7 @@ TODO
 | `GRPR-SPIM-012` | Clock divider ratio, `CPOL`, and `CPHA` shall all be programmable over the AHB bus. |
 | `GRPR-SPIM-016` | Only SPI Mode 0 and 3 shall be supported - attempts to configure the CPOL and CPHA fields to different values shall give a 2-cycle AHBlite Error Response|
 | `GRPR-SPIM-017` | FIFO_DEPTH shall be paramatarisable up to a width of 8 entires. |
+
 ## IOs and External Interfaces
 
 | Port | Direction | Width | Description |
@@ -73,12 +73,13 @@ TODO
 
 | Offset | Name | Access | Reset | Purpose |
 | --- | --- | --- | --- | --- |
-| 0x00 | CTRL | R/W | 0x0000_0000  |  Static config: mode, clock, CS |
+| 0x00 | CTRL | R/W | 0x0000_0100  |  Static config: mode, clock, enable |
 | 0x04 | CMD | R/W | 0x0000_0000   | Per-transfer descriptor + START |
 | 0x08 | STATUS | RO | 0x0000_000A | Live state and FIFO flags |
 | 0x0C | IRQ_STATUS  | W1C | 0x0000_0000   | Latched done/error events |
-| 0x10 | ADDR | R/W | 0x0000_0000  | Address phase payload |
-| 0x14 | DATA | R/W | —            | TX FIFO push (write) / RX FIFO pop (read) |
+| 0x10 | IRQ_EN | R/W | 0x0000_0000 | Per-source interrupt enables |
+| 0x14 | ADDR | R/W | 0x0000_0000  | Address phase payload |
+| 0x18 | DATA | R/W | —            | TX FIFO push (write) / RX FIFO pop (read) |
 
 Unlisted bits are reserved: write 0, read 0.
 
@@ -90,11 +91,18 @@ Written once at init. Not touched per transfer.
 | --- | --- | --- | --- |
 | 0 | CPHA | R/W | Clock phase    |
 | 1 | CPOL | R/W | Clock polarity |
-| 9:2 | CLKDIV | R/W | SCLK = fclk / (2 × (CLKDIV + 1)) |
-| 14 | IE_COMPLETE | R/W | Interrupt enable for IRQ_COMPLETE.TXN_COMPLETE |
-| 15 | IE_ERR | R/W |  Interrupt enable for IRQ_STATUS error bits |
+| 3 | ENABLE | R/W | SPI Master Enable. The block only runs while this is 1; a `CMD.START` written while it is 0 is ignored and sets `IRQ_STATUS.CFG_ERR` |
+| 15:8 | CLKDIV | R/W | SCLK = fclk / (2 × (CLKDIV + 1)) |
+| 16 | IE_COMPLETE | R/W | Interrupt enable for `IRQ_STATUS.TXN_COMPLETE` |
+| 17 | IE_ERR | R/W | Interrupt enable for the `IRQ_STATUS` error bits |
 
-Writing CTRL while STATUS.BUSY = 1 is ignored and sets INT.CFG_ERR.
+Reset value `0x0000_0100`: CLKDIV = 1, giving the 4 MHz default SCK of
+`GRPR-SPIM-013` from a 16 MHz system clock. The block is disabled at reset,
+so firmware must set ENABLE before the first transfer.
+
+Writing CTRL while STATUS.BUSY = 1 is ignored and sets `IRQ_STATUS.CFG_ERR`.
+CPOL and CPHA must be written equal — only modes 0 and 3 are supported, and an
+unequal pair is rejected with a two-cycle AHB ERROR response (`GRPR-SPIM-016`).
 
 ## CMD — 0x04
 
@@ -111,9 +119,15 @@ Write with START = 1 to launch a transfer. Single-store kickoff.
 | 14 | DIR | R/W | 0 = write (drain TX FIFO), 1 = read (fill RX FIFO) |
 | 19:15 | DUMMY | R/W | 0–31 dummy SCLK cycles between address and data |
 | 27:20 | DATA_LEN | R/W | Data phase length in bytes, minus 1. Range 1–256 |
+| 28    | RX_FLUSH | R/W | Flush the RX FIFO |
+| 29    | TX_FLUSH | R/W | Flush the TX FIFO |
 
 Phase order: CMD → ADDR → DUMMY → DATA. Any phase may be omitted.
 LEN and DIR are ignored when DATA_EN = 0.
+
+START, RX_FLUSH and TX_FLUSH are single-cycle pulses: they act on the write
+and always read back 0. A flush may be requested with START = 0 to reset a
+FIFO without launching a transfer.
 
 ## STATUS — 0x08 (read-only)
 
@@ -121,12 +135,10 @@ LEN and DIR are ignored when DATA_EN = 0.
 | --- | --- | --- |
 | 0 | BUSY | Transfer in progress |
 | 1 | TX_EMPTY | TX FIFO empty |
-| 2 | TX_FULL | TX FIFO full |
+| 2 | TX_FULL  | TX FIFO full |
 | 3 | RX_EMPTY | RX FIFO empty |
-| 4 | RX_FULL | RX FIFO full |
-| 7:5 | RSVD | - |
-| 11:8 | TX_LEVEL | TX FIFO occupancy |
-| 15:12 | RX_LEVEL | RX FIFO occupancy |
+| 4 | RX_FULL  | RX FIFO full |
+| 15:5 | RSVD  | - |
 
 Reset value 0x0A reflects TX_EMPTY = 1 and RX_EMPTY = 1.
 
@@ -134,14 +146,32 @@ Reset value 0x0A reflects TX_EMPTY = 1 and RX_EMPTY = 1.
 
 | Bits | Field | Description |
 | --- | --- | --- |
-| 0 | TXN_COMPLETE | Transfer completed |
-| 1 | OVERRUN | RX fifo read attempted when the FIFO is empty. |
-| 2 | UNDERRUN | TX fifo write attempted when the FIFO is full.|
-| 3 | CFG_ERR | START while BUSY, illegal descriptor, or CTRL write while BUSY |
+| 0 | TXN_COMPLETE  | Transfer completed |
+| 1 | UNDERRUN      | RX FIFO read attempted while empty, **or** a data byte was needed with the TX FIFO empty during a transfer |
+| 2 | OVERRUN       | TX FIFO write attempted while full, **or** an RX byte arrived with the RX FIFO full during a transfer |
+| 3 | CFG_ERR       | START while BUSY, START while disabled, illegal CPOL/CPHA pair, or a CTRL write while BUSY |
+
+Each of UNDERRUN and OVERRUN covers both its AHB-side access error and its
+in-transfer FIFO event; the two share a bit and are not distinguishable from
+`IRQ_STATUS` alone. See `SPIM-SPEC-001` for the open question of whether to
+split them into four bits.
 
 Interrupt asserts when (DONE & CTRL.IE_COMPLETE) or ((OVERRUN | UNDERRUN | CFG_ERR) & CTRL.IE_ERR).
 
-## ADDR — 0x10
+## IRQ_EN — 0x10
+
+Per-source enables, at the same bit positions as `IRQ_STATUS`. A source
+contributes to `irq` only when its `IRQ_EN` bit **and** the matching
+`CTRL.IE_COMPLETE` / `CTRL.IE_ERR` master enable are both set.
+
+| Bits | Field | Access | Description |
+| --- | --- | --- | --- |
+| 0 | TXN_COMPLETE | R/W | Enable the transfer-complete interrupt |
+| 1 | UNDERRUN     | R/W | Enable the underrun interrupt |
+| 2 | OVERRUN      | R/W | Enable the overrun interrupt |
+| 3 | CFG_ERR      | R/W | Enable the configuration-error interrupt |
+
+## ADDR — 0x14
 
 | Bits | Field | Access | Description |
 | --- | --- | --- | --- |
@@ -149,15 +179,24 @@ Interrupt asserts when (DONE & CTRL.IE_COMPLETE) or ((OVERRUN | UNDERRUN | CFG_E
 
 For a 24-bit device address, set ADDR_BYTES = 2 and place the address in bits 23:0.
 
-## DATA — 0x14
+## DATA — 0x18
 
 | Access | Behaviour |
 | --- | --- |
 | Write | Pushes 1–4 bytes into the TX FIFO |
-| Read | Pops from the RX FIFO |
+| Read  | Pops from the RX FIFO |
 
 Reading an empty RX FIFO returns the last popped value and sets IRQ_STATUS.UNDERRUN.
 Writing a full TX FIFO is dropped and sets IRQ_STATUS.OVERRUN
+
+## Data-phase Flow Control
+
+If the data phase of a write needs a byte the TX FIFO cannot supply, SCK stops
+and `CS_N` stays asserted until firmware pushes another byte through `DATA`;
+`IRQ_STATUS.UNDERRUN` is set. The transfer then resumes where it left off, so
+a `DATA_LEN` larger than `FIFO_DEPTH` is the normal case rather than an error.
+Stalling mid-byte is not possible — the stall is taken at a byte boundary — so
+no partial byte is ever emitted.
 
 ## Clocking Strategy
 
@@ -184,10 +223,20 @@ Fully synchronous design. `MISO` is sampled on the rising bus clock edge; the so
 ## Open Items
 
 - `GRPR-SPIM-004` — Pico/RP2040 SPI compatibility has no concrete pass/fail criteria yet.
-
-- `GRPR-SPIM-010` — three different clock-frequency figures in the source material (32 MHz text, 16 MHz diagram, 10 MHz current RTL default) need reconciling against the real top-level clock plan.
-
-- External pin ownership depends on the unresolved [GPIO Mux](GPIO%20Mux.md) pin-sharing scheme.
+- `SPIM-SPEC-001` — UNDERRUN and OVERRUN each cover two distinct events (an AHB
+  access error and an in-transfer FIFO event). Both are implemented, but they
+  share a bit. Splitting them into four bits is still open.
+- `SPIM-SPEC-003` — FIFO depth is fixed at 4 entries (`FIFO_DEPTH`), so the
+  `STATUS` level fields would need only 3 bits. They are currently not
+  implemented at all; `STATUS` exposes the empty/full flags only.
+- `SPIM-SPEC-005` — `CS_N` timing is now deterministic (one SCK half period of
+  setup before the first sampling edge, one half period of hold after the
+  last), but no numeric setup/hold/deassertion requirement is stated.
+- `SPIM-SPEC-006` — MISO is sampled on the SCK edge that drives the clock to
+  its active level (rising in mode 0, falling in mode 3); MOSI is launched on
+  the other edge.
+- `SPIM-SPEC-010`/`-011`/`-012` — requirement-ID and naming inconsistencies in
+  this document are not yet cleaned up.
 
 
 ## Verification Cross-Reference
