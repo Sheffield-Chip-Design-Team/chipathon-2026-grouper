@@ -302,6 +302,8 @@ module ahb_spi_m #(
               if (HWDATA[1]) int_underrun <= 1'b0;
               if (HWDATA[2]) int_overrun  <= 1'b0;
               if (HWDATA[3]) int_cfg_err  <= 1'b0;
+              if (HWDATA[4]) int_underflow <= 1'b0;
+              if (HWDATA[5]) int_overflow  <= 1'b0;
             end
           end
 
@@ -311,6 +313,8 @@ module ahb_spi_m #(
               ie_underrun <= HWDATA[1];
               ie_overrun  <= HWDATA[2];
               ie_cfg_err  <= HWDATA[3];
+              ie_underflow <= HWDATA[4];
+              ie_overflow  <= HWDATA[5];
             end
           end
 
@@ -324,18 +328,24 @@ module ahb_spi_m #(
           end
 
           ADDR_DATA: begin
-            // A push to a full TX FIFO is dropped and flags OVERRUN.
+            // A push to a full TX FIFO is dropped. That is an AHB access
+            // error, so it flags OVERFLOW -- distinct from OVERRUN, which is
+            // the in-transfer event of an RX byte arriving with the RX FIFO
+            // full (SPIM-SPEC-001).
             if (tx_full)
-              int_overrun <= 1'b1;
+              int_overflow <= 1'b1;
           end
 
           default: begin end
         endcase
 
-      // UNDERRUN is decided in the address phase, where rx_empty still
-      // describes the FIFO the access is about to read.
+      // UNDERFLOW is decided in the address phase, where rx_empty still
+      // describes the FIFO the access is about to read. It is the AHB-side
+      // error -- reading an empty RX FIFO -- as opposed to UNDERRUN, which is
+      // the in-transfer event of a data byte being needed with the TX FIFO
+      // empty (SPIM-SPEC-001).
       if (data_read && !rx_pop_valid)
-        int_underrun <= 1'b1;
+        int_underflow <= 1'b1;
       if (rx_pop_valid)
         rx_last_data <= rx_data;
     end
@@ -453,7 +463,9 @@ module ahb_spi_m #(
         };
 
         ADDR_INT_STS: HRDATA = {
-            28'b0,
+            26'b0,
+            int_overflow,
+            int_underflow,
             int_cfg_err,
             int_overrun,
             int_underrun,
@@ -461,7 +473,9 @@ module ahb_spi_m #(
         };
 
         ADDR_INT_EN: HRDATA = {
-            28'b0,
+            26'b0,
+            ie_overflow,
+            ie_underflow,
             ie_cfg_err,
             ie_overrun,
             ie_underrun,
@@ -540,9 +554,11 @@ module ahb_spi_m #(
 //------------------------------------------------------
 
   assign irq = (int_done && ctrl_ie_done && ie_done) ||
-               (ctrl_ie_err && ((int_overrun  && ie_overrun)  ||
-                                (int_underrun && ie_underrun) ||
-                                (int_cfg_err  && ie_cfg_err)));
+               (ctrl_ie_err && ((int_overrun   && ie_overrun)   ||
+                                (int_underrun  && ie_underrun)  ||
+                                (int_overflow  && ie_overflow)  ||
+                                (int_underflow && ie_underflow) ||
+                                (int_cfg_err   && ie_cfg_err)));
 
 //------------------------------------------------------
 // Invalid access / configuration detection
