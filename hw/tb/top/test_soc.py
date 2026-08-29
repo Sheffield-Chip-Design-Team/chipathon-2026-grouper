@@ -40,6 +40,15 @@ from cocotb.triggers import (
     with_timeout,
 )
 
+from hw.tb.models.aps6404l import (
+    FAST_READ_WAIT as APS_FAST_READ_WAIT,
+    OP_FAST_READ as APS_OP_FAST_READ,
+    OP_READ as APS_OP_READ,
+    OP_RESET as APS_OP_RESET,
+    OP_RESET_EN as APS_OP_RESET_EN,
+    OP_WRITE as APS_OP_WRITE,
+)
+from hw.tb.models.spi_psram_pads import PsramPadSlave
 from hw.tb.tb_utils import bootloader
 from hw.tb.top import trace_decode
 
@@ -966,7 +975,7 @@ async def expect_test_result(uart, name, timeout_ms=SIM_TIMEOUT_MS):
 # Firmware that needs the testbench to do something - drive a console, stream
 # GPIO - has its own test below. Everything else only has to run to completion.
 FW_TEST = os.environ.get("FW_TEST", "")
-DRIVEN_FW = ("uart_echo", "gpio_echo", "qspi")
+DRIVEN_FW = ("uart_echo", "gpio_echo", "qspi", "spi_m")
 
 # Whether the ROM holds the bootloader rather than an application image, which
 # is what the `boot` target builds. The file's presence and content is the
@@ -1266,6 +1275,82 @@ async def drive_qspi(dut, uart):
     await uart.wait_for("QSPI_TRANSACTION_DONE")
     await expect_test_result(uart, "qspi")
 
+async def drive_spi_m(dut, pads, uart):
+    """Run sw/tests/test_spi_m.c against an APS6404L model on the pads.
+
+    The firmware is self-checking - it reads back what it wrote and reports
+    through the usual TEST_RESULT line. What this adds is the other side of
+    the wire: a real device model, so the checks below are against what an
+    APS6404L would actually have seen and returned rather than against a
+    loopback. That is what makes it evidence for GRPR-SPIM-004.
+    """
+    psram = PsramPadSlave(dut, pads).start()
+
+    await uart.wait_for("SPI_M_TRANSACTION_DONE")
+    await expect_test_result(uart, "spi_m")
+
+    psram.stop()
+
+    # Datasheet section 8.6: every read and write must end on a byte boundary
+    # with CE# raised immediately after.
+    psram.device.check_termination()
+
+    opcodes = [record["opcode"] for record in psram.transactions]
+    log.info("APS6404L saw: %s", " ".join(f"0x{op:02x}" for op in opcodes))
+
+    # The firmware's sequence: Reset Enable, Reset, Write, Read, Fast Read.
+    assert opcodes == [
+        APS_OP_RESET_EN, APS_OP_RESET,
+        APS_OP_WRITE, APS_OP_READ, APS_OP_FAST_READ,
+    ], f"unexpected APS6404L command sequence: {opcodes}"
+
+    payload = bytes((0xDE, 0xAD, 0xBE, 0xEF))
+    address = 0x012345
+
+    written = psram.device.last(APS_OP_WRITE)
+    assert written["address"] == address, (
+        f"write went to 0x{written['address']:06x}, expected 0x{address:06x}"
+    )
+    assert written["written"] == payload, (
+        f"device received {written['written'].hex()}, expected {payload.hex()}"
+    )
+
+    # The model's own memory is the independent check that the address phase
+    # and the data phase agreed.
+    assert psram.device.read_memory(address, len(payload)) == payload
+
+    for opcode in (APS_OP_READ, APS_OP_FAST_READ):
+        record = psram.device.last(opcode)
+        assert record["address"] == address, (
+            f"0x{opcode:02x} read from 0x{record['address']:06x}, "
+            f"expected 0x{address:06x}"
+        )
+        assert record["read"].startswith(payload), (
+            f"0x{opcode:02x} returned {record['read'].hex()}, "
+            f"expected it to start with {payload.hex()}"
+        )
+
+    log.info("APS6404L: %d SCK cycles over %d CS# windows",
+             psram.sck_cycles, psram.cs_windows)
+
+    # One window per transaction, and every phase exactly 8 SCK per byte
+    # (GRPR-SPIM-016) with no stray edges: two bare commands, then
+    # command+address+data twice, then the same again with the 8 wait cycles
+    # 'h0B requires.
+    expected_cycles = (
+        8 + 8
+        + (8 + 24 + 8 * len(payload))
+        + (8 + 24 + 8 * len(payload))
+        + (8 + 24 + APS_FAST_READ_WAIT + 8 * len(payload))
+    )
+    assert psram.cs_windows == len(opcodes), (
+        f"{psram.cs_windows} CS# windows for {len(opcodes)} transactions"
+    )
+    assert psram.sck_cycles == expected_cycles, (
+        f"{psram.sck_cycles} SCK cycles, expected {expected_cycles}"
+    )
+
+
 async def score_firmware(dut, pads, uart, timeout_ms=SIM_TIMEOUT_MS):
     """Score whatever image is running now.
 
@@ -1283,6 +1368,8 @@ async def score_firmware(dut, pads, uart, timeout_ms=SIM_TIMEOUT_MS):
         await drive_gpio_patterns(dut, pads, uart)
     elif FW_TEST == "qspi":
         await drive_qspi(dut, uart)
+    elif FW_TEST == "spi_m":
+        await drive_spi_m(dut, pads, uart)
     else:
         await expect_test_result(uart, FW_TEST or "firmware", timeout_ms=timeout_ms)
 
@@ -1315,3 +1402,10 @@ async def test_qspi(dut):
     """sw/tests/test_qspi.c, running from the ROM."""
     _, uart = await bring_up(dut)
     await drive_qspi(dut, uart)
+
+
+@soc_test(skip=FW_TEST != "spi_m" or ROM_IS_BOOTLOADER)
+async def test_spi_m(dut):
+    """sw/tests/test_spi_m.c against an APS6404L model, running from the ROM."""
+    pads, uart = await bring_up(dut)
+    await drive_spi_m(dut, pads, uart)

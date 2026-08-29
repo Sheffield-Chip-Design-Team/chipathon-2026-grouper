@@ -59,6 +59,11 @@ IRQ_TXN_COMPLETE = 1 << 0
 IRQ_UNDERRUN = 1 << 1
 IRQ_OVERRUN = 1 << 2
 IRQ_CFG_ERR = 1 << 3
+# OVERRUN/UNDERRUN are the in-transfer (wire-side) FIFO events; UNDERFLOW and
+# OVERFLOW are the AHB access errors -- reading an empty RX FIFO and writing a
+# full TX FIFO. Split per SPIM-SPEC-001.
+IRQ_UNDERFLOW = 1 << 4
+IRQ_OVERFLOW = 1 << 5
 
 # APS6404L opcodes -- GRPR-SPIM-006
 OP_SPI_READ = 0x03
@@ -177,18 +182,18 @@ class SpiMonitor:
         dut = self.dut
         cocotb.start_soon(self._drive_miso())
 
-        prev_sck = int(dut.SPI_SCK.value)
-        prev_mosi = int(dut.SPI_MOSI.value)
-        prev_csn = int(dut.SPI_CS_N.value)
+        prev_sck = int(dut.spi_m_sck_o.value)
+        prev_mosi = int(dut.spi_m_mosi_o.value)
+        prev_csn = int(dut.spi_m_cs_n_o.value)
 
         while True:
             # Read on the HCLK edge itself, BEFORE the DUT's non-blocking
             # updates land: these are the values the wires held during the
             # cycle just ending, which is exactly what a slave sees.
             await RisingEdge(dut.HCLK)
-            sck = int(dut.SPI_SCK.value)
-            mosi = int(dut.SPI_MOSI.value)
-            csn = int(dut.SPI_CS_N.value)
+            sck = int(dut.spi_m_sck_o.value)
+            mosi = int(dut.spi_m_mosi_o.value)
+            csn = int(dut.spi_m_cs_n_o.value)
 
             # The sampling edge drives SCK to its active level: rising when
             # CPOL=0, falling when CPOL=1.
@@ -210,13 +215,13 @@ class SpiMonitor:
     async def _track_mosi(self):
         """Keep the value MOSI held before the most recent change."""
         dut = self.dut
-        self._mosi_prev = int(dut.SPI_MOSI.value)
+        self._mosi_prev = int(dut.spi_m_mosi_o.value)
         while True:
-            await Edge(dut.SPI_MOSI)
+            await Edge(dut.spi_m_mosi_o)
             # Everything the sampler needs is the value from *before* this
             # change; publish it only after the sampler has had its turn.
             await Timer(1, unit="ps")
-            self._mosi_prev = int(dut.SPI_MOSI.value)
+            self._mosi_prev = int(dut.spi_m_mosi_o.value)
 
     async def _drive_miso(self):
         """Shift out miso_data on the launch edge, MSB first."""
@@ -227,17 +232,17 @@ class SpiMonitor:
         # the bit is stable across the master's sampling edge.
         launch = 1 if self.cpol else 0
         while True:
-            await FallingEdge(dut.SPI_CS_N)
+            await FallingEdge(dut.spi_m_cs_n_o)
             self._miso_index = 0
-            dut.SPI_MISO.value = self._miso_bits[0]
-            prev_sck = int(dut.SPI_SCK.value)
-            while int(dut.SPI_CS_N.value) == 0:
+            dut.spi_m_miso_i.value = self._miso_bits[0]
+            prev_sck = int(dut.spi_m_sck_o.value)
+            while int(dut.spi_m_cs_n_o.value) == 0:
                 await RisingEdge(dut.HCLK)
-                sck = int(dut.SPI_SCK.value)
+                sck = int(dut.spi_m_sck_o.value)
                 if (sck == launch) and (prev_sck != launch):
                     self._miso_index += 1
                     if self._miso_index < len(self._miso_bits):
-                        dut.SPI_MISO.value = self._miso_bits[self._miso_index]
+                        dut.spi_m_miso_i.value = self._miso_bits[self._miso_index]
                 prev_sck = sck
 
 
@@ -249,3 +254,5 @@ async def wait_not_busy(dut, ahb_read, timeout_cycles=20000):
             return i
         await RisingEdge(dut.HCLK)
     raise TimeoutError("STATUS.BUSY never cleared -- transfer hung")
+
+

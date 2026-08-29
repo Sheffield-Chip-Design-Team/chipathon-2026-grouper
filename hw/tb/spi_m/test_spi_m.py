@@ -10,11 +10,17 @@ The transaction tests are the ones that matter: they are what would have
 caught the defects listed in hw/rtl/spi_m/spi_m_bugs.md.
 """
 
+import functools
 import logging
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge, Timer
+from cocotb.triggers import (
+    RisingEdge,
+    SimTimeoutError,
+    Timer,
+    with_timeout,
+)
 
 from hw.tb.tb_utils.ahb_utils import (
     HSIZE_BYTE,
@@ -30,7 +36,9 @@ from hw.tb.spi_m.spi_m_utils import (
     IRQ_EN,
     IRQ_STATUS,
     IRQ_CFG_ERR,
+    IRQ_OVERFLOW,
     IRQ_OVERRUN,
+    IRQ_UNDERFLOW,
     IRQ_TXN_COMPLETE,
     IRQ_UNDERRUN,
     OP_FAST_READ,
@@ -54,6 +62,39 @@ CLK_PERIOD_NS = 10
 # A small divider keeps the tests fast: SCK = HCLK / (2 * (CLKDIV + 1)).
 TEST_CLKDIV = 1
 
+async def settle(dut):
+    """Advance to a clock edge before letting the test end.
+
+    A test that returns immediately after a Timer or a value read leaves the
+    simulator mid-cycle, and Verilator's VPI teardown then walks a partially
+    updated model - which comes back as a bare exit -11 (SIGSEGV) from
+    ./Vtop after the regression summary has already printed every test as
+    passing. Ending on a clock edge lets the cycle complete first. Same
+    reasoning, and the same helper, as soc_test() in hw/tb/top/test_soc.py.
+    """
+    try:
+        await with_timeout(RisingEdge(dut.HCLK), 10 * CLK_PERIOD_NS, "ns")
+    except SimTimeoutError:
+        log.debug("settle: no clock edge - ending without one")
+    except Exception as exc:
+        log.debug("settle: %s", exc)
+
+
+def spi_m_test(**kwargs):
+    """cocotb.test that always ends its test on a clock edge. See settle()."""
+    def wrap(fn):
+        @cocotb.test(**kwargs)
+        @functools.wraps(fn)
+        async def inner(dut):
+            try:
+                await fn(dut)
+            finally:
+                await settle(dut)
+
+        return inner
+
+    return wrap
+
 
 async def reset_dut(dut):
     dut.HRESETn.value = 0
@@ -67,7 +108,7 @@ async def reset_dut(dut):
     dut.HBURST.value = 0
     dut.HMASTLOCK.value = 0
     dut.HPROT.value = 0
-    dut.SPI_MISO.value = 0
+    dut.spi_m_miso_i.value = 0
 
     await Timer(20, unit="ns")
     dut.HRESETn.value = 1
@@ -91,9 +132,18 @@ async def configure(dut, cpol=0, cpha=0, clk_div=TEST_CLKDIV):
 
 
 async def push_tx(dut, data_bytes):
-    """Push bytes into the TX FIFO via DATA."""
+    """Push bytes into the TX FIFO via DATA, one byte per store.
+
+    HSIZE_BYTE, not the default word size: a DATA write pushes 1-4 bytes
+    according to the transfer size (SPIM-ISSUE-017 and the DATA row of the
+    specification's register map), so a 32-bit store of one byte strobes all
+    four lanes and queues that byte followed by three zeros. Pushing three
+    bytes that way put 0xDE 0x00 0x00 on the wire and swallowed the two
+    following stores, because the second and third arrived while the first
+    store's lanes were still draining.
+    """
     for byte in data_bytes:
-        hresp = await ahb_write(dut, DATA, byte)
+        hresp = await ahb_write(dut, DATA, byte, size=HSIZE_BYTE)
         assert hresp == 0, "DATA write errored"
 
 
@@ -110,7 +160,7 @@ def expect_bytes(actual, expected, what):
 # Register tests
 # ---------------------------------------------------------------------------
 
-@cocotb.test()
+@spi_m_test()
 async def test_reset_values(dut):
     """Every register reads its specified reset value. GRPR-SPIM-001."""
     await init_test(dut)
@@ -138,7 +188,7 @@ async def test_reset_values(dut):
     log.info("reset values OK")
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_ctrl_fields(dut):
     """CTRL field placement: CPHA[0] CPOL[1] ENABLE[3] CLKDIV[15:8] IE[17:16]."""
     await init_test(dut)
@@ -155,7 +205,7 @@ async def test_ctrl_fields(dut):
     assert (readback >> 3) & 0x1 == 1, "ENABLE not at bit 3"
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_cmd_fields(dut):
     """CMD field placement, and START always reads back 0 (self-clearing)."""
     await init_test(dut)
@@ -173,7 +223,7 @@ async def test_cmd_fields(dut):
     assert readback & 0x1 == 0, "START must always read 0"
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_start_self_clears(dut):
     """SPIM-ISSUE-005: START is a pulse, so a transfer must not repeat."""
     await init_test(dut)
@@ -195,7 +245,7 @@ async def test_start_self_clears(dut):
         monitor.cs_windows
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_addr_byte_strobes(dut):
     """SPIM-ISSUE-019: a sub-word ADDR write must not clobber all 32 bits."""
     await init_test(dut)
@@ -211,31 +261,34 @@ async def test_addr_byte_strobes(dut):
         "byte write to ADDR clobbered upper bytes: 0x%08x" % value
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_irq_status_w1c(dut):
     """IRQ_STATUS bits are write-1-to-clear."""
     await init_test(dut)
     await configure(dut)
 
-    # Provoke UNDERRUN by reading the empty RX FIFO.
+    # Reading the empty RX FIFO is an AHB access error, so it sets UNDERFLOW
+    # (bit 4), not the in-transfer UNDERRUN (bit 1) -- SPIM-SPEC-001.
     await ahb_read(dut, DATA)
     irq, _ = await ahb_read(dut, IRQ_STATUS)
-    assert irq & IRQ_UNDERRUN, "UNDERRUN not set after empty RX read"
+    assert irq & IRQ_UNDERFLOW, "UNDERFLOW not set after empty RX read"
+    assert not (irq & IRQ_UNDERRUN), \
+        "an AHB read of an empty RX FIFO must not set the in-transfer UNDERRUN"
 
     # Writing 0 to the bit leaves it alone.
     await ahb_write(dut, IRQ_STATUS, 0)
     irq, _ = await ahb_read(dut, IRQ_STATUS)
-    assert irq & IRQ_UNDERRUN, "UNDERRUN cleared by a write of 0"
+    assert irq & IRQ_UNDERFLOW, "UNDERFLOW cleared by a write of 0"
 
     # Writing 1 clears it.
-    await ahb_write(dut, IRQ_STATUS, IRQ_UNDERRUN)
+    await ahb_write(dut, IRQ_STATUS, IRQ_UNDERFLOW)
     irq, _ = await ahb_read(dut, IRQ_STATUS)
-    assert not (irq & IRQ_UNDERRUN), "UNDERRUN not cleared by W1C"
+    assert not (irq & IRQ_UNDERFLOW), "UNDERFLOW not cleared by W1C"
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_tx_overrun(dut):
-    """Writing a full TX FIFO is dropped and sets OVERRUN."""
+    """Writing a full TX FIFO is dropped and sets OVERFLOW."""
     await init_test(dut)
     await configure(dut)
 
@@ -244,12 +297,16 @@ async def test_tx_overrun(dut):
     status, _ = await ahb_read(dut, STATUS)
     assert not (status & ST_TX_EMPTY), "TX FIFO still reads empty after 4 pushes"
 
-    await ahb_write(dut, DATA, 0x55)
+    # A push to a full TX FIFO is an AHB access error, so it sets OVERFLOW
+    # (bit 5), not the in-transfer OVERRUN (bit 2) -- SPIM-SPEC-001.
+    await push_tx(dut, [0x55])
     irq, _ = await ahb_read(dut, IRQ_STATUS)
-    assert irq & IRQ_OVERRUN, "OVERRUN not set on write to a full TX FIFO"
+    assert irq & IRQ_OVERFLOW, "OVERFLOW not set on write to a full TX FIFO"
+    assert not (irq & IRQ_OVERRUN), \
+        "an AHB write to a full TX FIFO must not set the in-transfer OVERRUN"
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_illegal_mode_error_response(dut):
     """GRPR-SPIM-016 / SPIM-ISSUE-014: CPOL != CPHA gives a 2-cycle ERROR."""
     await init_test(dut)
@@ -266,7 +323,7 @@ async def test_illegal_mode_error_response(dut):
     assert ctrl & 0x3 == 0, "illegal mode was accepted into CTRL"
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_status_write_error(dut):
     """STATUS is read-only: a write must error."""
     await init_test(dut)
@@ -274,7 +331,7 @@ async def test_status_write_error(dut):
     assert hresp == 1, "write to read-only STATUS did not produce HRESP"
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_cfg_err_start_while_busy(dut):
     """START while BUSY sets CFG_ERR and does not disturb the transfer."""
     await init_test(dut)
@@ -301,7 +358,7 @@ async def test_cfg_err_start_while_busy(dut):
 # Transaction tests -- the four commands of GRPR-SPIM-006
 # ---------------------------------------------------------------------------
 
-@cocotb.test()
+@spi_m_test()
 async def test_spi_write(dut):
     """SPI_WRITE (0x02): opcode + 24-bit address + data, all on MOSI.
 
@@ -340,14 +397,14 @@ async def test_spi_write(dut):
     # GRPR-SPIM-017: CS_N deasserted exactly once, at the end.
     assert monitor.cs_windows == 1, \
         "expected 1 CS_N window, saw %d" % monitor.cs_windows
-    assert int(dut.SPI_CS_N.value) == 1, "CS_N still low after the transfer"
+    assert int(dut.spi_m_cs_n_o.value) == 1, "CS_N still low after the transfer"
 
     # GRPR-SPIM-008: completion flag.
     irq, _ = await ahb_read(dut, IRQ_STATUS)
     assert irq & IRQ_TXN_COMPLETE, "TXN_COMPLETE not set after SPI_WRITE"
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_fast_write(dut):
     """FAST_WRITE (0x38): same shape as SPI_WRITE with a different opcode."""
     await init_test(dut)
@@ -378,7 +435,7 @@ async def test_fast_write(dut):
             monitor.sck_cycles, 8 * len(expected))
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_spi_read(dut):
     """SPI_READ (0x03): opcode + address out, data in on MISO, no dummy.
 
@@ -433,7 +490,7 @@ async def test_spi_read(dut):
         "RX FIFO not empty after popping all data -- extra bytes captured"
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_fast_read(dut):
     """FAST_READ (0x0B): opcode + address + 8 dummy SCK cycles, then data.
 
@@ -478,7 +535,7 @@ async def test_fast_read(dut):
     expect_bytes(received, read_data, "FAST_READ RX data")
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_mode3(dut):
     """GRPR-SPIM-002/-009: the same transfer works in mode 3 (CPOL=CPHA=1)."""
     await init_test(dut)
@@ -486,7 +543,7 @@ async def test_mode3(dut):
 
     # SCK must idle high in mode 3.
     await Timer(100, unit="ns")
-    assert int(dut.SPI_SCK.value) == 1, "SCK does not idle high in mode 3"
+    assert int(dut.spi_m_sck_o.value) == 1, "SCK does not idle high in mode 3"
 
     payload = [0x5A]
     monitor = SpiMonitor(dut, cpol=1, cpha=1).start()
@@ -502,10 +559,10 @@ async def test_mode3(dut):
 
     expect_bytes(monitor.mosi_bytes, [OP_SPI_WRITE] + payload,
                  "mode 3 MOSI stream")
-    assert int(dut.SPI_SCK.value) == 1, "SCK not back to idle high after mode 3"
+    assert int(dut.spi_m_sck_o.value) == 1, "SCK not back to idle high after mode 3"
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_cmd_only_transfer(dut):
     """A command-only descriptor emits exactly one byte. GRPR-SPIM-016."""
     await init_test(dut)
@@ -523,7 +580,7 @@ async def test_cmd_only_transfer(dut):
         "command-only used %d SCK cycles, expected 8" % monitor.sck_cycles
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_addr_bytes_widths(dut):
     """ADDR_BYTES selects the low-order N+1 bytes, MSB first. SPIM-ISSUE-012."""
     await init_test(dut)
@@ -552,7 +609,7 @@ async def test_addr_bytes_widths(dut):
                      "ADDR_BYTES=%d MOSI stream" % addr_bytes)
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_clkdiv_ratio(dut):
     """GRPR-SPIM-010: SCK period is 2 * (CLKDIV + 1) system clocks."""
     await init_test(dut)
@@ -563,9 +620,9 @@ async def test_clkdiv_ratio(dut):
     await ahb_write(dut, CMD, cmd_word(opcode=0x9F, cmd_en=1, data_en=0))
 
     # Time two consecutive rising SCK edges.
-    await RisingEdge(dut.SPI_SCK)
+    await RisingEdge(dut.spi_m_sck_o)
     start = cocotb.utils.get_sim_time(unit="ns")
-    await RisingEdge(dut.SPI_SCK)
+    await RisingEdge(dut.spi_m_sck_o)
     period = cocotb.utils.get_sim_time(unit="ns") - start
 
     expected = 2 * (clk_div + 1) * CLK_PERIOD_NS
@@ -576,7 +633,7 @@ async def test_clkdiv_ratio(dut):
     await wait_not_busy(dut, ahb_read)
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_tx_fifo_stall(dut):
     """SPIM-SPEC-009: a data phase longer than the FIFO stalls, then resumes.
 
@@ -601,7 +658,7 @@ async def test_tx_fifo_stall(dut):
             if status & ST_TX_EMPTY:
                 break
             await RisingEdge(dut.HCLK)
-        await ahb_write(dut, DATA, byte)
+        await push_tx(dut, [byte])
 
     await wait_not_busy(dut, ahb_read)
     await Timer(200, unit="ns")
@@ -613,7 +670,7 @@ async def test_tx_fifo_stall(dut):
         "CS_N deasserted mid-stall (%d windows)" % monitor.cs_windows
 
 
-@cocotb.test()
+@spi_m_test()
 async def test_fifo_flush(dut):
     """CMD.TX_FLUSH / RX_FLUSH empty the FIFOs. SPIM-ISSUE-022."""
     await init_test(dut)
@@ -634,7 +691,96 @@ async def test_fifo_flush(dut):
     assert status & ST_RX_EMPTY, "RX FIFO not empty after RX_FLUSH"
 
 
-@cocotb.test()
+@spi_m_test()
+async def test_reset_mid_transfer_drops(dut):
+    """A reset mid-transfer drops the transaction outright (SPIM-SPEC-007).
+
+    The block does not resume or replay: CS_N returns high, STATUS goes back
+    to its reset value with both FIFOs empty, and only whatever bytes had
+    already been clocked out are on the wire.
+    """
+    await init_test(dut)
+    await configure(dut)
+
+    monitor = SpiMonitor(dut).start()
+    await ahb_write(dut, ADDR, 0x0012_3456)
+    await push_tx(dut, [0xDE, 0xAD, 0xBE])
+    await ahb_write(dut, CMD, cmd_word(
+        opcode=OP_SPI_WRITE, cmd_en=1,
+        addr_en=1, addr_bytes=2,
+        data_en=1, dir_read=0, data_len=3,
+    ))
+
+    # Let the command phase get under way, then reset mid-flight.
+    for _ in range(40):
+        await RisingEdge(dut.HCLK)
+    assert int(dut.spi_m_cs_n_o.value) == 0, "CS_N not asserted mid-transfer"
+
+    await reset_dut(dut)
+    monitor.stop()
+
+    assert int(dut.spi_m_cs_n_o.value) == 1, "CS_N still low after reset"
+
+    status, _ = await ahb_read(dut, STATUS)
+    assert status == 0x0000_000A, \
+        "STATUS 0x%02x after reset, expected the 0x0A reset value" % status
+
+    # Nothing is retried: the transfer does not restart on its own.
+    await Timer(2000, unit="ns")
+    assert int(dut.spi_m_cs_n_o.value) == 1, "transfer resumed after reset"
+    assert monitor.cs_windows == 1, \
+        "%d CS_N windows -- the dropped transfer was replayed" % \
+        monitor.cs_windows
+
+
+@spi_m_test()
+async def test_disable_mid_transfer_completes(dut):
+    """Clearing CTRL.ENABLE does not kill a transfer already under way.
+
+    A CTRL write while BUSY is ignored and flags CFG_ERR (GRPR-SPIM-016), so
+    ENABLE cannot drop mid-transfer: the transaction runs to completion and
+    puts its whole byte stream on the wire.
+    """
+    await init_test(dut)
+    await configure(dut)
+
+    payload = [0xDE, 0xAD, 0xBE]
+    monitor = SpiMonitor(dut).start()
+
+    await ahb_write(dut, ADDR, 0x0012_3456)
+    await push_tx(dut, payload)
+    await ahb_write(dut, CMD, cmd_word(
+        opcode=OP_SPI_WRITE, cmd_en=1,
+        addr_en=1, addr_bytes=2,
+        data_en=1, dir_read=0, data_len=len(payload),
+    ))
+
+    for _ in range(40):
+        await RisingEdge(dut.HCLK)
+    assert int(dut.spi_busy.value) == 1, "not busy yet -- test set up wrong"
+
+    # Try to disable mid-transfer. The write is rejected, not applied.
+    await ahb_write(dut, CTRL, ctrl_word(clk_div=TEST_CLKDIV, enable=0))
+
+    irq, _ = await ahb_read(dut, IRQ_STATUS)
+    assert irq & IRQ_CFG_ERR, "CTRL write while BUSY did not flag CFG_ERR"
+
+    await wait_not_busy(dut, ahb_read)
+    await Timer(200, unit="ns")
+    monitor.stop()
+
+    expect_bytes(monitor.mosi_bytes,
+                 [OP_SPI_WRITE, 0x12, 0x34, 0x56] + payload,
+                 "MOSI stream after a rejected mid-transfer disable")
+    assert monitor.cs_windows == 1, \
+        "%d CS_N windows, expected 1" % monitor.cs_windows
+
+    # ENABLE survived the rejected write.
+    ctrl, _ = await ahb_read(dut, CTRL)
+    assert ctrl & (1 << 3), "ENABLE was cleared by a write that BUSY rejected"
+
+
+@spi_m_test()
 async def test_irq_output(dut):
     """GRPR-SPIM-008: irq asserts on completion when enabled, clears on W1C."""
     await init_test(dut)
