@@ -16,7 +16,7 @@ SPI master peripheral that lets the PicoRV32 CPU issue SPI transactions to an ex
 |---|---|
 | `GRPR-SPIM-001` | There shall be an AHB-Lite subordinate interface on the CPU side. |
 | `GRPR-SPIM-002` | SPI mode 0 (and mode 3, see `GRPR-SPIM-006`) shall be supported.  |
-| `GRPR-SPIM-003` | Serial data shall be transmitted on MSB-first, on the MOSI port   |
+| `GRPR-SPIM-003` | Serial data shall be transmitted MSB-first, on the MOSI port. |
 | `GRPR-SPIM-004` | Command/transaction set shall be compatible with the [APS6404L](https://www.pjrc.com/store/APS6404L_3SQR.pdf) datasheet's SPI-mode command encoding. |
 | `GRPR-SPIM-INFO-001` | Transaction timing/behavior shall be validated for compatibility with the Raspberry Pi Pico (RP2040) hardware SPI peripheral |
 
@@ -31,9 +31,13 @@ SPI master peripheral that lets the PicoRV32 CPU issue SPI transactions to an ex
 | `GRPR-SPIM-009` | `CPOL` and `CPHA` shall be independently programmable (SPI mode 0 or mode 3). |
 
 ### SPI Transactions
-| `GRPR-SPIM-014` | A SPI phase shall end only after the final bit's sampling edge. |
-| `GRPR-SPIM-016` | Each SPI byte transfer shall occupy exactly 8 SCK cycles. |
-| `GRPR-SPIM-017` | CS_N shall be de-asserted after every transaction.|
+| ID | Requirement |
+|---|---|
+| `GRPR-SPIM-018` | A SPI phase shall end only after the final bit's sampling edge. |
+| `GRPR-SPIM-019` | Each SPI byte transfer shall occupy exactly 8 SCK cycles. |
+| `GRPR-SPIM-020` | CS_N shall be de-asserted after every transaction. |
+| `GRPR-SPIM-021` | A reset asserted mid-transaction shall drop that transaction: CS_N shall be de-asserted, both FIFOs emptied and all registers returned to their reset values. The dropped transaction shall not be resumed or replayed. |
+| `GRPR-SPIM-022` | Clearing `CTRL.ENABLE` shall not terminate a transaction already in progress. A `CTRL` write while `STATUS.BUSY` is 1 is ignored and sets `IRQ_STATUS.CFG_ERR`, so the in-flight transaction always runs to completion. |
 
 
 ## Block Diagram
@@ -52,7 +56,7 @@ TODO
 | `GRPR-SPIM-011` | Shift-register width shall be configurable. |
 | `GRPR-SPIM-012` | Clock divider ratio, `CPOL`, and `CPHA` shall all be programmable over the AHB bus. |
 | `GRPR-SPIM-016` | Only SPI Mode 0 and 3 shall be supported - attempts to configure the CPOL and CPHA fields to different values shall give a 2-cycle AHBlite Error Response|
-| `GRPR-SPIM-017` | FIFO_DEPTH shall be paramatarisable up to a width of 8 entires. |
+| `GRPR-SPIM-023` | `FIFO_DEPTH` shall be parameterisable up to 8 entries. |
 
 ## IOs and External Interfaces
 
@@ -147,16 +151,20 @@ Reset value 0x0A reflects TX_EMPTY = 1 and RX_EMPTY = 1.
 | Bits | Field | Description |
 | --- | --- | --- |
 | 0 | TXN_COMPLETE  | Transfer completed |
-| 1 | UNDERRUN      | RX FIFO read attempted while empty, **or** a data byte was needed with the TX FIFO empty during a transfer |
-| 2 | OVERRUN       | TX FIFO write attempted while full, **or** an RX byte arrived with the RX FIFO full during a transfer |
+| 1 | UNDERRUN      | A data byte was needed with the TX FIFO empty during a transfer |
+| 2 | OVERRUN       | An RX byte arrived with the RX FIFO full during a transfer |
 | 3 | CFG_ERR       | START while BUSY, START while disabled, illegal CPOL/CPHA pair, or a CTRL write while BUSY |
+| 4 | UNDERFLOW     | AHB read of `DATA` with the RX FIFO empty |
+| 5 | OVERFLOW      | AHB write to `DATA` with the TX FIFO full |
 
-Each of UNDERRUN and OVERRUN covers both its AHB-side access error and its
-in-transfer FIFO event; the two share a bit and are not distinguishable from
-`IRQ_STATUS` alone. See `SPIM-SPEC-001` for the open question of whether to
-split them into four bits.
+The wire events and the AHB access errors are on separate bits
+(`SPIM-SPEC-001`): `UNDERRUN`/`OVERRUN` are the in-transfer FIFO events, and
+`UNDERFLOW`/`OVERFLOW` are the bus-side access errors. All four are
+independently enabled and cleared.
 
-Interrupt asserts when (DONE & CTRL.IE_COMPLETE) or ((OVERRUN | UNDERRUN | CFG_ERR) & CTRL.IE_ERR).
+Interrupt asserts when (TXN_COMPLETE & CTRL.IE_COMPLETE) or
+((UNDERRUN | OVERRUN | UNDERFLOW | OVERFLOW | CFG_ERR) & CTRL.IE_ERR), with
+each source additionally gated by its own `IRQ_EN` bit.
 
 ## IRQ_EN — 0x10
 
@@ -170,6 +178,8 @@ contributes to `irq` only when its `IRQ_EN` bit **and** the matching
 | 1 | UNDERRUN     | R/W | Enable the underrun interrupt |
 | 2 | OVERRUN      | R/W | Enable the overrun interrupt |
 | 3 | CFG_ERR      | R/W | Enable the configuration-error interrupt |
+| 4 | UNDERFLOW    | R/W | Enable the RX-FIFO-empty read interrupt |
+| 5 | OVERFLOW     | R/W | Enable the TX-FIFO-full write interrupt |
 
 ## ADDR — 0x14
 
@@ -186,8 +196,10 @@ For a 24-bit device address, set ADDR_BYTES = 2 and place the address in bits 23
 | Write | Pushes 1–4 bytes into the TX FIFO |
 | Read  | Pops from the RX FIFO |
 
-Reading an empty RX FIFO returns the last popped value and sets IRQ_STATUS.UNDERRUN.
-Writing a full TX FIFO is dropped and sets IRQ_STATUS.OVERRUN
+Reading an empty RX FIFO returns the last popped value and sets
+`IRQ_STATUS.UNDERFLOW`. Writing a full TX FIFO is dropped and sets
+`IRQ_STATUS.OVERFLOW`. These are the bus-side errors — the in-transfer
+`UNDERRUN`/`OVERRUN` bits are set by the wire-side FIFO events instead.
 
 ## Data-phase Flow Control
 
@@ -204,11 +216,29 @@ Single clock domain. SCK is generated by dividing the system clock (see `GRPR-SP
 
 ## Reset Strategy
 
-The block shall have an active-low reset that shall be asynchronously asserted and synchronously de-asserted.
+The block shall have an active-low reset that shall be asynchronously asserted
+and synchronously de-asserted.
+
+**A reset asserted mid-transaction drops that transaction** (`GRPR-SPIM-021`).
+`CS_N` de-asserts, SCK returns to its idle level, both FIFOs are emptied and
+every register returns to its reset value — so any bytes already queued for
+that transfer are lost along with it. The block does not resume or replay the
+dropped transaction, and firmware gets no completion event for it: whatever
+bytes had already been clocked out are simply the last thing the external
+device saw, and it is the firmware's responsibility to re-issue the transfer
+and to account for a device left mid-command. Nothing partial is retried
+automatically.
+
+**Clearing `CTRL.ENABLE` does not abort a transaction in progress**
+(`GRPR-SPIM-022`). `CTRL` writes are rejected while `STATUS.BUSY` is 1 — the
+write is ignored and `IRQ_STATUS.CFG_ERR` is set — so `ENABLE` cannot drop
+part-way through a transfer. A transaction that has started always runs to
+completion; `ENABLE` only gates whether a *new* one can start. Reset is
+therefore the only way to terminate a transfer early.
 
 ## CDC Strategy
 
-Fully synchronous design. `MISO` is sampled on the rising bus clock edge; the source material notes MISO needs a 2-stage synchroniser located inside the GPIO Mux (i.e. this block does not handle that synchronization itself — see [GPIO Mux § CDC Strategy](GPIO%20Mux.md#cdc-strategy)).
+Fully synchronous design. `MISO` is sampled on the SCK edge that drives the clock to its active level — rising in mode 0, falling in mode 3 — one sample per SCK period, and only during a read data phase; it is **not** sampled on the bare bus clock. The source material notes MISO needs a 2-stage synchroniser located inside the GPIO Mux, i.e. this block does not handle that synchronization itself — see [GPIO Mux § CDC Strategy](GPIO%20Mux.md#cdc-strategy).
 
 ## Performance Targets
 
@@ -223,9 +253,11 @@ Fully synchronous design. `MISO` is sampled on the rising bus clock edge; the so
 ## Open Items
 
 - `GRPR-SPIM-004` — Pico/RP2040 SPI compatibility has no concrete pass/fail criteria yet.
-- `SPIM-SPEC-001` — UNDERRUN and OVERRUN each cover two distinct events (an AHB
-  access error and an in-transfer FIFO event). Both are implemented, but they
-  share a bit. Splitting them into four bits is still open.
+- `SPIM-SPEC-001` — **Resolved.** The AHB access errors have been split out
+  onto their own bits: `UNDERFLOW` (bit 4) is an AHB read of an empty RX FIFO
+  and `OVERFLOW` (bit 5) an AHB write to a full TX FIFO, leaving `UNDERRUN`
+  (bit 1) and `OVERRUN` (bit 2) as the in-transfer wire events only. All four
+  are independently enabled through `IRQ_EN` and cleared by W1C.
 - `SPIM-SPEC-003` — FIFO depth is fixed at 4 entries (`FIFO_DEPTH`), so the
   `STATUS` level fields would need only 3 bits. They are currently not
   implemented at all; `STATUS` exposes the empty/full flags only.
@@ -235,8 +267,17 @@ Fully synchronous design. `MISO` is sampled on the rising bus clock edge; the so
 - `SPIM-SPEC-006` — MISO is sampled on the SCK edge that drives the clock to
   its active level (rising in mode 0, falling in mode 3); MOSI is launched on
   the other edge.
-- `SPIM-SPEC-010`/`-011`/`-012` — requirement-ID and naming inconsistencies in
-  this document are not yet cleaned up.
+- `SPIM-SPEC-010` — **Resolved.** The duplicate requirement IDs are gone: the
+  SPI Transactions requirements that reused `GRPR-SPIM-014`/`-016`/`-017` are
+  now `-018`/`-019`/`-020`, and the `FIFO_DEPTH` requirement that collided with
+  the mode requirement on `-017` is now `-023`. `GRPR-SPIM-016` is left to the
+  mode restriction alone, which is what the rest of the document references.
+- `SPIM-SPEC-011` — **Resolved.** `GRPR-SPIM-003` states the transmit port as
+  MOSI. The CDC section's claim that MISO is "sampled on the rising bus clock
+  edge" is also corrected — it is sampled on the SCK sampling edge, matching
+  `SPIM-SPEC-006` and `hw/rtl/spi_m/spi_m_rx.sv`.
+- `SPIM-SPEC-012` — register naming is still inconsistent between the map, the
+  section headings and the interrupt equation.
 
 
 ## Verification Cross-Reference
@@ -256,6 +297,12 @@ Fully synchronous design. `MISO` is sampled on the rising bus clock edge; the so
 | `GRPR-SPIM-011` | `V-SPIM-STM-008` |
 | `GRPR-SPIM-012` | `V-SPIM-STM-009`, `V-SPIM-COV-004` |
 | `GRPR-SPIM-013` | `V-SPIM-CHK-008` |
+| `GRPR-SPIM-018` | `test_spi_write`, `test_spi_read` (phase ends on the final sampling edge) |
+| `GRPR-SPIM-019` | `test_spi_write`, `test_fast_read` (SCK cycle count per byte) |
+| `GRPR-SPIM-020` | `test_start_self_clears` (exactly one CS_N window per transaction) |
+| `GRPR-SPIM-021` | `test_reset_mid_transfer_drops` |
+| `GRPR-SPIM-022` | `test_disable_mid_transfer_completes` |
+| `GRPR-SPIM-023` | *(parameter range — `FIFO_DEPTH` is elaboration-checked in `ahb_spi_m.sv`)* |
 | `GRPR-SPIM-015` | *(not verified by simulation — synthesis metric, tracked outside the functional verification plan)* |
 
 See [SPI Master Verification Plan](../../verification/blocks/SPI%20Master%20Verification%20Plan.md) for the full item definitions and test list.

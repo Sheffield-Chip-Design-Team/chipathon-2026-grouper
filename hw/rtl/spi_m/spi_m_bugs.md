@@ -3,14 +3,21 @@
 
 Status of `hw/rtl/spi_m/` against the [SPI Master Specification](../../../docs/hardware/design/blocks/SPI%20Master%20Specification.md), updated **29 August 2026**.
 
-The block is now **functional**. All four required commands (`SPI_READ`,
+The block is **functional**. All four required commands (`SPI_READ`,
 `FAST_READ`, `SPI_WRITE`, `FAST_WRITE` — `GRPR-SPIM-006`) produce a correct
 waveform, in both mode 0 and mode 3, and are checked byte-for-byte against the
-decoded MOSI stream by `hw/tb/spi_m/test_spi_m.py` (21 tests, all passing).
+decoded MOSI stream by `hw/tb/spi_m/test_spi_m.py` (23 tests, all passing).
 `ahb_spi_m_directed` is registered in `.github/sim-ci-targets.yaml`.
 
-The block is still **not integrated** — `hw/rtl/periph_ss.sv` continues to hold
-`ahb_stub_slave` in the SPI Master fabric slot. That remains outstanding work.
+The block is now **integrated**: `hw/rtl/periph_ss.sv` instantiates `ahb_spi_m`
+in the SPI Master fabric slot, with its pads routed through `io_ss` onto GPIO
+pins 4–7. `sw/tests/test_spi_m.c` drives it at the top level against an
+APS6404L device model (`hw/tb/models/aps6404l.py`), registered in
+`.github/sim-ci-targets.yaml` as `sw_spi_m`.
+
+The block's pad ports were renamed from `SPI_MOSI`/`SPI_SCK`/`SPI_CS_N`/
+`SPI_MISO` to `spi_m_mosi_o`/`spi_m_sck_o`/`spi_m_cs_n_o`/`spi_m_miso_i`, which
+matches both the specification's IO table and the surrounding RTL's naming.
 
 ### Fixed
 
@@ -34,6 +41,9 @@ The block is still **not integrated** — `hw/rtl/periph_ss.sv` continues to hol
 | `SPIM-ISSUE-022` | No FIFO flush path | `CMD.RX_FLUSH` / `CMD.TX_FLUSH` (bits 28/29) drive the FIFO flush inputs. |
 | `SPIM-ISSUE-025` | SCK divider free-ran; no CS hold | SCK is held at its idle level while idle and starts from a known phase; `CS_N` covers `ST_DONE`, giving a half-period of hold. |
 | `SPIM-ISSUE-026` | Dead `CLK_DIV_BITS`/`SPI_DATA_W` localparams | Removed. |
+| `SPIM-ISSUE-027` | **A back-to-back `DATA` store was silently dropped**, losing that byte. `push_start` was gated on `!push_active`, and `push_active` only clears the cycle *after* the last lane drains — so a store landing in that window never latched, and its byte never reached the FIFO. Byte-at-a-time pushes (three stores of one byte) put `0xDE 0x00` on the wire and hung `test_spi_write`, `test_fast_write`, `test_tx_fifo_stall`. | `push_start` is now gated on `!(\|push_pending)` — the lanes actually outstanding, which is already zero on the cycle the next store lands. |
+| `SPIM-ISSUE-029` | **The split interrupt bits were declared but dead.** `int_underflow`/`int_overflow` and `ie_underflow`/`ie_overflow` existed and were reset, but nothing set them, they were absent from the `IRQ_STATUS`/`IRQ_EN` readback (28'b0 + 4 bits), had no W1C path and were missing from the `irq` equation — Verilator flagged all four as unused. The AHB access errors still landed on the wire-event bits, so the split was nominal only. | Both AHB errors now set their own bit: an empty-RX read sets `UNDERFLOW`, a full-TX write sets `OVERFLOW`. Readback widened to 6 bits, W1C and `IRQ_EN` extended to bits 4/5, and all four sources added to `irq`. Covered by `test_irq_status_w1c` and `test_tx_overrun`, which now also assert the wire-event bit stays clear. |
+| `SPIM-ISSUE-028` | **`push_tx` in the TB pushed with word stores.** A 32-bit store of one byte strobes all four byte lanes, so the DATA register correctly queued that byte plus three zeros (the 1–4 byte behaviour the spec's `DATA` row calls for). The RTL was right and the testbench was wrong. | `hw/tb/spi_m/test_spi_m.py`'s `push_tx` now uses `HSIZE_BYTE`. |
 
 Also fixed, and not previously listed: `ahb_spi_m.sv` did not elaborate
 cleanly — `ctrl_enable` was an undeclared implicit net, `spi_m_core`'s `.addr()`
@@ -44,36 +54,31 @@ assigned from the malformed expression `& ~spi_start_r`.
 
 | ID | Issue | Affects |
 |---|---|---|
-| `SPIM-ISSUE-015` | **`STATUS` level fields are absent.** `TX_LEVEL`/`RX_LEVEL` are not implemented; `STATUS` exposes only the empty/full flags, which is what the current spec table defines. Add them if the level fields are wanted — see `SPIM-SPEC-003`. | Register map |
-| `SPIM-ISSUE-017` | **`DATA` writes push only 1 byte**, not the 1–4 the `DATA` register table allows. A 32-bit store pushes only `HWDATA[7:0]`. | Register map |
 | `SPIM-ISSUE-020` | **The register block aliases every 32 bytes** across its 4 KiB window — only `HADDR[4:2]` is decoded. Harmless today, but it should be a stated decision rather than an accident. | Register map |
 | `SPIM-ISSUE-021` | **Reserved-offset reads and writes now both error**, which resolves the old asymmetry — but the behaviour is still not stated in the spec. | `GRPR-SPIM-001` |
 | `SPIM-ISSUE-023` | **The shift-register width is not actually configurable.** `DATA_WIDTH` exists as a parameter, but `ahb_spi_m` hardcodes `.DATA_WIDTH(8)` and `spi_m_tx` still contains fixed 32-bit address slices. No other width will elaborate correctly. | `GRPR-SPIM-011` |
-| — | **Not integrated into `periph_ss`.** The SPI Master fabric slot still holds `ahb_stub_slave`. | — |
 
 ### Specification defects and gaps
 
-Resolved in the specification as part of this work: the register map now lists
-seven registers at `0x00`–`0x18` with `IRQ_EN` restored at `0x10`; `CTRL` gains
-`ENABLE` at bit 3, `CLKDIV` at `[15:8]` and the two interrupt enables at
-`[17:16]`, resetting to `0x0000_0100` for the 4 MHz default of
-`GRPR-SPIM-013`; the `IRQ_EN` table is corrected; the data-phase stall
-behaviour is specified; and `SPIM-SPEC-005`/`-006` are answered in prose.
+Resolved in this round:
+
+| ID | Resolution |
+|---|---|
+| `SPIM-SPEC-001` | The AHB access errors are split onto their own bits — `UNDERFLOW` (4) for an empty-RX read and `OVERFLOW` (5) for a full-TX write — leaving `UNDERRUN` (1) and `OVERRUN` (2) as the in-transfer wire events. All four are independently enabled and W1C-cleared. See `SPIM-ISSUE-029` for the RTL that was missing. |
+| `SPIM-SPEC-007` | Reset mid-transfer is now specified: the transaction is **dropped**, not resumed or replayed (`GRPR-SPIM-021`). `CTRL.ENABLE` is specified as *not* aborting an in-flight transfer — a `CTRL` write while BUSY is rejected with `CFG_ERR`, so a started transaction always completes (`GRPR-SPIM-022`). Reset is the only abort mechanism, by decision. |
+| `SPIM-SPEC-010` | Duplicate requirement IDs removed. The SPI Transactions requirements that reused `GRPR-SPIM-014`/`-016`/`-017` are now `-018`/`-019`/`-020`, plus the two new `-021`/`-022`; the `FIFO_DEPTH` requirement that collided on `-017` is now `-023`. `GRPR-SPIM-016` is left to the mode restriction alone. |
+| `SPIM-SPEC-011` | `GRPR-SPIM-003` states the transmit port as MOSI. The CDC section's claim that MISO is "sampled on the rising bus clock edge" is corrected to the SCK sampling edge, which is what `hw/rtl/spi_m/spi_m_rx.sv` actually does (`shift_bit = rx_active && sck_sample`). |
 
 Still open — see the Open Items section of the specification:
 
 | ID | Item |
 |---|---|
-| `SPIM-SPEC-001` | `OVERRUN`/`UNDERRUN` each cover both an AHB access error and an in-transfer FIFO event. Both are implemented and share a bit; splitting into four bits is still open. |
 | `SPIM-SPEC-003` | FIFO depth is fixed at 4 by `FIFO_DEPTH`, but is still not stated as a requirement. |
-| `SPIM-SPEC-007` | Flush is now implemented (`CMD.RX_FLUSH`/`TX_FLUSH`), but no transfer-abort mechanism is defined, and behaviour under reset mid-transfer is unstated. |
-| `SPIM-SPEC-010` | Duplicate and missing requirement IDs: `GRPR-SPIM-005` is used twice, `GRPR-SPIM-004` is referenced but the Pico item is tagged `GRPR-SPIM-INFO-001`, and `GRPR-SPIM-014`/`-016`/`-017` are each used for two different requirements. |
-| `SPIM-SPEC-011` | `GRPR-SPIM-005` says data is transmitted "on the MISO port". A master transmits on MOSI. |
 | `SPIM-SPEC-012` | Register naming is inconsistent between the map, the section headings and the interrupt equation. |
 
 ### Test coverage
 
-`hw/tb/spi_m/test_spi_m.py` — 21 directed tests, all passing:
+`hw/tb/spi_m/test_spi_m.py` — 23 directed tests, all passing:
 
 * **Registers** — reset values, `CTRL`/`CMD` field placement, `START` reads 0,
   `ADDR` byte strobes, `IRQ_STATUS` W1C, TX overrun, illegal-mode and
@@ -82,6 +87,10 @@ Still open — see the Open Items section of the specification:
   against the expected MOSI byte stream and SCK cycle count; mode 3;
   command-only transfers; all four `ADDR_BYTES` widths; the `CLKDIV` ratio;
   the TX-FIFO stall path; FIFO flush; and the `irq` output.
+* **Abort semantics** — `test_reset_mid_transfer_drops` (a reset mid-transfer
+  drops the transaction and does not replay it, `GRPR-SPIM-021`) and
+  `test_disable_mid_transfer_completes` (clearing `CTRL.ENABLE` while BUSY is
+  rejected with `CFG_ERR` and the transfer still completes, `GRPR-SPIM-022`).
 
 `hw/tb/spi_m/spi_m_utils.py` holds the register-field helpers and the
 wire-level `SpiMonitor`, which decodes MOSI and drives MISO on the CPOL/CPHA-
