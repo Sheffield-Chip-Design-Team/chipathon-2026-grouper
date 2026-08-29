@@ -13,10 +13,10 @@ The SoC is a `picorv32` (RV32EMC) CPU with an AHB-Lite bus fabric and a set of A
 | UART | `hw/rtl/uart/` | `hw/tb/uart/`, `hw/dv/ahb_uart/` | yes |
 | GPIO Mux | `hw/rtl/gpio/` (+ `hw/rtl/io_ss.sv`) | `hw/tb/gpio/` | yes (inside `io_ss`) |
 | SPI Slave | `hw/rtl/spi_s/` | `hw/tb/spi_s/` | yes |
-| SPI Master | `hw/rtl/spi_m/` | — | **no — slot holds `ahb_stub_slave`** |
-| QSPI | `hw/rtl/qspi/` | `hw/tb/qspi/` | **no — slot holds `ahb_stub_slave`** |
+| SPI Master | `hw/rtl/spi_m/` | `hw/tb/spi_m/` (18/21 pass — see `spi_m_bugs.md`) | yes |
+| QSPI | `hw/rtl/qspi/` | `hw/tb/qspi/` | yes |
 
-SPI Master and QSPI exist as standalone cores that lint and (for QSPI) have a directed TB, but `periph_ss` still instantiates `u_spi_m_stub` / `u_qspi_stub` in their fabric slots. Both are marked `FIXME` in `hw/rtl/periph_ss.sv`. Wiring them up is outstanding work.
+Both SPI Master and QSPI are now wired into `periph_ss`; no fabric slot holds a stub any more. The SPI Master's pads reach GPIO pins 4–7 through `io_ss`, and `sw/tests/test_spi_m.c` drives it at the top level against an APS6404L PSRAM model (`hw/tb/models/aps6404l.py`) — the `sw_spi_m` CI leg. Its block-level TB still has three real failures; see `hw/rtl/spi_m/spi_m_bugs.md` (`SPIM-ISSUE-027`).
 
 CPU memory is planned as a unified 4 KiB SRAM built from four `gf180mcu_ocd_ip_sram__sram1024x8m8wm1` macros (1024 × 8-bit words each, with byte/bit write enables) — see `ip/gf180mcu_ocd_ip_sram/` (vendored as a git submodule). **This is not yet integrated.** `hw/rtl/memory/ram_ss.sv` and `hw/pd/wrappers/sram1024x8_wrapper.sv` exist but are instantiated nowhere; `hw/rtl/memory/ahb_ram.sv` is still a behavioural `logic [] memory []` array, so the current hardened netlist implements RAM as a flop array. See "Outstanding RAM work" below.
 
@@ -140,7 +140,8 @@ grouper_soc_top          (clk, async_rst_n, uart_tx/rx, gpio_{in,out,oe,cs,sl,ie
             ├─ ahb_uart              wraps hw/rtl/uart/{uart,uart_tx,uart_rx,uart_clk_div}.sv
             ├─ io_ss                 pad control + ahb_gpio_ctrl
             ├─ ahb_spi_s
-            ├─ ahb_stub_slave ×2     QSPI and SPI Master slots (FIXME)
+            ├─ ahb_qspi              pads via io_ss, GPIO 8-14
+            ├─ ahb_spi_m             pads via io_ss, GPIO 4-7
             ├─ (ext periph slot)     brought out as digital_ss's ext_ahb_m_if_* ports,
             │                        tied off at grouper_soc_top
             └─ ahb_debug             DEBUG_PERIPH only
