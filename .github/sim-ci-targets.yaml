@@ -328,3 +328,19 @@ targets:
     fail_ok: false
     coverage_scope: full
     fw_test: "stdlib_fmt_width"
+
+  # The SPI master driving an APS6404L PSRAM model (hw/tb/models/aps6404l.py)
+  # on GPIO pads 4-7. Self-checking on the firmware side, but scored by
+  # drive_spi_m() in test_soc.py, which checks the command sequence, the
+  # payload and the SCK cycle count against what the device actually saw -
+  # the top-level evidence for GRPR-SPIM-004.
+  - name: sw_spi_m
+    group: directed_tb
+    core: sharc:soc_ip:grouper_soc_directed
+    fusesoc_target: default
+    kind: cocotb
+    fusesoc_args: "--no-export"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: "spi_m"
