@@ -74,6 +74,10 @@ typedef union {
 } spi_m_status_t;
 
 // IRQ_STATUS - 0x0C (write-1-to-clear). IRQ_EN uses the same bit positions.
+//
+// UNDERRUN/OVERRUN are the in-transfer (wire-side) FIFO events;
+// UNDERFLOW and OVERFLOW are the AHB access errors - reading DATA with the RX FIFO empty and
+// writing DATA with the TX FIFO full. They are separate bits (SPIM-SPEC-001).
 #define SPI_M_IRQ_TXN_COMPLETE (1u << 0)
 #define SPI_M_IRQ_UNDERRUN     (1u << 1)
 #define SPI_M_IRQ_OVERRUN      (1u << 2)

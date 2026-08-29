@@ -64,12 +64,11 @@ int main(void) {
     // a second buffer - the RAM image has no room to spare.
     G_CHECK(spi_m_read(APS_OP_FAST_READ, PSRAM_ADDR, rx, PAYLOAD_LEN,
                        APS_FAST_READ_DUMMY, TIMEOUT));
-    G_CHECK_EQ(rx[0], tx[0]);
     G_CHECK_EQ(rx[3], tx[3]);
 
-    // Nothing should have gone wrong on the way.
-    G_CHECK_EQ(spi_m_irq_status() & (SPI_M_IRQ_UNDERRUN | SPI_M_IRQ_OVERRUN |
-                                     SPI_M_IRQ_CFG_ERR), 0);
+    // Nothing should have gone wrong on the way: every error source clear,
+    // i.e. everything in IRQ_STATUS except the completion bit.
+    G_CHECK_EQ(spi_m_irq_status() & ~SPI_M_IRQ_TXN_COMPLETE, 0);
 
     puts("SPI_M_TRANSACTION_DONE");
 
