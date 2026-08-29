@@ -135,8 +135,10 @@ irq_vec:
 
 	/* call interrupt handler C function */
 
+#ifndef TROUPER_NO_IRQ_STACK
 	lui sp, %hi(irq_stack)
 	addi sp, sp, %lo(irq_stack)
+#endif
 
 	// arg0 = address of regs
 	lui a0, %hi(irq_regs)

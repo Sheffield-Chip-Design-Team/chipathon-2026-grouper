@@ -63,8 +63,11 @@ irq_regs:
 	.fill 32,4
 #endif
 
-	// stack for the interrupt handler
+	// The minimal Trouper IRQ image uses the ordinary bounded application
+	// stack. It has no nested interrupts, so no second 512-byte stack is needed.
+#ifndef TROUPER_NO_IRQ_STACK
 	.fill 128,4
+#endif
 irq_stack:
 
 #endif

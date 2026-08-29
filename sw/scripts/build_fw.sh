@@ -232,6 +232,9 @@ INCS="$INCS -I$SRC_DIR/drivers/uart -I$SRC_DIR/drivers/spi_m -I$SRC_DIR/drivers/
 CFLAGS="$MARCH -Os -g -ffreestanding -fno-builtin -fno-tree-loop-distribute-patterns"
 CFLAGS="$CFLAGS -ffunction-sections -fdata-sections -Wall -Wextra $DEBUG_FLAGS"
 CFLAGS="$CFLAGS -DUART_BAUD_RATE=$BAUD $INCS"
+if [ "$(basename "$TOP_SRC")" = "test_trouper_nwmrc_e2e.c" ]; then
+    CFLAGS="$CFLAGS -DTROUPER_IRQ_TIMING_TEST -DTROUPER_NO_IRQ_STACK"
+fi
 LDFLAGS="$MARCH -nostdlib -Wl,--gc-sections -Wl,-T,$LD_SCRIPT -Wl,-Map,$BUILD_DIR/firmware.map"
 
 # custom_ops.S, irq_vec.S and the headers are pulled in by textual #include,
