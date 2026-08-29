@@ -181,10 +181,15 @@ module periph_ss #(
 
 // --- Internal Signals -----------------------------------------------------------------
 
-logic mux_spi_s_ss_i;      // internal signal for SPI slave chip select
-logic mux_spi_s_sck_i;     // internal signal for SPI slave clock
-logic mux_spi_s_mosi_i;    // internal signal for SPI slave master out slave in
-logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
+logic       mux_spi_s_ss_i;      // internal signal for SPI slave chip select
+logic       mux_spi_s_sck_i;     // internal signal for SPI slave clock
+logic       mux_spi_s_mosi_i;    // internal signal for SPI slave master out slave in
+logic       mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
+
+logic       mux_spi_m_ss_o;      //  internal signal for SPI master chip select 
+logic       mux_spi_m_sck_o;     //  internal signal for SPI master clock       
+logic       mux_spi_m_mosi_o;    //  internal signal for SPI master data out    
+logic       mux_spi_m_miso_i;    //  internal signal for SPI master data in     
 
 logic       mux_qspi_sck_o;
 logic [1:0] mux_qspi_ce_n_o;
@@ -386,25 +391,22 @@ logic [3:0] mux_qspi_sio_oe;
 
   //--- SPI Master ------------------------------------------------------------------------
   
-  // FIXME - replace with hw/rtl/spi_m/ahb_spi_m.sv, whose pad ports are named
-  // SPI_MOSI/SPI_SCK/SPI_CS_N/SPI_MISO and will need mapping onto the io_ss
-  // names below. Until then the stub holds the slot at a representative size:
-  // 1706 GE, from `make measure-ge` (ahb_spi_m synthesizes to 14,402.7 um^2 =
-  // 1312 GE) x1.3 for the one remaining open item (GRPR-SPIM-005). That lands
-  // inside GRPR-SPIM-015's 1,500-2,000 GE estimate, which the spec flagged as
-  // unconfirmed by synthesis - it is now confirmed. See
-  // librelane/classic/TRIAL_NOTES.md.
-  
-  ahb_stub_slave #(
-    .ADDR_WIDTH (ADDR_WIDTH),
+  // ahb_spi_m's register file spans 0x00-0x18, so it decodes five address bits
+  // and takes HADDR[4:0]. Its pad ports are named for the SPI wires rather
+  // than for the io_ss mux, hence the rename onto mux_spi_m_*: CS_N is the
+  // io_ss "ss" pad, and the mux drives that pad's output enable itself.
+  //
+  // irq is left unconnected to match the QSPI slot above: cpu_ss's irq vector
+  // is {uart_rx_error_irq, uart_rx_irq} and has no spare line for this block.
+  ahb_spi_m #(
+    .ADDR_WIDTH (5),
     .DATA_WIDTH (DATA_WIDTH),
-    .TARGET_GE  (1706),
-    .PAD_OUT_W  (3),
-    .PAD_IN_W   (1)
-  ) u_spi_m_stub (
+    .FIFO_DEPTH (4)
+  ) u_spi_m (
     .HCLK         (HCLK),
     .HRESETn      (HRESETn),
-    .HADDR        (spi_m_HADDR),
+
+    .HADDR        (spi_m_HADDR[4:0]),
     .HBURST       (spi_m_HBURST),
     .HMASTLOCK    (spi_m_HMASTLOCK),
     .HPROT        (spi_m_HPROT),
@@ -412,16 +414,20 @@ logic [3:0] mux_qspi_sio_oe;
     .HTRANS       (spi_m_HTRANS),
     .HWDATA       (spi_m_HWDATA),
     .HWRITE       (spi_m_HWRITE),
+
     .HRDATA       (spi_m_HRDATA),
     .HREADYOUT    (spi_m_HREADYOUT),
     .HRESP        (spi_m_HRESP),
+
     .HREADYIN     (spi_m_HREADYIN),
     .HSEL         (spi_m_HSEL),
 
-    // io_ss drives these pads' output enables high itself, so pad_oe is unused.
-    .pad_in       (mux_spi_m_miso_i),
-    .pad_out      ({mux_spi_m_mosi_o, mux_spi_m_sck_o, mux_spi_m_ss_o}),
-    .pad_oe       ()
+    .spi_m_mosi_o (mux_spi_m_mosi_o),
+    .spi_m_sck_o  (mux_spi_m_sck_o),
+    .spi_m_cs_n_o (mux_spi_m_ss_o),
+    .spi_m_miso_i (mux_spi_m_miso_i),
+
+    .irq          ()
   );
 
   //--- SPI Slave -------------------------------------------------------------------------
@@ -534,10 +540,10 @@ logic [3:0] mux_qspi_sio_oe;
     .spi_s_miso_o    (mux_spi_s_miso_o),
 
     // FIXME - tied off until the SPI master is implemented
-    .spi_m_sck_o     (1'b0),
-    .spi_m_mosi_o    (1'b0),
-    .spi_m_miso_i    (),
-    .spi_m_ss_o      (1'b1),
+    .spi_m_sck_o     (mux_spi_m_sck_o),
+    .spi_m_mosi_o    (mux_spi_m_mosi_o),
+    .spi_m_miso_i    (mux_spi_m_miso_i),
+    .spi_m_ss_o      (mux_spi_m_ss_o),
 
     .qspi_sck_o       (mux_qspi_sck_o),
     .qspi_ce_n_o      (mux_qspi_ce_n_o),
