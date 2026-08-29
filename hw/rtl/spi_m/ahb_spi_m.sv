@@ -49,10 +49,10 @@ module ahb_spi_m #(
   input logic                   HSEL,
   /* verilator lint_on UNUSEDSIGNAL */
 
-  output logic                  SPI_MOSI,
-  output logic                  SPI_SCK,
-  output logic                  SPI_CS_N,
-  input  logic                  SPI_MISO,
+  output logic                  spi_m_mosi_o,
+  output logic                  spi_m_sck_o,
+  output logic                  spi_m_cs_n_o,
+  input  logic                  spi_m_miso_i,
 
   output logic                  irq
 );
@@ -359,7 +359,13 @@ module ahb_spi_m #(
   logic [3:0] write_lanes;
   assign write_lanes = byte_select_r;
 
-  assign push_start = data_write && !push_active;
+  // Gate on the lanes still outstanding rather than on push_active. The flag
+  // is cleared a cycle after the last lane drains, so a back-to-back DATA
+  // store - which is what a byte-at-a-time push looks like - arrived while it
+  // was still set and was silently dropped, losing that byte entirely.
+  // push_pending is the real "still busy" condition, and it is already zero
+  // on the cycle the store lands.
+  assign push_start = data_write && !(|push_pending);
 
   // Select the lowest still-pending lane.
   always_comb begin
@@ -523,10 +529,10 @@ module ahb_spi_m #(
       .busy           (spi_busy),
       .done           (spi_done),
 
-      .spi_mosi       (SPI_MOSI),
-      .spi_miso       (SPI_MISO),
-      .spi_sck        (SPI_SCK),
-      .spi_cs_n       (SPI_CS_N)
+      .spi_mosi       (spi_m_mosi_o),
+      .spi_miso       (spi_m_miso_i),
+      .spi_sck        (spi_m_sck_o),
+      .spi_cs_n       (spi_m_cs_n_o)
   );
 
 //------------------------------------------------------
@@ -566,6 +572,7 @@ module ahb_spi_m #(
   end
   // Cycle 1 (Data Phase): HRESP high, HREADYOUT low. Cycle 2: HRESP high, HREADYOUT high.
   assign HRESP     = err_req || err_second_cycle;
+
   assign HREADYOUT = ~err_req;
 
 endmodule
