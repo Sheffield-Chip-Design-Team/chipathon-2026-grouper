@@ -21,14 +21,9 @@
 // what lets a debugger tell which side of the block went wrong.
 
 module ahb_spi_s #(
-  parameter int ADDR_WIDTH = 32,
-  parameter int DATA_WIDTH = 32,
-  // RX and TX FIFO depth. small_sync_fifo requires a power of two; this block
-  // supports up to 8 entries (GRPR-SPIS-023 / -024).
-  parameter int FIFO_DEPTH = 4,
-  // Build-time presence of the debug transport. Distinct from the
-  // CTRL.DEBUG_PORT_EN register bit, which gates forwarding at run time in a
-  // build where the port exists (GRPR-SPIS-020).
+  parameter int ADDR_WIDTH    = 32,
+  parameter int DATA_WIDTH    = 32,
+  parameter int FIFO_DEPTH    = 4,   // supports up to 8 entries (GRPR-SPIS-023 / -024).
   parameter int DEBUG_PORT_EN = 0
 ) (
   input logic                   HCLK,
@@ -260,8 +255,7 @@ module ahb_spi_s #(
 
   // Writes retire as soon as the last lane is accepted. Reads additionally
   // wait for the final byte to reach the assembly register, one cycle behind
-  // the pop that fetched it -- retiring on the pop would hand back a word
-  // whose top lane was still in flight.
+  // the pop that fetched it 
   // A read is not finished when the last lane is popped: small_sync_fifo
   // registers its read data, so that byte only reaches the assembly register
   // on the following edge. rx_read covers the pop cycle and rx_read_r the
