@@ -12,7 +12,6 @@ module rom_ss #(
   output logic [31:0]           rom_rdata
 );
 
-  // FIXME - use metadata to digure out the exact size of the boot rom.
   `include "boot.meta.vh"
   localparam int ACTUAL_MEM_ADDR_WIDTH = $clog2(MEM_WORDS);
 
@@ -27,10 +26,12 @@ module rom_ss #(
   // VERILOG_INCLUDE_DIRS; point that at sw/boot.
   `include "boot.vmem"
 `else
-  initial
+
+  initial begin
     // readmemh for simulation-time ROM initialisation, resolved against the
     // simulator's working directory.
     $readmemh("boot.hex", memory);
+  end
 `endif
 
   always_ff @(posedge clk) begin
