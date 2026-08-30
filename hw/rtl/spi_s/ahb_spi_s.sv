@@ -1,8 +1,37 @@
-// AHB spi_s
+// AHB-Lite SPI slave: register file and bus interface.
+//
+// The wire-facing logic lives in spi_s_core (framing FSM, RX/TX paths, debug
+// transport); this module owns the register map and the AHB handshake.
+//
+// Register map (GRPR-SPIS-001):
+//   0x00 CTRL        R/W   ENABLE[0] SOFT_RESET[1] CPHA[2] CPOL[3]
+//                          DEBUG_PORT_EN[4]
+//   0x04 STATUS      RO    BUSY[0] RX_VALID[1] TX_READY[2] DEBUG_BUSY[3]
+//                          RX_EMPTY[4] RX_FULL[5] TX_EMPTY[6] TX_FULL[7]
+//                          RX_LEVEL[11:8]
+//   0x08 TXDATA      WO    TX FIFO push, 1-4 bytes by HSIZE
+//   0x0C RXDATA      RO    RX FIFO pop,  1-4 bytes by HSIZE
+//   0x10 IRQ_STATUS  W1C   RX_VALID[0] UNDERRUN[1] OVERRUN[2]
+//                          UNDERFLOW[4] OVERFLOW[5]
+//   0x14 IRQ_EN      R/W   same bit positions as IRQ_STATUS
+//
+// UNDERRUN/OVERRUN are the in-transfer (wire-side) FIFO events, caused by the
+// external host outrunning firmware. UNDERFLOW/OVERFLOW are the AHB access
+// errors, caused by firmware mis-sizing its own access. Keeping them apart is
+// what lets a debugger tell which side of the block went wrong.
 
 module ahb_spi_s #(
   parameter int ADDR_WIDTH = 32,
-  parameter int DATA_WIDTH = 32
+  parameter int DATA_WIDTH = 32,
+  // RX and TX FIFO depth. small_sync_fifo requires a power of two; this block
+  // supports up to 8 entries (GRPR-SPIS-023 / -024).
+  parameter int FIFO_DEPTH = 4,
+  // Build-time presence of the debug transport. Distinct from the
+  // CTRL.DEBUG_PORT_EN register bit, which gates forwarding at run time in a
+  // build where the port exists (GRPR-SPIS-020).
+  // int rather than bit so a -GDEBUG_PORT_EN=1 elaboration override does
+  // not trip a width-truncation warning on the 32-bit literal.
+  parameter int DEBUG_PORT_EN = 0
 ) (
   input logic                   HCLK,
   input logic                   HRESETn,
@@ -34,110 +63,140 @@ module ahb_spi_s #(
   input logic                   spi_ss,
   input logic                   spi_sck,
   input logic                   spi_mosi,
-  output logic                  spi_miso
+  output logic                  spi_miso,
+
+  // Debug port. This block is a debug *transport*: it frames SPI commands
+  // into requests and never masters a bus itself. See the Debug Unit
+  // document's "Debug Port Interface" for the normative definition.
+  output logic                  dbg_req_valid,
+  input  logic                  dbg_req_ready,
+  output logic [3:0]            dbg_req_cmd,
+  output logic [31:0]           dbg_req_addr,
+  output logic [31:0]           dbg_req_wdata,
+  output logic [1:0]            dbg_req_size,
+  input  logic                  dbg_rsp_valid,
+  output logic                  dbg_rsp_ready,
+  input  logic [31:0]           dbg_rsp_rdata,
+  input  logic                  dbg_rsp_err,
+
+  output logic                  irq
 );
 
   import ahb3lite_pkg::*;
 
   localparam int SPI_S_DATA_W = 8;
 
-  // AHB transfer codes needed in this module
+  initial begin : check_fifo_depth
+    if (FIFO_DEPTH != 2 && FIFO_DEPTH != 4 && FIFO_DEPTH != 8)
+      $error("%m: FIFO_DEPTH must be 2, 4 or 8 (GRPR-SPIS-023)");
+  end
+
   localparam bit [1:0] No_Transfer = 2'b00;
 
-  localparam bit [1:0] ADDR_CTRL   = 2'b00;
-  localparam bit [1:0] ADDR_STATUS = 2'b01;
-  localparam bit [1:0] ADDR_TXDATA = 2'b10;
-  localparam bit [1:0] ADDR_RXDATA = 2'b11;
+  // Word offsets. The map grew past four entries with IRQ_STATUS/IRQ_EN, so
+  // the decode is HADDR[4:2] rather than the HADDR[3:2] four registers needed.
+  localparam logic [2:0] ADDR_CTRL      = 3'd0;  // 0x00
+  localparam logic [2:0] ADDR_STATUS    = 3'd1;  // 0x04
+  localparam logic [2:0] ADDR_TXDATA    = 3'd2;  // 0x08
+  localparam logic [2:0] ADDR_RXDATA    = 3'd3;  // 0x0C
+  localparam logic [2:0] ADDR_IRQ_STS   = 3'd4;  // 0x10
+  localparam logic [2:0] ADDR_IRQ_EN    = 3'd5;  // 0x14
+  localparam logic [2:0] ADDR_SPI_S_MAX = 3'd5;
 
-  // SPI command codes
-  localparam logic [7:0] SPI_WRITE  = 8'h02;
-  localparam logic [7:0] SPI_READ   = 8'h03;
-  localparam logic [7:0] FAST_WRITE = 8'h0A;
-  localparam logic [7:0] FAST_READ  = 8'h0B;
-
-  // SPI command FSM states
-  typedef enum logic [2:0] {
-    FSM_IDLE,
-    FSM_COMMAND,
-    FSM_ADDRESS,
-    FSM_READ_DATA,
-    FSM_WRITE_DATA
-  } spi_state_t;
-
-  spi_state_t spi_state;
-
-  // Control registers
+  // CTRL
   logic ctrl_enable;
   logic ctrl_soft_reset;
+  logic ctrl_cpha;
+  logic ctrl_cpol;
+  logic ctrl_debug_port_en;
 
-  // Status registers
-  logic status_busy;
-  logic status_rx_valid;
-  logic status_tx_ready;
+  // IRQ_STATUS / IRQ_EN. Bit 3 is reserved: the SPI Master's CFG_ERR has no
+  // analogue here, and leaving the position vacant keeps the two maps aligned
+  // so a shared driver header can use one set of masks.
+  logic int_rx_valid, int_underrun, int_overrun, int_underflow, int_overflow;
+  logic ie_rx_valid,  ie_underrun,  ie_overrun,  ie_underflow,  ie_overflow;
 
-  // SPI data registers
-  logic [SPI_S_DATA_W-1:0] tx_data;
-  logic [SPI_S_DATA_W-1:0] rx_data;
-
-  // SPI receive shift register and bit counter
-  logic [SPI_S_DATA_W-1:0] rx_shift;
-  logic [2:0]              bit_count;
-
-  // SPI transmit shift register and bit counter
-  logic [SPI_S_DATA_W-1:0] tx_shift;
-  logic [2:0]              tx_bit_count;
-
-  // Received SPI byte
-  logic [SPI_S_DATA_W-1:0] received_byte;
-
-  // SPI command and address
-  logic [SPI_S_DATA_W-1:0] spi_command;
-  logic [23:0]             spi_address;
-  logic [23:0]             address_shift;
-  logic [4:0]              address_bit_count;
-
-  // SPI clock edge detection
-  logic spi_sck_d;
-  logic spi_sck_rise;
-  logic spi_sck_fall;
-
-  // AHB control signals
+  // AHB pipeline
   logic                       access;
   logic                       read_enable;
   logic                       read_enable_r;
   logic                       write_enable;
-  logic [1:0]                 word_address;
-  logic [1:0]                 word_address_r;
+  logic [2:0]                 word_address;
+  logic [2:0]                 word_address_r;
   logic [(DATA_WIDTH/8)-1:0]  byte_select;
   logic [(DATA_WIDTH/8)-1:0]  byte_select_r;
   logic                       invalid_access;
+  logic                       err_req;
+  logic                       err_second_cycle;
 
-  // Generate AHB control signals
+  // Core interface
+  logic [SPI_S_DATA_W-1:0] rx_rdata;
+  logic                    rx_read;
+  logic                    rx_full;
+  logic                    rx_empty;
+  logic [3:0]              rx_level;
+
+  logic [SPI_S_DATA_W-1:0] tx_wdata;
+  logic                    tx_write;
+  logic                    tx_full;
+  logic                    tx_empty;
+
+  logic                    core_busy;
+  logic                    rx_overrun;
+  logic                    tx_underrun;
+  logic                    dbg_err_evt;
+  logic                    rx_byte_pushed;
+  logic                    fifo_flush;
+
+  // Lane machine
+  logic [3:0]              lane_pending;
+  logic [1:0]              lane_index;
+  logic                    lane_is_read;
+  logic                    lane_stall;
+  logic [DATA_WIDTH-1:0]   lane_wdata;
+  logic [DATA_WIDTH-1:0]   rx_assemble;
+  logic [1:0]              rx_lane_index_r;
+  logic                    rx_read_r;
+  logic                    data_write;
+  logic                    data_read;
+  logic [3:0]              lane_next;
+  logic                    lane_start_w;
+  logic                    lane_start_r;
+  logic                    lane_rd_active;
+  logic                    lane_underflow_evt;
+  logic                    lane_overflow_evt;
+
+//------------------------------------------------------
+// AHB address phase decode
+//------------------------------------------------------
+
   assign access      = HREADYIN && HSEL && (HTRANS != No_Transfer);
   assign read_enable = access && ~HWRITE;
 
-  // Temporary value until the remaining SPI core logic is implemented.
-  assign status_busy = 1'b0;
+  assign word_address = access ? HADDR[4:2] : '0;
+  assign byte_select  = access ? generate_byte_select_32(HSIZE, HADDR[1:0]) : '0;
 
-  // Detect SPI clock edges
-  assign spi_sck_rise = spi_sck && !spi_sck_d;
-  assign spi_sck_fall = !spi_sck && spi_sck_d;
+//------------------------------------------------------
+// AHB pipeline register
+//------------------------------------------------------
 
-  // AHB address and byte select
-  assign word_address =
-      access ? HADDR[3:2] : '0;
-
-  assign byte_select =
-      access ? generate_byte_select_32(HSIZE, HADDR[1:0]) : '0;
-
-  // Delay AHB control signals to the data phase
   always_ff @(posedge HCLK, negedge HRESETn) begin
     if (~HRESETn) begin
-
       write_enable   <= 1'b0;
       read_enable_r  <= 1'b0;
       word_address_r <= '0;
       byte_select_r  <= '0;
+    end
+    else if (lane_stall) begin
+      // Hold the data phase. HREADYOUT is low, so the master is still
+      // presenting this transfer and must not have its control signals
+      // overwritten by the address phase of the next one. Everything below is
+      // qualified by these registers, so letting them advance under a stall
+      // would retire the access against the wrong register, or retire it twice.
+      write_enable   <= write_enable;
+      read_enable_r  <= read_enable_r;
+      word_address_r <= word_address_r;
+      byte_select_r  <= byte_select_r;
     end
     else begin
       write_enable   <= access && HWRITE;
@@ -147,359 +206,361 @@ module ahb_spi_s #(
     end
   end
 
-  // Main SPI and register logic
+  assign data_write = write_enable  && (word_address_r == ADDR_TXDATA);
+  assign data_read  = read_enable_r && (word_address_r == ADDR_RXDATA);
+
+//------------------------------------------------------
+// Multi-byte TXDATA / RXDATA lane machine (GRPR-SPIS-025 .. -027)
+//------------------------------------------------------
+// One byte per asserted HSIZE lane, low lane first. The FIFO takes one access
+// per cycle, so the lanes are serialised and HREADYOUT is held low until the
+// last one has been dealt with, making the whole multi-lane access a single
+// AHB transfer.
+//
+// The stall is bounded by construction -- at most four lanes plus the FIFO's
+// one-cycle read latency -- and is never paced by the SPI wire: a full TX
+// FIFO or a short RX FIFO ends it immediately and flags OVERFLOW/UNDERFLOW.
+// That matters more here than in the SPI Master, because the far end is an
+// external host the SoC does not control at all, and cpu_ss is single-master,
+// so a held HREADY blocks instruction fetch and the CPU could never run the
+// loop that services the FIFO.
+//
+// Reads are held until every lane has been *assembled*, not merely popped:
+// small_sync_fifo registers its read data, so a byte arrives one cycle after
+// the pop that fetched it. Retiring on the pop would hand back a word whose
+// last lane was still in flight.
+
+  assign lane_index = lane_pending[0] ? 2'd0 :
+                      lane_pending[1] ? 2'd1 :
+                      lane_pending[2] ? 2'd2 : 2'd3;
+
+  assign tx_wdata = lane_wdata[{3'd0, lane_index} * 4'd8 +: 8];
+  assign tx_write = !lane_is_read && (|lane_pending) && !tx_full;
+  assign rx_read  =  lane_is_read && (|lane_pending) && !rx_empty;
+
+  assign lane_start_w = data_write && !(|lane_pending);
+  // lane_rd_active keeps this to one assertion per transfer: the pipeline
+  // freeze holds data_read high for the whole stall, so a start condition
+  // written from data_read alone would re-fire every cycle and keep
+  // re-clearing the assembly register.
+  assign lane_start_r = data_read && !lane_rd_active;
+
+  // Lanes still outstanding *after* this cycle retires.
+  //
+  // Deliberately computed from the post-edge set rather than from
+  // lane_pending directly. lane_pending is a register: on the cycle the
+  // access lands it is still zero, so a stall written against it asserts
+  // nothing then and holds HREADYOUT low one cycle later, against the *next*
+  // transfer. That is exactly how the SPI Master's stall first went wrong
+  // (SPIM-ISSUE-031), and it is easy to reintroduce when simplifying.
+  always_comb begin
+    if (lane_start_w || lane_start_r)
+      lane_next = byte_select_r;
+    else if (tx_write || rx_read)
+      lane_next = lane_pending & ~(4'd1 << lane_index);
+    else
+      lane_next = lane_pending;
+  end
+
+  // Writes retire as soon as the last lane is accepted. Reads additionally
+  // wait for the final byte to reach the assembly register, one cycle behind
+  // the pop that fetched it -- retiring on the pop would hand back a word
+  // whose top lane was still in flight.
+  // A read is not finished when the last lane is popped: small_sync_fifo
+  // registers its read data, so that byte only reaches the assembly register
+  // on the following edge. rx_read covers the pop cycle and rx_read_r the
+  // write-back cycle, so the transfer retires with the word complete.
+  // A read is not finished when the last lane is popped: small_sync_fifo
+  // registers its read data, so that byte only reaches the assembly register
+  // on the following edge. rx_read covers the pop cycle and rx_read_r the
+  // write-back cycle, so the transfer retires with the word complete.
+  //
+  // lane_start_r is deliberately NOT a stall term on its own: the pipeline
+  // freeze holds data_read asserted, so a self-referential start condition
+  // would latch the bus low forever.
+  // "More than one bit set" - lane_next & (lane_next - 1) clears the lowest
+  // set bit, so a nonzero result means at least two lanes remain and another
+  // cycle is genuinely needed. A single remaining lane is accepted this cycle
+  // and the transfer retires with no wait state, which is what keeps
+  // byte-at-a-time firmware zero-wait.
+  // Every term is qualified by the access still being present, so the stall
+  // cannot outlive the transfer that caused it. rx_read_r in particular is
+  // asserted the cycle *after* its pop, which without this qualifier held
+  // HREADYOUT low over the start of the next transfer.
+  assign lane_stall = (data_write || data_read) &&
+                      (((|(lane_next & (lane_next - 4'd1))) &&
+                        !(lane_is_read ? rx_empty : tx_full))
+                       || (lane_is_read && ((|lane_pending) || rx_read_r))
+                       || (lane_start_r && !rx_empty));
+
+  // Bus-side errors: the access asked for more lanes than the FIFO could
+  // supply or accept. Distinct from the wire-side events (GRPR-SPIS-028).
+  // Any RXDATA read that finds the FIFO short is the bus-side error, whether
+  // it is the first lane (an outright empty read) or a later one part way
+  // through a packed access.
+  assign lane_underflow_evt = data_read && rx_empty;
+  assign lane_overflow_evt  = (|lane_pending) && !lane_is_read && tx_full;
+
   always_ff @(posedge HCLK, negedge HRESETn) begin
-
     if (~HRESETn) begin
+      lane_pending   <= '0;
+      lane_wdata     <= '0;
+      lane_is_read   <= 1'b0;
+      lane_rd_active <= 1'b0;
+    end
+    else if (fifo_flush) begin
+      lane_pending   <= '0;
+      lane_is_read   <= 1'b0;
+      lane_rd_active <= 1'b0;
+    end
+    else begin
+      // One start per read transfer, cleared when the transfer retires.
+      if (lane_start_r)
+        lane_rd_active <= 1'b1;
+      else if (!data_read)
+        lane_rd_active <= 1'b0;
 
-      // Control registers
-      ctrl_enable     <= 1'b0;
-      ctrl_soft_reset <= 1'b0;
+      if (lane_start_w) begin
+        // Latch the store; HWDATA is only valid in this data phase.
+        lane_wdata   <= HWDATA;
+        lane_pending <= byte_select_r;
+        lane_is_read <= 1'b0;
+      end
+      else if (lane_start_r) begin
+        lane_pending <= byte_select_r;
+        lane_is_read <= 1'b1;
+      end
+      else if (tx_write || rx_read) begin
+        lane_pending[lane_index] <= 1'b0;
+      end
 
-      // SPI command FSM
-      spi_state <= FSM_IDLE;
+      // The FIFO ran out with lanes outstanding: drop them.
+      if ((|lane_pending) && (lane_is_read ? rx_empty : tx_full))
+        lane_pending <= '0;
+    end
+  end
 
-      // Data registers
-      tx_data       <= '0;
-      rx_data       <= '0;
-      received_byte <= '0;
+  // Assemble popped bytes into the read word, one cycle behind the pop that
+  // fetched each one. Cleared when a fresh read starts, so lanes the FIFO
+  // could not supply read back as zero (GRPR-SPIS-025).
+  always_ff @(posedge HCLK, negedge HRESETn) begin
+    if (~HRESETn) begin
+      rx_assemble     <= '0;
+      rx_lane_index_r <= '0;
+      rx_read_r       <= 1'b0;
+    end
+    else begin
+      rx_read_r <= rx_read;
+      // The index the in-flight byte belongs to. Sampled with the pop, not
+      // after it, so the byte lands in the lane that fetched it.
+      if (rx_read)
+        rx_lane_index_r <= lane_index;
 
-      // SPI command and address
-      spi_command       <= '0;
-      spi_address       <= '0;
-      address_shift     <= '0;
-      address_bit_count <= '0;
+      if (lane_start_r)
+        rx_assemble <= '0;
 
-      // Receive logic
-      rx_shift  <= '0;
-      bit_count <= '0;
+      if (rx_read_r)
+        rx_assemble[{3'd0, rx_lane_index_r} * 4'd8 +: 8] <= rx_rdata;
+    end
+  end
 
-      // Transmit logic
-      tx_shift     <= '0;
-      tx_bit_count <= '0;
+//------------------------------------------------------
+// SPI core
+//------------------------------------------------------
 
-      // SPI clock history
-      spi_sck_d <= 1'b0;
+  spi_s_core #(
+    .DATA_WIDTH    (SPI_S_DATA_W),
+    .FIFO_DEPTH    (FIFO_DEPTH),
+    .DEBUG_PORT_EN (DEBUG_PORT_EN)
+  ) u_core (
+    .clk           (HCLK),
+    .rst_n         (HRESETn),
 
-      // Status
-      status_rx_valid <= 1'b0;
-      status_tx_ready <= 1'b1;
+    .enable        (ctrl_enable),
+    .cpol          (ctrl_cpol),
+    .cpha          (ctrl_cpha),
+    .debug_port_en (ctrl_debug_port_en),
+    .flush         (fifo_flush),
 
+    .spi_ss        (spi_ss),
+    .spi_sck       (spi_sck),
+    .spi_mosi      (spi_mosi),
+    .spi_miso      (spi_miso),
+
+    .rx_read       (rx_read),
+    .rx_rdata      (rx_rdata),
+    .rx_full       (rx_full),
+    .rx_empty      (rx_empty),
+    .rx_level      (rx_level),
+
+    .tx_wdata      (tx_wdata),
+    .tx_write      (tx_write),
+    .tx_full       (tx_full),
+    .tx_empty      (tx_empty),
+
+    .busy          (core_busy),
+    .rx_overrun    (rx_overrun),
+    .rx_pushed     (rx_byte_pushed),
+    .tx_underrun   (tx_underrun),
+
+    .dbg_req_valid (dbg_req_valid),
+    .dbg_req_ready (dbg_req_ready),
+    .dbg_req_cmd   (dbg_req_cmd),
+    .dbg_req_addr  (dbg_req_addr),
+    .dbg_req_wdata (dbg_req_wdata),
+    .dbg_req_size  (dbg_req_size),
+    .dbg_rsp_valid (dbg_rsp_valid),
+    .dbg_rsp_ready (dbg_rsp_ready),
+    .dbg_rsp_rdata (dbg_rsp_rdata),
+    .dbg_rsp_err   (dbg_rsp_err),
+    .dbg_err_evt   (dbg_err_evt)
+  );
+
+  // Soft reset flushes both FIFOs and the framing FSM (SPIS-SPEC-006). It
+  // deliberately does not touch IRQ_STATUS: those flags record what already
+  // happened and are cleared by a W1C write.
+  assign fifo_flush = write_enable && (word_address_r == ADDR_CTRL) &&
+                      byte_select_r[0] && HWDATA[1];
+
+//------------------------------------------------------
+// Register writes
+//------------------------------------------------------
+
+  always_ff @(posedge HCLK, negedge HRESETn) begin
+    if (~HRESETn) begin
+      ctrl_enable        <= 1'b0;
+      ctrl_soft_reset    <= 1'b0;
+      ctrl_cpha          <= 1'b0;
+      ctrl_cpol          <= 1'b0;
+      ctrl_debug_port_en <= (DEBUG_PORT_EN != 0);
+
+      int_rx_valid  <= 1'b0;
+      int_underrun  <= 1'b0;
+      int_overrun   <= 1'b0;
+      int_underflow <= 1'b0;
+      int_overflow  <= 1'b0;
+
+      ie_rx_valid   <= 1'b0;
+      ie_underrun   <= 1'b0;
+      ie_overrun    <= 1'b0;
+      ie_underflow  <= 1'b0;
+      ie_overflow   <= 1'b0;
     end
     else begin
 
-      // Remember previous SPI clock state
-      spi_sck_d <= spi_sck;
-
-      // SPI command FSM
-      if (spi_ss) begin
-
-        spi_state         <= FSM_IDLE;
-        bit_count         <= 3'd0;
-        address_bit_count <= 5'd0;
-
-      end
-      else if (spi_state == FSM_IDLE) begin
-
-        spi_state <= FSM_COMMAND;
-
-      end
-
-      // SPI RECEIVE
-      // sample MOSI on the rising edge of SCK
-      if (!spi_ss && spi_sck_rise) begin
-
-        rx_shift <= {
-          rx_shift[6:0],
-          spi_mosi
-        };
-
-        // Receiving command
-        if (spi_state == FSM_COMMAND) begin
-
-          if (bit_count == 3'd7) begin
-
-            received_byte <= {
-              rx_shift[6:0],
-              spi_mosi
-            };
-
-            rx_data <= {
-              rx_shift[6:0],
-              spi_mosi
-            };
-
-            status_rx_valid <= 1'b1;
-
-            bit_count <= 3'd0;
-
-            // Save command
-            spi_command <= {
-              rx_shift[6:0],
-              spi_mosi
-            };
-
-            // SPI command decode
-            unique case ({
-              rx_shift[6:0],
-              spi_mosi
-            })
-
-              SPI_WRITE,
-              SPI_READ,
-              FAST_WRITE,
-              FAST_READ:
-                spi_state <= FSM_ADDRESS;
-
-              default:
-                spi_state <= FSM_IDLE;
-
-            endcase
-
-          end
-          else begin
-
-            bit_count <= bit_count + 1'b1;
-
-          end
-
-        end
-
-        // Receiving address
-        else if (spi_state == FSM_ADDRESS) begin
-
-          address_shift <= {
-            address_shift[22:0],
-            spi_mosi
-          };
-
-          if (address_bit_count == 5'd23) begin
-
-            // 24-bit address received.
-            spi_address <= {
-              address_shift[22:0],
-              spi_mosi
-            };
-
-            address_bit_count <= 5'd0;
-
-            // Decide whether this is a read or write.
-            if (spi_command == SPI_READ ||
-                spi_command == FAST_READ) begin
-
-              spi_state <= FSM_READ_DATA;
-
-            end
-            else begin
-
-              spi_state <= FSM_WRITE_DATA;
-
-            end
-
-          end
-          else begin
-
-            address_bit_count <= address_bit_count + 1'b1;
-
-          end
-
-        end
-
-        // Receiving write data
-        else if (spi_state == FSM_WRITE_DATA) begin
-
-          if (bit_count == 3'd7) begin
-
-            // Eight bits received.
-            received_byte <= {
-              rx_shift[6:0],
-              spi_mosi
-            };
-
-            rx_data <= {
-              rx_shift[6:0],
-              spi_mosi
-            };
-
-            status_rx_valid <= 1'b1;
-
-            bit_count <= 3'd0;
-
-          end
-          else begin
-
-            bit_count <= bit_count + 1'b1;
-
-          end
-
-        end
-
-      end
-
-      // SPI READ DATA
-      if (!spi_ss &&
-          spi_state == FSM_READ_DATA &&
-          status_tx_ready) begin
-
-        // Load the current transmit byte.
-        tx_shift     <= tx_data;
-        tx_bit_count <= 3'd0;
-
-        // A byte is now being transmitted.
-        status_tx_ready <= 1'b0;
-
-      end
-
-      // SPI TRANSMIT
-      if (!spi_ss && spi_sck_fall && !status_tx_ready) begin
-
-        if (tx_bit_count == 3'd7) begin
-
-          // All eight bits have been transmitted.
-          tx_bit_count <= 3'd0;
-
-          status_tx_ready <= 1'b1;
-
-        end
-        else begin
-
-          tx_bit_count <= tx_bit_count + 1'b1;
-
-        end
-
-      end
-
-      // Keep transmit shift register updated
-      if (!spi_ss && spi_sck_fall && !status_tx_ready) begin
-
-        tx_shift <= {
-          tx_shift[6:0],
-          1'b0
-        };
-
-      end
-
-      // Clear RX_VALID after software reads RXDATA
-      if (read_enable_r && word_address_r == ADDR_RXDATA) begin
-
-        status_rx_valid <= 1'b0;
-
-      end
-
-      // AHB WRITE
       if (write_enable) begin
-
         unique case (word_address_r)
 
-          // CTRL register
           ADDR_CTRL: begin
-
             if (byte_select_r[0]) begin
+              ctrl_enable        <= HWDATA[0];
+              ctrl_soft_reset    <= HWDATA[1];
+              ctrl_cpha          <= HWDATA[2];
+              ctrl_cpol          <= HWDATA[3];
+              ctrl_debug_port_en <= (DEBUG_PORT_EN != 0) ? HWDATA[4] : 1'b0;
 
-              ctrl_enable     <= HWDATA[0];
-              ctrl_soft_reset <= HWDATA[1];
-
-              // Software reset
-              if (HWDATA[1]) begin
-
-                rx_shift          <= '0;
-                bit_count         <= '0;
-
-                tx_shift          <= '0;
-                tx_bit_count      <= '0;
-
-                status_rx_valid   <= 1'b0;
-                status_tx_ready   <= 1'b1;
-
-                spi_state         <= FSM_IDLE;
-
-                spi_command       <= '0;
-                spi_address       <= '0;
-                address_shift     <= '0;
-                address_bit_count <= '0;
-
-              end
+              // SOFT_RESET is a strobe, not a mode: it self-clears in the
+              // cycle it acts (SPIS-SPEC-006). Leaving it set made every
+              // later CTRL readback look like a reset was still pending.
+              if (HWDATA[1])
+                ctrl_soft_reset <= 1'b0;
             end
           end
 
-          // TXDATA register
-          ADDR_TXDATA: begin
-
+          // IRQ_STATUS -- write 1 to clear.
+          ADDR_IRQ_STS: begin
             if (byte_select_r[0]) begin
-
-              // Store the byte written by the AHB master.
-              tx_data <= HWDATA[7:0];
-
-              // Also load the shift register.
-              tx_shift <= HWDATA[7:0];
-
-              // Start at the MSB.
-              tx_bit_count <= 3'd0;
-
-              // A byte is now waiting to be transmitted.
-              status_tx_ready <= 1'b0;
-
+              if (HWDATA[0]) int_rx_valid  <= 1'b0;
+              if (HWDATA[1]) int_underrun  <= 1'b0;
+              if (HWDATA[2]) int_overrun   <= 1'b0;
+              if (HWDATA[4]) int_underflow <= 1'b0;
+              if (HWDATA[5]) int_overflow  <= 1'b0;
             end
           end
 
-          default: begin
+          ADDR_IRQ_EN: begin
+            if (byte_select_r[0]) begin
+              ie_rx_valid  <= HWDATA[0];
+              ie_underrun  <= HWDATA[1];
+              ie_overrun   <= HWDATA[2];
+              ie_underflow <= HWDATA[4];
+              ie_overflow  <= HWDATA[5];
+            end
           end
+
+          default: begin end
 
         endcase
       end
+
+      // Interrupt sources, set AFTER the W1C block above so a source firing
+      // in the same cycle as its clear wins. That is the order the
+      // specification requires, and the opposite of ahb_spi_m, where the
+      // clear is written later and a concurrent event is lost.
+      if (rx_byte_pushed || !rx_empty) int_rx_valid  <= 1'b1;
+      if (rx_overrun)                  int_overrun   <= 1'b1;  // wire-side
+      if (tx_underrun)                 int_underrun  <= 1'b1;  // wire-side
+      if (lane_underflow_evt)          int_underflow <= 1'b1;  // bus-side
+      if (lane_overflow_evt)           int_overflow  <= 1'b1;  // bus-side
+      if (dbg_err_evt)                 int_overrun   <= 1'b1;
     end
   end
 
-  // SPI MISO
+//------------------------------------------------------
+// Register reads
+//------------------------------------------------------
+
   always_comb begin
-
-    if (!spi_ss && ctrl_enable && !status_tx_ready) begin
-
-      spi_miso = tx_shift[7];
-
-    end
-    else begin
-
-      spi_miso = 1'b0;
-
-    end
-
-  end
-
-  // AHB READ DATA
-  always_comb begin
-
     if (!read_enable_r) begin
-
       HRDATA = '0;
-
     end
     else begin
-
       unique case (word_address_r)
 
-        // CTRL register - 0x00
         ADDR_CTRL:
           HRDATA = {
-            30'b0,
+            27'b0,
+            ctrl_debug_port_en,
+            ctrl_cpol,
+            ctrl_cpha,
             ctrl_soft_reset,
             ctrl_enable
           };
 
-        // STATUS register - 0x04
+        // RX_VALID and TX_READY keep their original bit positions and now
+        // read as !rx_empty / !tx_full, so existing firmware sees the same
+        // handshake against a deeper buffer.
         ADDR_STATUS:
           HRDATA = {
-            29'b0,
-            status_tx_ready,
-            status_rx_valid,
-            status_busy
+            20'b0,
+            rx_level,
+            tx_full,
+            tx_empty,
+            rx_full,
+            rx_empty,
+            1'b0,          // DEBUG_BUSY - no debug unit connected yet
+            !tx_full,      // TX_READY
+            !rx_empty,     // RX_VALID
+            core_busy
           };
 
-        // RXDATA register - 0x0C
+        // The lane machine assembles the popped bytes low-lane-first; lanes
+        // the FIFO could not supply read back as zero.
         ADDR_RXDATA:
+          HRDATA = rx_assemble;
+
+        ADDR_IRQ_STS:
           HRDATA = {
-            24'b0,
-            rx_data
+            26'b0,
+            int_overflow, int_underflow, 1'b0,
+            int_overrun,  int_underrun,  int_rx_valid
+          };
+
+        ADDR_IRQ_EN:
+          HRDATA = {
+            26'b0,
+            ie_overflow, ie_underflow, 1'b0,
+            ie_overrun,  ie_underrun,  ie_rx_valid
           };
 
         default:
@@ -507,36 +568,66 @@ module ahb_spi_s #(
 
       endcase
     end
-
   end
 
-  // AHB invalid-access detection
-  always_comb begin
+//------------------------------------------------------
+// AHB error response and wait states
+//------------------------------------------------------
+// AHB-Lite ERROR is two cycles: HREADYOUT low with HRESP high, then
+// HREADYOUT high with HRESP high (SPIS-SPEC-009). This was a one-cycle
+// response before, which is a protocol violation -- and it matters more now
+// that the lane machine drives HREADYOUT for the first time, since the two
+// share the signal.
 
+  always_comb begin
     invalid_access = 1'b0;
 
     if (write_enable) begin
-
       unique case (word_address_r)
-
-        // STATUS is read-only
-        ADDR_STATUS:
-          invalid_access |= 1'b1;
-
-        // RXDATA is read-only
-        ADDR_RXDATA:
-          invalid_access |= 1'b1;
-
-        default: begin
-        end
-
+        ADDR_STATUS: invalid_access |= 1'b1;  // read-only
+        ADDR_RXDATA: invalid_access |= 1'b1;  // read-only
+        default:     begin end
       endcase
     end
+
+    // Offsets past the end of the map error on read and write alike.
+    if ((write_enable || read_enable_r) && (word_address_r > ADDR_SPI_S_MAX))
+      invalid_access |= 1'b1;
   end
 
-  // AHB response
-  // Single-cycle (zero-wait-state)
-  assign HREADYOUT = 1'b1;
+  assign err_req = invalid_access && !err_second_cycle;
 
-  // FIXME: add 2-cycle error response for invalid access.
-  assign HRESP = invalid_access ? 1'b1 : 1'b0;
+  always_ff @(posedge HCLK, negedge HRESETn) begin
+    if (~HRESETn)
+      err_second_cycle <= 1'b0;
+    else
+      err_second_cycle <= err_req;
+  end
+
+  assign HRESP = err_req || err_second_cycle;
+
+  // Two independent reasons to hold the bus. The error response wins: once
+  // err_req is asserted the transfer is being aborted, and the second ERROR
+  // cycle must present HREADYOUT high on schedule regardless of what the lane
+  // machine is doing.
+  assign HREADYOUT = err_second_cycle ? 1'b1 : (~err_req && ~lane_stall);
+
+//------------------------------------------------------
+// Interrupt output (GRPR-SPIS-029)
+//------------------------------------------------------
+// Single-level gating: IRQ_EN is the only gate. The SPI Master's extra
+// CTRL.IE_COMPLETE/IE_ERR pair exists to separate completion from error
+// reporting on a block that raises both; this block has no transaction-
+// complete event of its own.
+//
+// The output has no CPU interrupt line today -- cpu_ss's vector is full -- so
+// it joins QSPI's and the SPI Master's as an unconnected port at periph_ss
+// and firmware polls IRQ_STATUS (SPIS-SPEC-012).
+
+  assign irq = (int_rx_valid  && ie_rx_valid)  ||
+               (int_underrun  && ie_underrun)  ||
+               (int_overrun   && ie_overrun)   ||
+               (int_underflow && ie_underflow) ||
+               (int_overflow  && ie_overflow);
+
+endmodule

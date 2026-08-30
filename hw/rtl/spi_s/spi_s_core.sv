@@ -50,22 +50,16 @@ module spi_s_core #(
 
   // Debug port (GRPR-SPIS-030 .. -035)
   output logic                  dbg_req_valid,
-  /* verilator lint_off UNUSEDSIGNAL */
-  // Backpressure from the Debug Unit. Not consumed yet: with no unit
-  // connected this is tied low, and honouring it needs the request-retry path
-  // that arrives with the unit itself.
+
   input  logic                  dbg_req_ready,
-  /* verilator lint_on UNUSEDSIGNAL */
   output logic [3:0]            dbg_req_cmd,
   output logic [31:0]           dbg_req_addr,
   output logic [31:0]           dbg_req_wdata,
   output logic [1:0]            dbg_req_size,
   input  logic                  dbg_rsp_valid,
   output logic                  dbg_rsp_ready,
-  /* verilator lint_off UNUSEDSIGNAL */
-  // Byte-sized requests, so only the low lane of a response is consumed.
   input  logic [31:0]           dbg_rsp_rdata,
-  /* verilator lint_on UNUSEDSIGNAL */
+
   input  logic                  dbg_rsp_err,
   output logic                  dbg_err_evt
 );
@@ -123,10 +117,6 @@ module spi_s_core #(
 // to its active level and the launch edge is the other, so a single
 // CPOL-selected pair covers them; CPHA is required to equal CPOL.
 
-  /* verilator lint_off UNUSEDSIGNAL */
-  logic cpha_unused;
-  assign cpha_unused = cpha;
-  /* verilator lint_on UNUSEDSIGNAL */
 
   always_ff @(posedge clk, negedge rst_n)
     if (~rst_n) spi_sck_d <= 1'b0;
@@ -169,6 +159,13 @@ module spi_s_core #(
         spi_state <= FSM_COMMAND;
       end
 
+      // A read burst advances when the Debug Unit accepts each request.
+      // Outside the sample_edge guard because the handshake is paced by the
+      // bus, not by SCK.
+      if (!spi_ss && dbg_active && dbg_is_read &&
+          dbg_req_valid && dbg_req_ready)
+        spi_address <= spi_address + 24'd1;
+
       if (!spi_ss && sample_edge) begin
 
         if (spi_state == FSM_COMMAND) begin
@@ -183,6 +180,12 @@ module spi_s_core #(
             endcase
           end
         end
+
+        // Multi-byte bursts walk consecutive ascending addresses
+        // (GRPR-SPIS-034, mirroring GRPR-DBG-012). Without this every byte of
+        // a burst would target the address the frame opened with.
+        else if ((spi_state == FSM_WRITE_DATA) && rx_byte_done && dbg_active)
+          spi_address <= spi_address + 24'd1;
 
         else if (spi_state == FSM_ADDRESS) begin
           address_shift <= {address_shift[22:0], spi_mosi};
@@ -293,10 +296,16 @@ module spi_s_core #(
 
   // One request per payload byte, at the auto-incrementing address
   // (GRPR-SPIS-034). Byte-sized, since the SPI frame is a byte stream.
+  // The write side must be qualified by FSM_WRITE_DATA: rx_byte_done fires on
+  // every completed byte, so without it the opcode and the three address
+  // bytes each issued a spurious request at whatever address the frame had
+  // captured so far -- four bogus writes to address 0 before the real one.
   assign dbg_req_valid = dbg_active && !spi_ss &&
                          (dbg_is_read ? ((spi_state == FSM_READ_DATA) &&
                                          !tx_busy && !dbg_rsp_byte_valid)
-                                      : rx_byte_done);
+                                      : ((spi_state == FSM_WRITE_DATA) &&
+                                         rx_byte_done));
+                                         
   assign dbg_req_cmd   = dbg_is_read ? DBG_CMD_READ : DBG_CMD_WRITE;
   assign dbg_req_addr  = {8'b0, spi_address};
   assign dbg_req_wdata = {24'b0, rx_byte_data};
