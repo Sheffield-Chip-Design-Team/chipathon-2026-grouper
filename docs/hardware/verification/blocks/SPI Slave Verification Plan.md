@@ -2,7 +2,9 @@
 
 **Design doc:** [SPI Slave Specification](../../design/blocks/SPI%20Slave%20Specification.md)
 **Source:** [Schematic Review](../../Schematic%20Review.md) §5 "Verification Summary" — block-level testbench architecture (SPI VIP ↔ DUT ↔ AHB VIP ↔ Scoreboard).
-**DV status:** RTL exists (`hw/rtl/spi_s/ahb_spi_s.sv`) and a directed cocotb suite exists (`hw/tb/spi_s/test_spi_s.py`, 8 tests, all passing, registered as `ahb_spi_s_directed` — still flagged `fail_ok: true`, which is stale). No VIP or scoreboard yet, and the command FSM is not covered by any test. The debug port is specification only, as are the FIFOs, word-wide data access and interrupt registers of `GRPR-SPIS-023` … `-029`.
+**DV status:** RTL exists and is split into `spi_s_rx` / `spi_s_tx` / `spi_s_core` / `ahb_spi_s` under `hw/rtl/spi_s/`. Two directed cocotb suites pass: `hw/tb/spi_s/test_spi_s.py` (22 tests, `ahb_spi_s_directed`) and `hw/tb/spi_s/test_spi_s_debug.py` (8 tests, `ahb_spi_s_debug_port`, which elaborates `DEBUG_PORT_EN=1`). `GRPR-SPIS-023` … `-035` are implemented, as are `SPIS-SPEC-004`/`-005`/`-006`/`-009`. The command FSM is now exercised, since the frame helper in `spi_s_utils.py` holds `SS` across a whole `opcode + address + payload` frame.
+
+Still open: no VIP or scoreboard; the debug transport is tested only against the `DebugStub`, because no Debug Unit RTL exists; and the `ahb_spi_s_directed` leg is still flagged `fail_ok: true` despite passing 22/22.
 
 ---
 
@@ -29,9 +31,10 @@ column names a function in `hw/tb/spi_s/test_spi_s.py` are implemented; the
 rest are named for the test that should exist.
 
 **Registered in CI as `ahb_spi_s_directed` with `fail_ok: true`** — failures are
-recorded but do not block. That should be tightened to `fail_ok: false` once
-the command-FSM gaps below are closed, otherwise a regression in this block
-goes unnoticed.
+recorded but do not block, even though the suite now passes 22/22. That flag is
+stale and should be tightened to `fail_ok: false`, otherwise a regression here
+goes unnoticed. The `ahb_spi_s_debug_port` leg added alongside it is already
+`fail_ok: false`.
 
 ### `GRPR-SPIS-001` / `-006` / `-008` — register map and decode
 
@@ -117,24 +120,48 @@ cited as a starting point rather than as evidence about the Slave.
 
 | Item             | Test                                              | What it does                                                                                                                                                                       | Req             |
 | ---------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------- |
-| `V-SPIS-DIR-031` | *(missing)* `test_rx_fifo_depth`                  | Clock in `FIFO_DEPTH` bytes over SPI, then read them back in arrival order. `STATUS.RX_LEVEL` tracks the count and `RX_FULL` asserts on the last one                                | `-023`          |
-| `V-SPIS-DIR-032` | *(missing)* `test_tx_fifo_depth`                  | Queue `FIFO_DEPTH` bytes through `TXDATA`, confirm `TX_FULL`, then clock them out and confirm they appear on MISO in queue order                                                    | `-024`          |
-| `V-SPIS-DIR-033` | *(missing)* `test_rxdata_word_read_packs_bytes`   | Four bytes received over SPI come back as one 32-bit read, oldest in bits 7:0. The core of the packed-read requirement                                                              | `-025`          |
-| `V-SPIS-DIR-034` | *(missing)* `test_rxdata_short_word_read`         | A word read with only 2 bytes queued returns those 2, zeroes the upper lanes, sets `UNDERFLOW`, and leaves `RX_LEVEL` at 0. The case that distinguishes a short read from zero data | `-025`          |
-| `V-SPIS-DIR-035` | *(missing)* `test_txdata_word_write_queues_bytes` | One 32-bit store queues four bytes; all four reach MISO low-lane-first. Port of `test_word_push_wait_states`' MOSI half                                                             | `-026`          |
-| `V-SPIS-DIR-036` | *(missing)* `test_word_access_wait_states`        | A word `TXDATA` write and a word `RXDATA` read each take exactly 3 wait states; a half-word takes 1. Port of `test_word_push_wait_states`                                           | `-027`          |
-| `V-SPIS-DIR-037` | *(missing)* `test_byte_access_is_zero_wait`       | Byte-sized accesses take 0 wait states, so byte-at-a-time firmware is not slowed. Port of `test_byte_push_is_zero_wait`                                                             | `-027`          |
-| `V-SPIS-DIR-038` | *(missing)* `test_irq_status_w1c`                 | Writing 1 clears a bit; writing 0 leaves it set. Port of the Master's `test_irq_status_w1c`                                                                                         | `-028`          |
-| `V-SPIS-DIR-039` | *(missing)* `test_irq_wire_vs_bus_split`          | An RX-full arrival sets `OVERRUN` and **not** `UNDERFLOW`; a short word read sets `UNDERFLOW` and **not** `OVERRUN`. The split is the point of the register                         | `-028`          |
-| `V-SPIS-DIR-040` | *(missing)* `test_irq_en_gates_output`            | With `IRQ_EN` clear, `irq` stays low while `IRQ_STATUS` still records the event; setting the matching enable raises `irq`                                                           | `-029`          |
-| `V-SPIS-DIR-041` | *(missing)* `test_tx_underrun_on_empty`           | The host clocks a read byte with the TX FIFO empty: `UNDERRUN` sets, and the wire behaviour is whatever the spec commits to                                                         | `-028`          |
-| `V-SPIS-DIR-042` | *(missing)* `test_txdata_overflow_not_wire_paced` | A `TXDATA` write to a full FIFO retires with **no** wait states, drops the surplus and sets `OVERFLOW`. This is the anti-deadlock property, so it is the highest-value row here     | `-026`, `-027`  |
-| `V-SPIS-DIR-043` | *(missing)* `test_soft_reset_flushes_fifos`       | `CTRL.SOFT_RESET` empties both FIFOs and restores `STATUS`, but leaves `IRQ_STATUS` alone                                                                                           | `-023`, `-024`  |
+| `V-SPIS-DIR-031` | `test_rx_fifo_depth`                  | Clock in `FIFO_DEPTH` bytes over SPI, then read them back in arrival order. `STATUS.RX_LEVEL` tracks the count and `RX_FULL` asserts on the last one                                | `-023`          |
+| `V-SPIS-DIR-032` | `test_tx_fifo_depth`                  | Queue `FIFO_DEPTH` bytes through `TXDATA`, confirm `TX_FULL`, then clock them out and confirm they appear on MISO in queue order                                                    | `-024`          |
+| `V-SPIS-DIR-033` | `test_rxdata_word_read_packs_bytes`   | Four bytes received over SPI come back as one 32-bit read, oldest in bits 7:0. The core of the packed-read requirement                                                              | `-025`          |
+| `V-SPIS-DIR-034` | `test_rxdata_short_word_read`         | A word read with only 2 bytes queued returns those 2, zeroes the upper lanes, sets `UNDERFLOW`, and leaves `RX_LEVEL` at 0. The case that distinguishes a short read from zero data | `-025`          |
+| `V-SPIS-DIR-035` | `test_txdata_word_write_queues_bytes` | One 32-bit store queues four bytes; all four reach MISO low-lane-first. Port of `test_word_push_wait_states`' MOSI half                                                             | `-026`          |
+| `V-SPIS-DIR-036` | `test_word_access_wait_states`        | A word `TXDATA` write and a word `RXDATA` read each take exactly 3 wait states; a half-word takes 1. Port of `test_word_push_wait_states`                                           | `-027`          |
+| `V-SPIS-DIR-037` | `test_byte_access_is_zero_wait`       | Byte-sized accesses take 0 wait states, so byte-at-a-time firmware is not slowed. Port of `test_byte_push_is_zero_wait`                                                             | `-027`          |
+| `V-SPIS-DIR-038` | `test_irq_status_w1c`                 | Writing 1 clears a bit; writing 0 leaves it set. Port of the Master's `test_irq_status_w1c`                                                                                         | `-028`          |
+| `V-SPIS-DIR-039` | `test_irq_wire_vs_bus_split`          | An RX-full arrival sets `OVERRUN` and **not** `UNDERFLOW`; a short word read sets `UNDERFLOW` and **not** `OVERRUN`. The split is the point of the register                         | `-028`          |
+| `V-SPIS-DIR-040` | `test_irq_en_gates_output`            | With `IRQ_EN` clear, `irq` stays low while `IRQ_STATUS` still records the event; setting the matching enable raises `irq`                                                           | `-029`          |
+| `V-SPIS-DIR-041` | `test_tx_underrun_on_empty`           | The host clocks a read byte with the TX FIFO empty: `UNDERRUN` sets, and the wire behaviour is whatever the spec commits to                                                         | `-028`          |
+| `V-SPIS-DIR-042` | `test_txdata_overflow_not_wire_paced` | A `TXDATA` write to a full FIFO retires with **no** wait states, drops the surplus and sets `OVERFLOW`. This is the anti-deadlock property, so it is the highest-value row here     | `-026`, `-027`  |
+| `V-SPIS-DIR-043` | `test_soft_reset_flushes_fifos`       | `CTRL.SOFT_RESET` empties both FIFOs and restores `STATUS`, but leaves `IRQ_STATUS` alone                                                                                           | `-023`, `-024`  |
 | `V-SPIS-DIR-044` | *(missing)* `test_stall_vs_error_precedence`      | An erroring access issued while a multi-lane access drains: the two-cycle ERROR wins and its second cycle presents `HREADYOUT` high on schedule                                     | `-027`, `SPIS-SPEC-009` |
 
-Note `V-SPIS-DIR-042` and `-044` both depend on `SPIS-SPEC-009` being fixed —
-they are about how `HREADYOUT` behaves, and the block does not drive it low at
-all today.
+`V-SPIS-DIR-044` is the one row above still unwritten. `SPIS-SPEC-009` is now
+fixed (the error response is two cycles) and the lane stall drives `HREADYOUT`,
+so the precedence it describes is implemented and argued in RTL comments — but
+it is not yet proven by a test.
+
+### `GRPR-SPIS-030` … `-035` — debug transport
+
+Run with the `debug_port` target, which elaborates `DEBUG_PORT_EN=1`; the
+default target compiles the transport out, so these would pass vacuously there.
+The far end is the `DebugStub` in `hw/tb/spi_s/spi_s_utils.py`, since no Debug
+Unit RTL exists — **these prove the SPI-to-debug translation, not the bus
+behaviour behind it.**
+
+```bash
+fusesoc run --no-export --target=debug_port sharc:comms_ip:ahb_spi_s_directed
+```
+
+| Item             | Test                                | What it does                                                                                                          | Req            |
+| ---------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------- |
+| `V-SPIS-DIR-045` | `test_debug_port_en_elaborated`     | Guards the suite: `CTRL.DEBUG_PORT_EN` reads set, so the rest cannot pass against a dead path                          | `-035`         |
+| `V-SPIS-DIR-046` | `test_spi_write_becomes_bus_write`  | `SPI_WRITE` payload is forwarded as a debug `WRITE` at the zero-extended 24-bit address                                | `-030`         |
+| `V-SPIS-DIR-047` | `test_spi_read_sources_from_bus`    | `SPI_READ` sources MISO bytes from debug `READ` responses rather than the TX FIFO                                      | `-030`, `-032` |
+| `V-SPIS-DIR-048` | `test_write_burst_auto_increments`  | A multi-byte burst walks consecutive ascending addresses                                                               | `-034`         |
+| `V-SPIS-DIR-049` | `test_bytes_bypass_rx_fifo`         | On the debug path payload bytes reach the bus and the RX FIFO stays empty                                              | `-032`         |
+| `V-SPIS-DIR-050` | `test_bus_error_is_reported_not_hung` | A refused access is flagged in `IRQ_STATUS` and the frame still completes — the host clocks SCK and cannot be held off | `-033`         |
+| `V-SPIS-DIR-051` | `test_debug_disabled_uses_fifo_path`  | With `CTRL.DEBUG_PORT_EN` clear, no request is issued and the byte lands in the RX FIFO                              | `-035`         |
+| `V-SPIS-DIR-052` | `test_request_is_byte_sized`        | `dbg_req_size` is 0: the SPI frame is a byte stream                                                                    | `-030`         |
 
 ### Known limitations
 
