@@ -2,7 +2,7 @@
 
 **Status:** Draft, rebuilt from the [Schematic Review](../Schematic%20Review.md) (the one confirmed-authoritative planning document for this repo — see the note at the bottom of this file for why the rest of `planning/` was discarded).
 
-This document is scoped to **integration** requirements — clocking, reset, interconnect, memory map, boot flow, and physical design. Peripheral-internal design lives in the block docs under [`blocks/`](blocks/): [UART](blocks/UART.md), [GPIO Mux](blocks/GPIO%20Mux.md), [SPI Master](blocks/SPI%20Master.md), [SPI Slave](blocks/SPI%20Slave.md), [QSPI](blocks/QSPI.md).
+This document is scoped to **integration** requirements — clocking, reset, interconnect, memory map, boot flow, and physical design. Peripheral-internal design lives in the block docs under [`blocks/`](blocks/): [UART](blocks/UART%20Specification.md), [GPIO Mux](blocks/GPIO%20Mux%20Specification.md), [SPI Master](blocks/SPI%20Master%20Specification.md), [SPI Slave](blocks/SPI%20Slave%20Specification.md), [QSPI](blocks/QSPI%20Specification.md).
 
 **Related:** [Grouper SoC Verification Plan](../verification/Grouper%20SoC%20Verification%20Plan.md)
 
@@ -19,18 +19,31 @@ The current RTL (`hw/rtl/`, top level `picorv32_hello_top`/`picorv32_hello_core`
 | ID | Requirement |
 |---|---|
 | `GRPR-SOC-001` | On power-on-reset, the core shall begin executing from the boot ROM at the reset vector. |
-| `GRPR-SOC-002` | The boot ROM shall load the program image into RAM over [UART](blocks/UART.md) — UART was chosen over SPI/QSPI for this role because it is simpler to implement in a small hand-written boot ROM. |
+| `GRPR-SOC-002` | The boot ROM shall support loading the program image into RAM over [UART](blocks/UART%20Specification.md) — UART was chosen over SPI/QSPI for this role because it is simpler to implement in a small hand-written boot ROM. This is one of two supported load paths; the other is the debug-unit path of `GRPR-SOC-022`. |
 | `GRPR-SOC-003` | A Bank Switch Reset shall be implemented as a PCPI (PicoRV32 co-processor) custom instruction that swaps the ROM and RAM regions in the memory map. |
 | `GRPR-SOC-004` | After the bank-switch reset, the CPU shall execute the just-loaded program from RAM. |
-| `GRPR-SOC-005` | [SPI Master](blocks/SPI%20Master.md) and [QSPI](blocks/QSPI.md) external memory (NOR flash / PSRAM) become available as alternative/extended storage only after the initial UART-loaded program is running (QSPI NOR flash can additionally bypass this UART path entirely and boot directly from flash — see [QSPI § Purpose](blocks/QSPI.md#purpose)). |
+| `GRPR-SOC-005` | [SPI Master](blocks/SPI%20Master%20Specification.md) and [QSPI](blocks/QSPI%20Specification.md) external memory (NOR flash / PSRAM) become available as alternative/extended storage only after the initial UART-loaded program is running (QSPI NOR flash can additionally bypass this UART path entirely and boot directly from flash — see [QSPI § Purpose](blocks/QSPI%20Specification.md#purpose)). This requirement concerns the SPI *Master* and QSPI storage interfaces; it does not constrain the SPI *Slave* debug-transport boot path of `GRPR-SOC-022`, which is a separate mechanism. |
 
 ```
 Power-on Reset
+  → Debug strap (pad 15) sampled; if high, debug access armed in hardware
   → Core executes from boot ROM (reset vector)
-  → Boot ROM loads program over UART into RAM
-  → Bank Switch Reset (PCPI custom instruction swaps ROM/RAM regions)
+  → Boot ROM arms the debug consent gates and the SPI-slave pads
+  │
+  ├─ (a) UART path
+  │      Boot ROM loads program over UART into RAM
+  │
+  └─ (b) Debug path
+         External host takes a reset-style lock over a debug transport,
+         writes the image straight into RAM, sets the bank switch, releases
+  │
+  → Bank Switch Reset (swaps ROM/RAM regions)
   → Program execution from RAM
 ```
+
+Path (b) is reachable only after the boot ROM has run far enough to arm the
+gates (`GRPR-SOC-023`), so it is not a cold-silicon recovery mechanism. See
+[Debug Unit `DBG-SPEC-001`](blocks/Debug%20Unit.md#open-items).
 
 ## Memory Map
 
@@ -45,6 +58,7 @@ Target memory map, per the Schematic Review §3b:
 | `0x0000_5000` | `0x0000_5FFF` | 4 KiB | QSPI |
 | `0x0000_6000` | `0x0000_6FFF` | 4 KiB | SPI M |
 | `0x0000_7000` | `0x0000_7FFF` | 4 KiB | SPI S |
+| `0x0000_8000` | `0x0000_8FFF` | 4 KiB | [Debug Unit](blocks/Debug%20Unit.md) |
 | `0x0001_0000` | `0x0001_FFFF` | 64 KiB | External peripheral |
 
 `GRPR-SOC-006`: The SoC shall implement the memory map above.
@@ -55,10 +69,10 @@ Target memory map, per the Schematic Review §3b:
 
 | ID | Requirement |
 |---|---|
-| `GRPR-SOC-007` | The interconnect shall be a 2-level, single-master AHB-Lite fabric. |
+| `GRPR-SOC-007` | The interconnect shall be a 2-level AHB-Lite fabric with a single manager *at a time*. Two managers are possible — the CPU and the [Debug Unit](blocks/Debug%20Unit.md) — but never concurrently: ownership transfers wholesale and exclusively, so the fabric itself still sees one manager and needs no arbitration. |
 | `GRPR-SOC-008` | **L1 fabric** — a register stage breaking up the long combinatorial path between the CPU address bus and the RAM address line. **Not yet present in the current bring-up RTL** — `hw/rtl/sram/ahb_ram.sv` is currently decoded directly off the L2 decoder with no separate L1 register stage. |
 | `GRPR-SOC-009` | **L2 fabric** — an AHB-Lite decoder fanning out to the remaining peripherals. `hw/rtl/interconnect/ahb_interconnect.sv` + `hw/rtl/periph/periph_ss.sv` |
-| `GRPR-SOC-010` | Single master: PicoRV32, via a custom AHB-Lite wrapper (`hw/rtl/cpu/cpu_ss.sv`) converting picorv32's native `mem_*`/`mem_la_*` interface to AHB-Lite. No arbitration is needed (single master). |
+| `GRPR-SOC-010` | The default manager is PicoRV32, via a custom AHB-Lite wrapper (`hw/rtl/cpu/cpu_ss.sv`) converting picorv32's native `mem_*`/`mem_la_*` interface to AHB-Lite. The [Debug Unit](blocks/Debug%20Unit.md) may take ownership from it under `GRPR-DBG-006`. **No arbiter is implemented, and none shall be**: ownership is exclusive and swaps as a unit, so at most one manager is ever active. |
 
 **Open item — CPU ISA variant mismatch.** The Schematic Review's interconnect diagram labels the CPU "RV32EMC" (implying the E — reduced register — and C — compressed — extensions). The actual RTL configuration (`hw/rtl/cpu/cpu_ss.sv`) instantiates picorv32 with `ENABLE_REGS_16_31=1` (full 32 registers, not the E variant), `COMPRESSED_ISA=0` (no C extension), and `ENABLE_MUL=1`/`ENABLE_DIV=1` (M extension enabled) — i.e. the real core is **RV32IM** (for the software demo), not RV32EMC.
 
@@ -71,8 +85,53 @@ Target memory map, per the Schematic Review §3b:
 | `GRPR-SOC-012` | Reset shall be active-low (`HRESETn`/`rst_n`), asynchronous assert / synchronous de-assert, distributed to all synchronous logic. |
 
 
-## Boot Flow 
-TODO
+## Boot Flow
+
+Two paths load a program image into RAM. Both end the same way, at the bank
+switch, so only the load differs.
+
+**(a) UART path** — the default, and the only one available before the boot ROM
+has run. The ROM polls the UART for the command protocol implemented in
+`sw/boot/bootloader.c` (`'R'` read, `'W'` write, `'B'` bank-switch and reboot),
+writes the image into RAM, then swaps banks.
+
+**(b) Debug-transport path** — an external host takes a reset-style lock
+through a debug transport, writes the image straight into RAM through the
+[Debug Unit](blocks/Debug%20Unit.md), sets the bank-switch register, and
+releases the lock. The CPU comes out of reset executing the loaded image. No
+UART traffic is involved and the CPU is held throughout, so there is no
+contention for RAM.
+
+| ID | Requirement |
+|---|---|
+| `GRPR-SOC-022` | The SoC shall support an alternate boot path in which an external host acquires a reset-style lock through a debug transport, writes a program image into RAM, sets the bank-switch register, and releases the lock, after which the CPU executes the loaded image. This path shall not require the UART load of `GRPR-SOC-002`. |
+| `GRPR-SOC-023` | The boot ROM shall arm the debug consent gates (`CTRL.LOCK_EN` in the Debug Unit, `CTRL.DEBUG_PORT_EN` in the transport) and assign the transport's pads their alternate function, before entering its UART load loop, so that the path of `GRPR-SOC-022` is reachable on a chip strapped for normal boot. This shall not raise the boot ROM's stack usage above zero bytes. |
+| `GRPR-SOC-024` | GPIO pad 15 shall be sampled at reset release as a debug strap. When sampled high, the SoC shall arm debug access in hardware: pads 0–3 shall be given their SPI-slave alternate function, and the Debug Unit's `CTRL.LOCK_EN` and the transport's `CTRL.DEBUG_PORT_EN` shall come out of reset set. When sampled low, reset values shall be as specified elsewhere in this document and pad 15 shall behave as ordinary GPIO. |
+| `GRPR-SOC-025` | The sampled strap value shall be captured in a register readable by firmware and by the Debug Unit, and shall not change until the next reset. Pad 15 shall be usable as ordinary GPIO after the sample without affecting the captured value. |
+| `GRPR-SOC-026` | Debug access armed by the strap shall be revocable by firmware: a write clearing `CTRL.LOCK_EN` or `CTRL.DEBUG_PORT_EN` shall take effect normally regardless of how they were armed. The strap sets the reset value; it does not lock the gates open. |
+
+The zero-stack constraint in `GRPR-SOC-023` is not incidental:
+`sw/scripts/build_bootloader.sh` enforces a `-fstack-usage` budget of 0 and the
+bootloader is written to hold it (leaf-only, `always_inline`, `-ffixed-s0
+-ffixed-s1`). A single non-inlined call added to the ROM breaks the build. Any
+arming code must be inline register writes.
+
+**Cold-silicon access via the debug strap.** Path (b) has two ways in. On a
+normally strapped chip the boot ROM arms the gates (`GRPR-SOC-023`), so debug
+access becomes available shortly after reset but does depend on the ROM
+running. Holding **GPIO pad 15 high at reset** instead arms debug access in
+hardware (`GRPR-SOC-024`) — pads 0–3 take their SPI-slave function and both
+consent gates come up set — with no firmware involvement at all. That makes the
+path usable on a chip whose ROM does not execute, which is the case that
+matters for bring-up and recovery.
+
+Strapping is a deliberate middle ground. Arming debug unconditionally would let
+stray pad activity at power-on halt the CPU; requiring firmware alone would
+make a non-booting chip unreachable. A strap costs one pad — the spare — and
+puts the choice in the hands of whoever builds the board. Note that it is an
+access-control decision, not an authentication one: a board that strapped debug
+on is open to anyone who can reach its pins (`GRPR-DBG-INFO-002`).
+
 
 
 ## Interrupt Handling Scheme
@@ -102,10 +161,66 @@ TODO
 | 12 | `qspi_sio[1]` | bidir |
 | 13 | `qspi_sio[2]` | bidir |
 | 14 | `qspi_sio[3]` | bidir |
-| 15 | none — GPIO only | — |
+| 15 | `dbg_strap` — sampled at reset, then GPIO | in |
+
+**Pad ownership at reset.** All pads default to GPIO, not to their alternate
+function — with one exception. Pad 15, otherwise the spare, is sampled at reset
+as the **debug strap** (`GRPR-SOC-024`). When it is high at reset release, the
+SoC arms debug access in hardware: pads 0–3 take their SPI-slave alternate
+function and the debug consent gates come up set, with no firmware involvement.
+When it is low — the normal case, and the state a pull-down gives — everything
+behaves exactly as before and pad 15 reverts to ordinary GPIO after the sample.
+
+This is what makes the debug boot path reachable on cold silicon, including on
+a chip whose boot ROM does not run.
+
 
 ## Debug/Test Features
-TODO
+
+Debug access is provided by the [Debug Unit](blocks/Debug%20Unit.md), reached
+through a debug transport — initially the
+[SPI Slave](blocks/SPI%20Slave%20Specification.md). The unit can take the
+system bus from the CPU, drive any peripheral or memory location, and control
+CPU execution: halt, read back state, single-step, redirect, and resume.
+
+*(Not to be confused with `ahb_debug`, the simulation-only printf and trace
+sink built under `DEBUG_PERIPH`. That block does not exist in silicon.)*
+
+| ID | Requirement |
+|---|---|
+| `GRPR-SOC-017` | The SoC shall instantiate a debug unit positioned so that both the CPU's AHB manager port and the CPU's RAM port pass through it. The unit is in series on those paths, not a leaf peripheral on the fabric. |
+| `GRPR-SOC-018` | The debug unit shall additionally be an AHB subordinate on the peripheral fabric, occupying its own 4 KiB decode window, so firmware can read its status and configure its consent gates. |
+| `GRPR-SOC-019` | The CPU subsystem shall expose the hooks the debug unit requires: a stall input, a reset input, a runtime reset vector, an instruction-retirement indication, a program-counter output, and a register-file read port. |
+| `GRPR-SOC-020` | CPU freeze shall be implemented by gating the CPU's memory-interface ready signal, **not** by holding AHB `HREADY` low. The CPU does not stall on ROM- or RAM-sourced accesses, so `HREADY` alone would not stop it. |
+| `GRPR-SOC-021` | Single-step shall release the freeze for exactly one instruction retirement and reassert it. The retirement indication shall come from the CPU, not be inferred from bus activity — not every instruction produces a bus transfer, and some produce several, so a bus-activity heuristic miscounts. |
+
+### CPU requirements
+
+The debug unit's CPU-facing requirements need core support that upstream
+picorv32 does not provide. `ip/picorv32` is a team fork
+(`Sheffield-Chip-Design-Team/picorv32`), so these are available to implement,
+at an area cost that should be measured before they are committed to.
+
+| ID | Requirement |
+|---|---|
+| `GRPR-CPU-001` | The CPU shall expose a debug register read port — an index input and a 32-bit data output returning the selected general-purpose register. On this RV32E configuration (`ENABLE_REGS_16_31 = 0`) only `x0`–`x15` exist. |
+| `GRPR-CPU-003` | The CPU shall expose its current program counter and an instruction-retirement indication for debug use. |
+
+`GRPR-CPU-003` deserves scrutiny on area. picorv32's existing `trace_valid`
+output is the obvious retirement signal, but it exists only when the core is
+built with `ENABLE_TRACE`, which is currently off in silicon
+(`hw/rtl/cpu_ss.sv`). Enabling it adds trace logic to the CPU. Single-stepping
+is the more valuable of the two features and should not be made to depend on
+trace — if trace is dropped for area, a dedicated retirement output is needed
+instead. See [Debug Unit `DBG-SPEC-006`](blocks/Debug%20Unit.md#open-items).
+
+**Topology note.** Placing the debug unit in series on the CPU's RAM path adds
+delay to what `GRPR-SOC-008` already identifies as the long combinational path
+in the design. The ownership mux should be combinational and thin; a registered
+mux would break `cpu_ss`'s single-cycle RAM assumption and require that logic
+reworked. Flag this for the P&R flow — see
+[Debug Unit `DBG-SPEC-003`](blocks/Debug%20Unit.md#open-items).
+
 
 ## Physical Design Requirements
 
@@ -114,7 +229,7 @@ TODO
 | `GRPR-SOC-013` | Target process: GF180MCU, fabricated via the 2026 Chipathon / wafer.space shared-die shuttle. |
 | `GRPR-SOC-014` | Unified CPU SRAM: 4 KiB total, implemented as 4× `gf180mcu_ocd_ip_sram__sram1024x8m8wm1` macros (1024 × 8-bit words each, with byte/bit write enables) — see `ip/gf180mcu_ocd_ip_sram/`. |
 | `GRPR-SOC-015` | GrouperSoC needs **20 signal pads**: 1 clock, 1 reset, 1 UART RX (input-only), and 17 bidirectional (16 GPIO + 1 UART TX). See the Pad List below. Die placement within the shared multi-team die is still TBD. |
-| `GRPR-SOC-016` | Total gate-equivalent (GE) area is the sum of the 5 peripheral block estimates plus CPU/interconnect/SRAM overhead (not separately estimated yet). Of the 5 blocks, only [SPI Master](blocks/SPI%20Master.md#size-estimate) has a stated estimate (1,500–2,000 GE); UART, GPIO Mux, SPI Slave, and QSPI are all TBD pending RTL/synthesis. **ESTIMATE: 1.4 * 1.4mm** |
+| `GRPR-SOC-016` | Total gate-equivalent (GE) area is the sum of the 5 peripheral block estimates plus CPU/interconnect/SRAM overhead (not separately estimated yet). Of the 5 blocks, only [SPI Master](blocks/SPI%20Master%20Specification.md#size-estimate) has a stated estimate (1,500–2,000 GE); UART, GPIO Mux, SPI Slave, and QSPI are all TBD pending RTL/synthesis. **ESTIMATE: 1.4 * 1.4mm** |
 
 ### Pad List
 
@@ -173,9 +288,27 @@ Each integration requirement above depends on requirements defined in the block-
 | `GRPR-SOC-006` (target memory map) | `GRPR-UART-001` (UART register region), `GRPR-SPIS-006` (SPI Slave 4 KiB region), block address decode in each of the 5 block docs |
 | `GRPR-SOC-009` (L2 fabric / peripheral fan-out) | All 5 blocks' `GRPR-*-001`-class AHB-Lite subordinate requirements |
 | `GRPR-SOC-011`/clock-plan open item | `GRPR-SPIM-010`, `GRPR-QSPI-016` (both blocked on the same unresolved clock-frequency question) |
-| `GRPR-SOC-015` (pad budget) | External-pin requirements in [SPI Master](blocks/SPI%20Master.md#ios-and-external-interfaces), [SPI Slave](blocks/SPI%20Slave.md#ios-and-external-interfaces), [QSPI](blocks/QSPI.md#ios-and-external-interfaces), and the [GPIO Mux](blocks/GPIO%20Mux.md#purpose) pin-sharing role that ties them together |
+| `GRPR-SOC-015` (pad budget) | External-pin requirements in [SPI Master](blocks/SPI%20Master%20Specification.md#ios-and-external-interfaces), [SPI Slave](blocks/SPI%20Slave%20Specification.md#ios-and-external-interfaces), [QSPI](blocks/QSPI%20Specification.md#ios-and-external-interfaces), and the [GPIO Mux](blocks/GPIO%20Mux%20Specification.md#purpose) pin-sharing role that ties them together |
+| `GRPR-SOC-017`/`-018` (debug unit placement and window) | `GRPR-DBG-001`, `GRPR-DBG-002`, `GRPR-DBG-008` |
+| `GRPR-SOC-019`…`-021` (CPU hooks, freeze, step) | `GRPR-DBG-019`…`-027`, `GRPR-CPU-001`/`-003` |
+| `GRPR-SOC-022` (alternate boot path) | `GRPR-DBG-006`…`-020`, `GRPR-SPIS-014`…`-019` |
+| `GRPR-SOC-023` (boot ROM arms the gates) | `GRPR-DBG-007`, `GRPR-SPIS-016`, `GRPR-SPIS-020` |
+| `GRPR-SOC-024`…`-026` (debug strap) | `GRPR-DBG-007`, `GRPR-DBG-022`, `GRPR-SPIS-016`, and the [GPIO Mux](blocks/GPIO%20Mux%20Specification.md) pad-assignment behaviour |
 
 ## Open Items (integration-level)
+
+- **Debug strap needs a board-level pull-down.** `GRPR-SOC-024` arms debug
+  access when pad 15 is high at reset, so a floating pad 15 could arm it by
+  accident. The pad's own programmable pull-down is not established until
+  firmware configures it, which is after the sample. This needs either a
+  reset-default pull-down on that pad or a stated board requirement — decide
+  which before tape-out.
+- **Debug unit area is unbudgeted.** The block adds a register file, an AHB
+  manager FSM, two ownership muxes, and CPU-side changes, on a die where the
+  SPI Master slot is budgeted at 1706 GE. Needs a synthesis estimate before the
+  specification is frozen.
+- **In-series topology timing.** See the note in § Debug/Test Features and
+  [Debug Unit `DBG-SPEC-003`](blocks/Debug%20Unit.md#open-items).
 
 - Boot ROM / reset-vector address discrepancy (`0x0001_0000` vs `0x0000_1000`) — see Boot Sequence.
 
@@ -186,7 +319,7 @@ Each integration requirement above depends on requirements defined in the block-
 - Die placement within the shared multi-team die is undecided. The pad list itself is now documented — see [Pad List](#pad-list).
 - No total area estimate — 4 of 5 blocks have no GE figure yet.
 
-- GPIO Mux pin-sharing scheme (which physical pins are shared across SPI M/S, QSPI, UART, and how ownership/priority is arbitrated) is undocumented — see [GPIO Mux § Open Items](blocks/GPIO%20Mux.md#open-items).
+- GPIO Mux pin-sharing scheme (which physical pins are shared across SPI M/S, QSPI, UART, and how ownership/priority is arbitrated) is undocumented — see [GPIO Mux § Open Items](blocks/GPIO%20Mux%20Specification.md#open-items).
 
 ## Verification Cross-Reference
 
@@ -203,6 +336,16 @@ Each integration requirement above depends on requirements defined in the block-
 | `GRPR-SOC-009` | `V-SOC-STM-006`, `V-SOC-CHK-008` |
 | `GRPR-SOC-010` | `V-SOC-CHK-009` |
 | `GRPR-SOC-011` | `V-SOC-CHK-010` (blocked on open clock-plan question) |
+| `GRPR-SOC-017` | `V-SOC-CHK-017` (debug unit is in series on both CPU paths) |
+| `GRPR-SOC-018` | `V-SOC-CHK-018` (decode window reachable from firmware) |
+| `GRPR-SOC-019` | `V-SOC-CHK-019` (CPU hooks present and connected) |
+| `GRPR-SOC-020` | `V-SOC-STM-017`, `V-SOC-CHK-020` (freeze stops a CPU running from ROM/RAM, which `HREADY` alone would not) |
+| `GRPR-SOC-021` | `V-SOC-STM-018`, `V-SOC-CHK-021` (exact instruction counts, against the real CPU) |
+| `GRPR-SOC-022` | `V-SOC-STM-019`, `V-SOC-CHK-022` — the alternate-boot acceptance test: load an image over a debug transport, bank switch, release, confirm it executes |
+| `GRPR-SOC-023` | `V-SOC-CHK-023` (gates armed by the ROM; bootloader stack usage still 0) |
+| `GRPR-SOC-024` | `V-SOC-STM-020`, `V-SOC-CHK-024` — strap high and low at reset; with it high, debug is reachable **with the boot ROM held or absent**, which is the case this requirement exists for |
+| `GRPR-SOC-025` | `V-SOC-CHK-025` (strap value latched, readable, stable while pad 15 is driven as GPIO afterwards) |
+| `GRPR-SOC-026` | `V-SOC-CHK-026` (firmware can clear a strap-armed gate) |
 | `GRPR-SOC-012` | `V-SOC-STM-007`, `V-SOC-CHK-011` |
 | `GRPR-SOC-013`–`GRPR-SOC-016` | *(physical design — not covered by functional verification; tracked as synthesis/PD signoff items, not simulation checks)* |
 
