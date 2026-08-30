@@ -42,33 +42,36 @@ int main(void) {
     // The APS6404L powers up in SPI mode and wants CE# high before anything
     // else (datasheet 8.4), which reset already gives us. Reset Enable then
     // Reset is the datasheet's init pair - both are command-only.
-    G_CHECK(spi_m_cmd_only(APS_OP_RESET_EN, TIMEOUT));
-    G_CHECK(spi_m_cmd_only(APS_OP_RESET, TIMEOUT));
+    G_CHECK_T(spi_m_cmd_only(APS_OP_RESET_EN, TIMEOUT), "reset_en");
+    G_CHECK_T(spi_m_cmd_only(APS_OP_RESET, TIMEOUT), "reset");
 
     // Write a known payload, then read it back through the device model.
     static const uint8_t tx[PAYLOAD_LEN] = { 0xDE, 0xAD, 0xBE, 0xEF };
     uint8_t rx[PAYLOAD_LEN] = { 0 };
 
-    G_CHECK(spi_m_write(APS_OP_WRITE, PSRAM_ADDR, tx, PAYLOAD_LEN, TIMEOUT));
-    G_CHECK(spi_m_read(APS_OP_READ, PSRAM_ADDR, rx, PAYLOAD_LEN, 0, TIMEOUT));
+    G_CHECK_T(spi_m_write(APS_OP_WRITE, PSRAM_ADDR, tx, PAYLOAD_LEN, TIMEOUT),
+              "write");
+    G_CHECK_T(spi_m_read(APS_OP_READ, PSRAM_ADDR, rx, PAYLOAD_LEN, 0, TIMEOUT),
+              "read");
 
-    // Checked in pairs rather than per byte: each G_CHECK costs ~75 bytes of
-    // image for the stringified expression, and this test sits against the
-    // 4 KiB RAM ceiling. The testbench's device model shows the full payload
-    // either way.
+    // Checked in pairs rather than per byte, and with short G_CHECK_*_T tags
+    // rather than the stringified expression: this test sits against the 4 KiB
+    // RAM ceiling and the argument lists below run to ~85 bytes of .rodata
+    // each. The line number in a FAIL line still pins the exact call site, and
+    // the testbench's device model shows the full payload either way.
     G_CHECK_EQ(rx[0], tx[0]);
     G_CHECK_EQ(rx[3], tx[3]);
 
     // Fast Read returns the same bytes, but needs the 8 wait cycles the
     // datasheet's section 8.5 table gives 'h0B. Reuse rx rather than adding
     // a second buffer - the RAM image has no room to spare.
-    G_CHECK(spi_m_read(APS_OP_FAST_READ, PSRAM_ADDR, rx, PAYLOAD_LEN,
-                       APS_FAST_READ_DUMMY, TIMEOUT));
+    G_CHECK_T(spi_m_read(APS_OP_FAST_READ, PSRAM_ADDR, rx, PAYLOAD_LEN,
+                         APS_FAST_READ_DUMMY, TIMEOUT), "fast_read");
     G_CHECK_EQ(rx[3], tx[3]);
 
     // Nothing should have gone wrong on the way: every error source clear,
     // i.e. everything in IRQ_STATUS except the completion bit.
-    G_CHECK_EQ(spi_m_irq_status() & ~SPI_M_IRQ_TXN_COMPLETE, 0);
+    G_CHECK_EQ_T(spi_m_irq_status() & ~SPI_M_IRQ_TXN_COMPLETE, 0, "irq");
 
     puts("SPI_M_TRANSACTION_DONE");
 
