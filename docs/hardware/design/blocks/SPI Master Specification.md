@@ -38,6 +38,7 @@ SPI master peripheral that lets the PicoRV32 CPU issue SPI transactions to an ex
 | `GRPR-SPIM-020` | CS_N shall be de-asserted after every transaction. |
 | `GRPR-SPIM-021` | A reset asserted mid-transaction shall drop that transaction: CS_N shall be de-asserted, both FIFOs emptied and all registers returned to their reset values. The dropped transaction shall not be resumed or replayed. |
 | `GRPR-SPIM-022` | Clearing `CTRL.ENABLE` shall not terminate a transaction already in progress. A `CTRL` write while `STATUS.BUSY` is 1 is ignored and sets `IRQ_STATUS.CFG_ERR`, so the in-flight transaction always runs to completion. |
+| `GRPR-SPIM-024` | A `DATA` write shall queue one byte per asserted byte lane of `HSIZE`, low lane first. The block shall hold `HREADYOUT` low until every lane has been accepted, so a multi-lane store completes as a single AHB transfer. The stall shall be bounded by the number of lanes (at most 3 wait states for a 32-bit store) and shall never be paced by the SPI wire: a store to a full TX FIFO shall complete without waiting, dropping the remaining lanes and setting `IRQ_STATUS.OVERFLOW`. |
 
 
 ## Block Diagram
@@ -71,7 +72,7 @@ TODO
 | `spi_m_cs_n_o` | out | — |  Chip Select Output|
 | `irq`    | out | — |  Combined interrupt output|
 
- External pin multiplexing depends on the  [GPIO Mux](GPIO%20Mux.md) pin-sharing scheme.
+ External pin multiplexing depends on the  [GPIO Mux](GPIO%20Mux%20Specification.md) pin-sharing scheme.
 
 ## Register Map
 
@@ -193,13 +194,46 @@ For a 24-bit device address, set ADDR_BYTES = 2 and place the address in bits 23
 
 | Access | Behaviour |
 | --- | --- |
-| Write | Pushes 1–4 bytes into the TX FIFO |
+| Write | Pushes 1–4 bytes into the TX FIFO, one per asserted `HSIZE` byte lane |
 | Read  | Pops from the RX FIFO |
 
 Reading an empty RX FIFO returns the last popped value and sets
 `IRQ_STATUS.UNDERFLOW`. Writing a full TX FIFO is dropped and sets
 `IRQ_STATUS.OVERFLOW`. These are the bus-side errors — the in-transfer
 `UNDERRUN`/`OVERRUN` bits are set by the wire-side FIFO events instead.
+
+### Multi-byte push and bus stall (`GRPR-SPIM-024`)
+
+A `DATA` write queues one byte per asserted byte lane, **low lane first**: a
+32-bit store of `0xDDCCBBAA` sends `AA`, `BB`, `CC`, `DD`. That ordering is
+what both the address phase and the APS6404L expect, so firmware can hand over
+four payload bytes in one store instead of four byte stores.
+
+The TX FIFO accepts one write per cycle, so the lanes are serialised. The block
+holds `HREADYOUT` low until the last lane has been accepted, making the whole
+multi-lane push a single AHB transfer:
+
+| Store size | Lanes | Wait states |
+| --- | --- | --- |
+| byte  | 1 | 0 |
+| half  | 2 | 1 |
+| word  | 4 | 3 |
+
+A single-lane store is accepted in the cycle it lands, so the byte-at-a-time
+driver loop costs no wait states.
+
+Two properties bound the stall deliberately:
+
+- **It is bounded by lane count, not by the wire.** At most 3 wait states for a
+  32-bit store, independent of `CLKDIV` or the state of the transfer.
+- **It is never device-paced.** A store that finds the TX FIFO full completes
+  immediately rather than waiting for the device to drain it; the remaining
+  lanes are dropped and `IRQ_STATUS.OVERFLOW` is set. Stalling on the device
+  would deadlock the SoC — `cpu_ss` is single-master, so a held `HREADY` blocks
+  instruction fetch and the CPU could never run the loop that empties the FIFO.
+  Back-pressure for a `DATA_LEN` longer than `FIFO_DEPTH` is expressed through
+  `STATUS`/`IRQ_STATUS` polling instead, as described under Data-phase Flow
+  Control below.
 
 ## Data-phase Flow Control
 
@@ -209,6 +243,12 @@ and `CS_N` stays asserted until firmware pushes another byte through `DATA`;
 a `DATA_LEN` larger than `FIFO_DEPTH` is the normal case rather than an error.
 Stalling mid-byte is not possible — the stall is taken at a byte boundary — so
 no partial byte is ever emitted.
+
+This wire-side stall is distinct from the bus-side stall of `GRPR-SPIM-024`:
+this one holds *SCK* for as long as the device needs, and is released by
+firmware pushing more data; that one holds *`HREADYOUT`* for at most three
+cycles while a multi-lane store drains into the FIFO. The block never holds the
+bus waiting for the wire.
 
 ## Clocking Strategy
 
@@ -238,7 +278,7 @@ therefore the only way to terminate a transfer early.
 
 ## CDC Strategy
 
-Fully synchronous design. `MISO` is sampled on the SCK edge that drives the clock to its active level — rising in mode 0, falling in mode 3 — one sample per SCK period, and only during a read data phase; it is **not** sampled on the bare bus clock. The source material notes MISO needs a 2-stage synchroniser located inside the GPIO Mux, i.e. this block does not handle that synchronization itself — see [GPIO Mux § CDC Strategy](GPIO%20Mux.md#cdc-strategy).
+Fully synchronous design. `MISO` is sampled on the SCK edge that drives the clock to its active level — rising in mode 0, falling in mode 3 — one sample per SCK period, and only during a read data phase; it is **not** sampled on the bare bus clock. The source material notes MISO needs a 2-stage synchroniser located inside the GPIO Mux, i.e. this block does not handle that synchronization itself — see [GPIO Mux § CDC Strategy](GPIO%20Mux%20Specification.md#cdc-strategy).
 
 ## Performance Targets
 
@@ -303,6 +343,7 @@ Fully synchronous design. `MISO` is sampled on the SCK edge that drives the cloc
 | `GRPR-SPIM-021` | `test_reset_mid_transfer_drops` |
 | `GRPR-SPIM-022` | `test_disable_mid_transfer_completes` |
 | `GRPR-SPIM-023` | *(parameter range — `FIFO_DEPTH` is elaboration-checked in `ahb_spi_m.sv`)* |
+| `GRPR-SPIM-024` | `test_word_push_wait_states`, `test_byte_push_is_zero_wait` |
 | `GRPR-SPIM-015` | *(not verified by simulation — synthesis metric, tracked outside the functional verification plan)* |
 
 See [SPI Master Verification Plan](../../verification/blocks/SPI%20Master%20Verification%20Plan.md) for the full item definitions and test list.

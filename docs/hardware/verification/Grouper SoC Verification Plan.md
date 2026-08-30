@@ -40,7 +40,7 @@ The core SoC (SRAM + boot ROM + CPU + L1/L2 fabric) is **not** individually VIP-
 | Interrupt Checker / Interrupt Interface | **Missing** | GrouperSoC's IRQ sources (`uart_rx_irq`, `uart_rx_error_irq` today, more as SPI/QSPI/GPIO land — see `hw/rtl/cpu/cpu_ss.sv`'s `NUM_IRQ` parameter) need a checker confirming each source reaches the CPU's `irq` input correctly and at the right priority/masking behavior. |
 | External AHB-Lite Interface (AHB VIP, passive) | **Exists** — `hw/dv/uvc/ahb3lite/` (`is_active=False` mode already supported per `ahb3lite_agent.py`) | Reuse in passive mode to observe/checkpoint internal bus traffic during the top-level test, per the Schematic Review's diagram. |
 | Per-peripheral VIPs | **Partial** — UART exists (`hw/dv/uvc/uart/`); SPI/QSPI/GPIO don't yet | Reuse the block-level VIPs being built per the block verification plans — do not duplicate them at the top level. |
-| GPIO IO MUX + MUX CTRL routing checker | **Missing**, blocked | Depends on the [GPIO Mux](../design/blocks/GPIO%20Mux.md) pin-sharing scheme being defined first. |
+| GPIO IO MUX + MUX CTRL routing checker | **Missing**, blocked | Depends on the [GPIO Mux](../design/blocks/GPIO%20Mux%20Specification.md) pin-sharing scheme being defined first. |
 | Scoreboard(s) | **Missing** | Top-level scoreboard needs: boot-flow state tracking (ROM→RAM bank-switch), memory-map address-decode correctness, and IRQ aggregation correctness. |
 
 ## Traceability Matrix

@@ -4,7 +4,7 @@
 **Status:** Specified, RTL in progress. This document is the design contract — it was written before the RTL and `hw/rtl/gpio/ahb_gpio_ctrl.sv` is built to it, rather than being reverse-engineered from finished RTL. The block currently instantiated in the `GPIO CTRL` slot is `ahb_stub_slave`, which errors on every access.
 **Source:** [Schematic Review](../../Schematic%20Review.md) §"Block-Level Design Checklists → 2. AHB GPIO Multiplexer". The source checklist for this block is a single bullet; the pin-sharing scheme, register map and error behaviour below were decided during design and are now firm, superseding the "not yet documented" state of the earlier revision of this file.
 
-**Related:** [Grouper SoC Specification](../Grouper%20SoC%20Specification.md) — memory map, pin-sharing context | [GPIO Mux Verification Plan](../../verification/blocks/GPIO%20Mux%20Verification%20Plan.md) | [SPI Slave](SPI%20Slave.md), [SPI Master](SPI%20Master.md), [QSPI](QSPI.md) — the peripherals whose pins this block owns
+**Related:** [Grouper SoC Specification](../Grouper%20SoC%20Specification.md) — memory map, pin-sharing context | [GPIO Mux Verification Plan](../../verification/blocks/GPIO%20Mux%20Verification%20Plan.md) | [SPI Slave](SPI%20Slave%20Specification.md), [SPI Master](SPI%20Master%20Specification.md), [QSPI](QSPI%20Specification.md) — the peripherals whose pins this block owns
 
 ---
 
