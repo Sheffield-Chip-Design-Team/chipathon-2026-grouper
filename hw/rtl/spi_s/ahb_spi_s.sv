@@ -29,8 +29,6 @@ module ahb_spi_s #(
   // Build-time presence of the debug transport. Distinct from the
   // CTRL.DEBUG_PORT_EN register bit, which gates forwarding at run time in a
   // build where the port exists (GRPR-SPIS-020).
-  // int rather than bit so a -GDEBUG_PORT_EN=1 elaboration override does
-  // not trip a width-truncation warning on the 32-bit literal.
   parameter int DEBUG_PORT_EN = 0
 ) (
   input logic                   HCLK,
@@ -68,6 +66,7 @@ module ahb_spi_s #(
   // Debug port. This block is a debug *transport*: it frames SPI commands
   // into requests and never masters a bus itself. See the Debug Unit
   // document's "Debug Port Interface" for the normative definition.
+  
   output logic                  dbg_req_valid,
   input  logic                  dbg_req_ready,
   output logic [3:0]            dbg_req_cmd,
@@ -81,34 +80,31 @@ module ahb_spi_s #(
 
   output logic                  irq
 );
+  import ahb3lite_pkg::*; // AHBlite packages
 
-  import ahb3lite_pkg::*;
+  localparam int       SPI_S_DATA_W = 8;
 
-  localparam int SPI_S_DATA_W = 8;
+  localparam bit [1:0] ADDR_CTRL    = 2'b00;
+  localparam bit [1:0] ADDR_STATUS  = 2'b01;
+  localparam bit [1:0] ADDR_TXDATA  = 2'b10;
+  localparam bit [1:0] ADDR_RXDATA  = 2'b11;
+  
+  // Control registers
+  logic                     ctrl_enable;
+  logic                     ctrl_soft_reset;
+  
+  // Status registers
+  logic                     status_busy;
+  logic                     status_rx_valid;
+  logic                     status_tx_ready;
+  
+  // SPI data registers
+  logic [SPI_S_DATA_W-1:0]   tx_data;
+  logic [SPI_S_DATA_W-1:0]   rx_data;
 
-  initial begin : check_fifo_depth
-    if (FIFO_DEPTH != 2 && FIFO_DEPTH != 4 && FIFO_DEPTH != 8)
-      $error("%m: FIFO_DEPTH must be 2, 4 or 8 (GRPR-SPIS-023)");
-  end
-
-  localparam bit [1:0] No_Transfer = 2'b00;
-
-  // Word offsets. The map grew past four entries with IRQ_STATUS/IRQ_EN, so
-  // the decode is HADDR[4:2] rather than the HADDR[3:2] four registers needed.
-  localparam logic [2:0] ADDR_CTRL      = 3'd0;  // 0x00
-  localparam logic [2:0] ADDR_STATUS    = 3'd1;  // 0x04
-  localparam logic [2:0] ADDR_TXDATA    = 3'd2;  // 0x08
-  localparam logic [2:0] ADDR_RXDATA    = 3'd3;  // 0x0C
-  localparam logic [2:0] ADDR_IRQ_STS   = 3'd4;  // 0x10
-  localparam logic [2:0] ADDR_IRQ_EN    = 3'd5;  // 0x14
-  localparam logic [2:0] ADDR_SPI_S_MAX = 3'd5;
-
-  // CTRL
-  logic ctrl_enable;
-  logic ctrl_soft_reset;
-  logic ctrl_cpha;
-  logic ctrl_cpol;
-  logic ctrl_debug_port_en;
+  // SPI shift register and bit counter
+  logic [SPI_S_DATA_W-1:0]   rx_shift;
+  logic [2:0]                bit_count;
 
   // IRQ_STATUS / IRQ_EN. Bit 3 is reserved: the SPI Master's CFG_ERR has no
   // analogue here, and leaving the position vacant keeps the two maps aligned
