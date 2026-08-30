@@ -10,7 +10,7 @@ module periph_ss #(
   input logic                        HCLK,
   input logic                        HRESETn,
 
-  // AHB Slave Interface (From CPU)
+  // AHB Slave Interface (From CPU/Debug Unit)
   input logic [ADDR_WIDTH-1:0]       HADDR,
   input logic [2:0]                  HBURST,
   input logic                        HMASTLOCK,
@@ -208,7 +208,7 @@ logic [3:0] mux_qspi_sio_oe;
     .HCLK             (HCLK),
     .HRESETn          (HRESETn),
    
-    // CPU Slave interface
+    // CPU/Debug Slave interface
     .HADDR            (HADDR),
     .HBURST           (HBURST),
     .HMASTLOCK        (HMASTLOCK),
@@ -432,50 +432,6 @@ logic [3:0] mux_qspi_sio_oe;
 
   //--- SPI Slave -------------------------------------------------------------------------
 
-`ifdef DRY_RUN
-
-  // The SPI slave is out of scope for the dry run - occupy its fabric slot
-  // with the same placeholder the not-yet-implemented peripherals use, so the
-  // interconnect still sees eight slaves.
-  //
-  // Sized at 635 GE, from `make measure-ge` (ahb_spi_s synthesizes to 3,483.8
-  // um^2 = 317 GE) x2.0 for what it still has to grow (two-cycle error
-  // response, IRQs, and the FIFOs that GRPR-SPIS-012's 1.25 MB/s firmware load
-  // needs). See librelane/classic/TRIAL_NOTES.md.
-  ahb_stub_slave #(
-    .ADDR_WIDTH (ADDR_WIDTH),
-    .DATA_WIDTH (DATA_WIDTH),
-    .TARGET_GE  (635),
-    .PAD_OUT_W  (1),
-    .PAD_IN_W   (3)
-  ) u_spi_s_stub (
-    .HCLK         (HCLK),
-    .HRESETn      (HRESETn),
-    .HADDR        (spi_s_HADDR),
-    .HBURST       (spi_s_HBURST),
-    .HMASTLOCK    (spi_s_HMASTLOCK),
-    .HPROT        (spi_s_HPROT),
-    .HSIZE        (spi_s_HSIZE),
-    .HTRANS       (spi_s_HTRANS),
-    .HWDATA       (spi_s_HWDATA),
-    .HWRITE       (spi_s_HWRITE),
-    .HRDATA       (spi_s_HRDATA),
-    .HREADYOUT    (spi_s_HREADYOUT),
-    .HRESP        (spi_s_HRESP),
-    .HREADYIN     (spi_s_HREADYIN),
-    .HSEL         (spi_s_HSEL),
-
-    // Same pad signals the real ahb_spi_s takes below, so the SPI slave's four
-    // pad paths through io_ss exist in the netlist either way. spi_sck arrives
-    // here as plain data into an HCLK-clocked register, so the stub adds no
-    // clock domain of its own. io_ss drives this pad's output enable high
-    // itself, so pad_oe is unused.
-    .pad_in       ({mux_spi_s_mosi_i, mux_spi_s_sck_i, mux_spi_s_ss_i}),
-    .pad_out      (mux_spi_s_miso_o),
-    .pad_oe       ()
-  );
-
-`else
 
   ahb_spi_s #(
     .ADDR_WIDTH (ADDR_WIDTH),
@@ -498,16 +454,27 @@ logic [3:0] mux_qspi_sio_oe;
     .HREADYIN     (spi_s_HREADYIN),
     .HSEL         (spi_s_HSEL),
 
-    // TODO - add IRQs
+    // Debug transport. No Debug Unit exists yet, so the port is tied off:
+    // dbg_req_ready low means no request is ever accepted and the FIFO path
+    // is what runs.
+    .dbg_req_valid (),
+    .dbg_req_ready (1'b0),
+    .dbg_req_cmd   (),
+    .dbg_req_addr  (),
+    .dbg_req_wdata (),
+    .dbg_req_size  (),
+    .dbg_rsp_valid (1'b0),
+    .dbg_rsp_ready (),
+    .dbg_rsp_rdata (32'b0),
+    .dbg_rsp_err   (1'b0),
 
     .spi_ss       (mux_spi_s_ss_i),
     .spi_sck      (mux_spi_s_sck_i),
     .spi_mosi     (mux_spi_s_mosi_i),
-    .spi_miso     (mux_spi_s_miso_o)
+    .spi_miso     (mux_spi_s_miso_o),
+
+    .irq          ()
   );
-
-`endif
-
   //--- Input/Output Subsystem (GPIO MUX) -----------------------------------------------------------------
 
   io_ss #(
@@ -539,7 +506,6 @@ logic [3:0] mux_qspi_sio_oe;
     .spi_s_mosi_i    (mux_spi_s_mosi_i),
     .spi_s_miso_o    (mux_spi_s_miso_o),
 
-    // FIXME - tied off until the SPI master is implemented
     .spi_m_sck_o     (mux_spi_m_sck_o),
     .spi_m_mosi_o    (mux_spi_m_mosi_o),
     .spi_m_miso_i    (mux_spi_m_miso_i),
@@ -591,6 +557,7 @@ logic [3:0] mux_qspi_sio_oe;
 
   //--- Debug Peripheral -------------------------------------------------------------------------
   // Only instantiated if DEBUG_PERIPH is defined, otherwise the trace signals are unused.
+  // Simulation only
 
 `ifdef DEBUG_PERIPH
   ahb_debug #(
