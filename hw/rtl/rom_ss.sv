@@ -12,7 +12,8 @@ module rom_ss #(
   output logic [31:0]           rom_rdata
 );
 
-  localparam int MEM_WORDS = 'hb6;
+  // FIXME - use metadata to digure out the exact size of the boot rom.
+  `include "boot.meta.vh"
   localparam int ACTUAL_MEM_ADDR_WIDTH = $clog2(MEM_WORDS);
 
   // Memory Array  
@@ -24,12 +25,12 @@ module rom_ss #(
   // synthesisable equivalent (standard cells have no initial-value mechanism),
   // so this is what actually produces a mask ROM. Resolved against
   // VERILOG_INCLUDE_DIRS; point that at sw/boot.
-  `include "code.vmem"
+  `include "boot.vmem"
 `else
   initial
     // readmemh for simulation-time ROM initialisation, resolved against the
     // simulator's working directory.
-    $readmemh("code.hex", memory);
+    $readmemh("boot.hex", memory);
 `endif
 
   always_ff @(posedge clk) begin
