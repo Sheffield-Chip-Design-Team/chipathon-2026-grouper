@@ -121,8 +121,25 @@ SECTIONS
     * The stack lives at the top of RAM, growing down towards the image the
     * bootloader is writing at the bottom of RAM. sw/boot/bootloader.c is
     * written to keep its usage tiny for that reason.
+    *
+    * main() is __attribute__((naked)), so it emits no prologue and never
+    * decrements sp: it spills its locals to fixed offsets 0..15(sp) at
+    * whatever sp holds on entry. ORIGIN+LENGTH is one-past-the-end of RAM,
+    * and RAM is aliased across its whole region - ram_addr takes only
+    * RAM_ADDR_WIDTH=10 word bits, see hw/rtl/cpu_ss.sv - so that address
+    * wraps to word 0 and those spills land on top of the image being
+    * loaded. Bias the initial sp down by the frame so it addresses the top
+    * of real RAM instead.
+    *
+    * _boot_frame_bytes must cover main()'s frame. build_bootloader.sh
+    * measures the real number with -fstack-usage and fails the build if it
+    * exceeds MAX_STACK_BYTES, which is what keeps this constant honest.
+    * The top _boot_frame_bytes of RAM are reserved: check_image() in
+    * hw/tb/tb_utils/bootloader.py subtracts the same amount so an image
+    * that would reach them is rejected rather than silently corrupted.
     */
-   _estack = ORIGIN(RAM) + LENGTH(RAM);
+   PROVIDE(_boot_frame_bytes = 16);
+   _estack = ORIGIN(RAM) + LENGTH(RAM) - _boot_frame_bytes;
 
 
    /*
