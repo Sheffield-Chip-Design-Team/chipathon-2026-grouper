@@ -165,6 +165,20 @@ targets:
     coverage_scope: full
     fw_test: ""
 
+  # The debug transport is behind the DEBUG_PORT_EN parameter, so the default
+  # leg above elaborates it out. This leg builds it in and runs the debug-path
+  # suite against the DebugStub in hw/tb/spi_s/spi_s_utils.py.
+  - name: ahb_spi_s_debug_port
+    group: directed_tb
+    core: sharc:comms_ip:ahb_spi_s_directed
+    fusesoc_target: debug_port
+    kind: cocotb
+    fusesoc_args: ""
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: ""
+
   # --- Top level -----------------------------------------------------------
   #
   # Everything below builds firmware through sw/scripts/build_fw.sh, so all of
