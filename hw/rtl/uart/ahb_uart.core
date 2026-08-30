@@ -6,7 +6,6 @@ description: AHB-Lite wrapped UART (RTL only, no testbench)
 filesets:
   rtl:
     files:
-      - uart_clk_div.sv:              {file_type: systemVerilogSource}
       - uart_rx.sv:                   {file_type: systemVerilogSource}
       - uart_tx.sv:                   {file_type: systemVerilogSource}
       - uart.sv:                      {file_type: systemVerilogSource}
