@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Build the GrouperSoC bring-up firmware and regenerate sw/code.hex and
-# sw/code.vmem, which the ROM model (hw/rtl/rom/ahb_rom.sv) loads.
+# sw/code.vmem, whichis loaded into the RAM model (hw/rtl/ram_ss.sv) loads.
 #
 # Invoked directly, or via the FuseSoC pre_build hooks declared in
 # grouper_soc.core (targets tb_top and tb_top_debug). Those hooks run with
