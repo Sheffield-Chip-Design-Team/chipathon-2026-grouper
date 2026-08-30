@@ -16,6 +16,7 @@ import logging
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import (
+    FallingEdge,
     RisingEdge,
     SimTimeoutError,
     Timer,
@@ -668,6 +669,99 @@ async def test_tx_fifo_stall(dut):
                  "stalled SPI_WRITE MOSI stream")
     assert monitor.cs_windows == 1, \
         "CS_N deasserted mid-stall (%d windows)" % monitor.cs_windows
+
+
+@spi_m_test()
+async def test_word_push_wait_states(dut):
+    """SPIM-ISSUE-017: a 32-bit DATA store queues four bytes and stalls the bus.
+
+    small_sync_fifo takes one write per cycle, so the four byte lanes of a
+    word store are serialised over four cycles. The block holds HREADYOUT low
+    until the last lane is accepted, which is what lets firmware hand over
+    four bytes in a single store instead of four byte stores.
+
+    Two things are checked, because either alone would pass for the wrong
+    reason: the wire has to carry all four bytes in lane order, *and* the
+    store has to have actually stalled. Without the stall the lanes are
+    latched and drained in the background, which puts the same bytes on the
+    wire - so the MOSI check alone would not notice the bus never waited.
+    """
+    await init_test(dut)
+    await configure(dut)
+
+    payload = [0xAA, 0xBB, 0xCC, 0xDD]      # sent low lane first
+    monitor = SpiMonitor(dut).start()
+
+    # Count wait states across the word store: HREADYOUT low on a falling edge
+    # while the transfer is outstanding is one wait state. Sampling on the
+    # falling edge matches the BFM's own data phase in hw/tb/tb_utils.
+    waits = 0
+
+    async def count_waits():
+        nonlocal waits
+        while True:
+            await FallingEdge(dut.HCLK)
+            if int(dut.HREADYOUT.value) == 0:
+                waits += 1
+
+    counter = cocotb.start_soon(count_waits())
+
+    # One 32-bit store carrying all four bytes, low lane first.
+    word = payload[0] | (payload[1] << 8) | (payload[2] << 16) | (payload[3] << 24)
+    hresp = await ahb_write(dut, DATA, word, size=HSIZE_WORD)
+    assert hresp == 0, "word DATA store errored"
+
+    counter.kill()
+
+    # Four lanes, one per cycle: the first retires the transfer, so three
+    # wait states. Zero would mean the stall never happened.
+    assert waits == 3, \
+        "word DATA store took %d wait states, expected 3" % waits
+
+    await ahb_write(dut, CMD, cmd_word(
+        opcode=OP_SPI_WRITE, cmd_en=1, data_en=1, data_len=len(payload),
+    ))
+
+    await wait_not_busy(dut, ahb_read)
+    await Timer(200, unit="ns")
+    monitor.stop()
+
+    # All four bytes, in lane order, from the one store.
+    expect_bytes(monitor.mosi_bytes, [OP_SPI_WRITE] + payload,
+                 "word-push MOSI stream")
+
+    # The stall is flow control, not an error: nothing was dropped.
+    irq, _ = await ahb_read(dut, IRQ_STATUS)
+    assert not (irq & IRQ_OVERFLOW), \
+        "OVERFLOW set on a word push that fit in the FIFO"
+
+
+@spi_m_test()
+async def test_byte_push_is_zero_wait(dut):
+    """A byte-at-a-time DATA store still costs no wait states.
+
+    The stall exists for the multi-lane case only. A single-lane store is
+    accepted in the cycle it lands, so the common driver path - the byte loop
+    in sw/src/drivers/spi_m/spi_m.c - must not have become slower.
+    """
+    await init_test(dut)
+    await configure(dut)
+
+    waits = 0
+
+    async def count_waits():
+        nonlocal waits
+        while True:
+            await FallingEdge(dut.HCLK)
+            if int(dut.HREADYOUT.value) == 0:
+                waits += 1
+
+    counter = cocotb.start_soon(count_waits())
+    await push_tx(dut, [0x5A, 0xA5])
+    counter.kill()
+
+    assert waits == 0, \
+        "byte DATA stores took %d wait states, expected none" % waits
 
 
 @spi_m_test()
