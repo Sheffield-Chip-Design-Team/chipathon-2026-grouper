@@ -239,8 +239,8 @@ LDFLAGS="$MARCH -nostdlib -Wl,--gc-sections -Wl,-T,$LD_SCRIPT -Wl,-Map,$BUILD_DI
 # so they are not compiled as separate translation units. $TOP_SRC supplies
 # main() and is the only entry that changes with --test.
 SOURCES=(
-    "$BOOT_DIR/start.S"
-    "$BOOT_DIR/reset_handler.c"
+    "$SRC_DIR/start_irq_rv32e.S"
+    "$SRC_DIR/reset_handler.c"
     "$TOP_SRC"
     "$SRC_DIR/irq/irq.c"
     "$SRC_DIR/debug/debug.c"
