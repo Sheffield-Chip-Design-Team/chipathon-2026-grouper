@@ -152,6 +152,7 @@ module ahb_spi_m #(
   logic [1:0]                 push_index;
   logic                       tx_push;
   logic [7:0]                 tx_push_data;
+  logic                       push_stall;
 
   // Error response
   logic err_req;
@@ -179,6 +180,18 @@ module ahb_spi_m #(
       rx_pop_valid   <= '0;
       word_address_r <= '0;
       byte_select_r  <= '0;
+    end else if (push_stall) begin
+      // Hold the data phase. HREADYOUT is low, so the master is still
+      // presenting this transfer and must not have its control signals
+      // overwritten by the address phase of the next one. Everything below is
+      // qualified by these registers - data_write above all - so letting them
+      // advance under a stall would retire the push against the wrong
+      // register, or retire it twice.
+      write_enable   <= write_enable;
+      read_enable_r  <= read_enable_r;
+      rx_pop_valid   <= rx_pop_valid;
+      word_address_r <= word_address_r;
+      byte_select_r  <= byte_select_r;
     end else begin
       write_enable   <= access && HWRITE;
       read_enable_r  <= read_enable;
@@ -359,6 +372,14 @@ module ahb_spi_m #(
 // takes one write per cycle, so the lanes are serialised here and the AHB
 // transfer is stalled with HREADYOUT until they drain.
 //
+// The stall is bounded by construction: at most four lanes, one per cycle, so
+// a 32-bit store costs at most three wait states. It is *not* paced by the
+// SPI wire - a full TX FIFO completes the transfer and flags OVERFLOW rather
+// than holding the bus until the device drains it. Stalling on the device
+// would deadlock this SoC: cpu_ss is single-master, so a held HREADY blocks
+// instruction fetch, and the CPU could never run the driver loop that empties
+// the FIFO.
+//
 // Lanes are pushed low byte first, which is the order the address phase and
 // the APS6404L both expect: a store of 0xDDCCBBAA sends AA, BB, CC, DD.
 //
@@ -369,13 +390,44 @@ module ahb_spi_m #(
   logic [3:0] write_lanes;
   assign write_lanes = byte_select_r;
 
-  // Gate on the lanes still outstanding rather than on push_active. The flag
-  // is cleared a cycle after the last lane drains, so a back-to-back DATA
-  // store - which is what a byte-at-a-time push looks like - arrived while it
-  // was still set and was silently dropped, losing that byte entirely.
-  // push_pending is the real "still busy" condition, and it is already zero
-  // on the cycle the store lands.
+  // With the stall below, a DATA store cannot arrive while a previous one is
+  // still draining: HREADYOUT holds the master off until push_pending is
+  // empty. The !(|push_pending) qualifier is kept as a belt-and-braces guard
+  // so a stray data_write can still never re-latch push_data mid-drain.
   assign push_start = data_write && !(|push_pending);
+
+  // Stall the data phase while more than one lane is still to go.
+  //
+  // The count has to include the lane being accepted *this* cycle, so this is
+  // written against the lanes outstanding after it retires, not against
+  // push_pending directly. push_pending is a register: on the cycle the store
+  // lands it is still zero, so a naive (|push_pending) asserts nothing here
+  // and then holds HREADYOUT low one cycle later - against the *next*
+  // transfer, which is how this first went wrong (it swallowed the CMD write
+  // that follows a push and the transfer never started).
+  //
+  // push_next is the lanes that will still be pending at the next edge:
+  // whatever this store asks for on its first cycle, or what is left after
+  // the current lane drains.
+  logic [3:0] push_next;
+  always_comb begin
+    if (push_start)
+      push_next = write_lanes;
+    else if (tx_push)
+      push_next = push_pending & ~(4'd1 << push_index);
+    else
+      push_next = push_pending;
+  end
+
+  // More than one lane left means at least one more cycle is needed, so hold
+  // the bus. A single remaining lane is accepted this cycle and the transfer
+  // retires with no wait state - the common case of a byte-at-a-time push,
+  // which stays zero-wait exactly as before.
+  //
+  // tx_full ends the stall immediately rather than hanging: those lanes are
+  // dropped and OVERFLOW is flagged in the register-write block. Stalling on
+  // a full FIFO would be device-paced and could deadlock the SoC.
+  assign push_stall = (|(push_next & (push_next - 4'd1))) && !tx_full;
 
   // Select the lowest still-pending lane.
   always_comb begin
@@ -589,6 +641,13 @@ module ahb_spi_m #(
   // Cycle 1 (Data Phase): HRESP high, HREADYOUT low. Cycle 2: HRESP high, HREADYOUT high.
   assign HRESP     = err_req || err_second_cycle;
 
-  assign HREADYOUT = ~err_req;
+  // Two independent reasons to hold the bus. The error response wins: once
+  // err_req is asserted the transfer is being aborted, and the second ERROR
+  // cycle must present HREADYOUT high on schedule regardless of what the push
+  // machinery is doing. A DATA store cannot be both anyway - an ERROR comes
+  // from an out-of-range address or an illegal CPOL/CPHA pair, neither of
+  // which is a DATA write - so this is ordering for safety, not a real
+  // conflict.
+  assign HREADYOUT = err_second_cycle ? 1'b1 : (~err_req && ~push_stall);
 
 endmodule
