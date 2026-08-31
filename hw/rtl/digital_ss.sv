@@ -77,6 +77,23 @@ module digital_ss #(
   logic                       cpu_trace_valid;
   logic [35:0]                cpu_trace_data;
 
+  // Debug Unit lock-active indication (GRPR-DBG-044), passed through to
+  // io_ss's pad-3 output-enable gate (GRPR-GPIO-016).
+  logic                       dbg_lock_active;
+
+  // Debug port between cpu_ss (slave) and the SPI Slave transport (master,
+  // inside periph_ss). GRPR-DBG-042.
+  logic                       dbg_req_valid;
+  logic                       dbg_req_ready;
+  logic [3:0]                 dbg_req_cmd;
+  logic [ADDR_WIDTH-1:0]      dbg_req_addr;
+  logic [DATA_WIDTH-1:0]      dbg_req_wdata;
+  logic [1:0]                 dbg_req_size;
+  logic                       dbg_rsp_valid;
+  logic                       dbg_rsp_ready;
+  logic [DATA_WIDTH-1:0]      dbg_rsp_rdata;
+  logic                       dbg_rsp_err;
+
   // --- CPU Subsystem ------------------------------------------------------------
   // Picorv32 Subsytem with AHB-lite master interface and Direct Memory interface 
   // with bank switch logic
@@ -86,11 +103,7 @@ module digital_ss #(
     .DATA_WIDTH     (DATA_WIDTH),
     .ROM_ADDR_WIDTH (ROM_ADDR_WIDTH),
     .RAM_ADDR_WIDTH (RAM_ADDR_WIDTH),
-  `ifdef CPU_TRACE
-    .ENABLE_TRACE (1'b1),
-  `else
-    .ENABLE_TRACE (1'b0),
-  `endif
+    .ENABLE_TRACE   (1'b1),
     .NUM_IRQ        (2)
   ) u_cpu_ss (
     .HCLK       (clk),
@@ -121,6 +134,25 @@ module digital_ss #(
     .HRDATA     (cpu_ss_ahb_s_if_HRDATA),
     .HREADY     (cpu_ss_ahb_s_if_HREADY),
     .HRESP      (cpu_ss_ahb_s_if_HRESP),
+
+    // Debug port (GRPR-DBG-042), connected through to the SPI Slave
+    // transport inside periph_ss below. With no SS/SCK/MOSI activity on the
+    // wire and CTRL.LOCK_EN closed at reset (GRPR-SOC-029), dbg_req_valid
+    // stays low on its own and the mux inside cpu_ss remains a wire, so
+    // nothing here needs a separate tie-off any more.
+    .dbg_req_valid   (dbg_req_valid),
+    .dbg_req_ready   (dbg_req_ready),
+    .dbg_req_cmd     (dbg_req_cmd),
+    .dbg_req_addr    (dbg_req_addr),
+    .dbg_req_wdata   (dbg_req_wdata),
+    .dbg_req_size    (dbg_req_size),
+    .dbg_rsp_valid   (dbg_rsp_valid),
+    .dbg_rsp_ready   (dbg_rsp_ready),
+    .dbg_rsp_rdata   (dbg_rsp_rdata),
+    .dbg_rsp_err     (dbg_rsp_err),
+
+    .dbg_lock_active (dbg_lock_active),
+
     .irq        ({
       uart_rx_error_irq,
       uart_rx_irq
@@ -198,6 +230,21 @@ module digital_ss #(
     // CPU instruction trace
     .trace_valid         (cpu_trace_valid),
     .trace_data          (cpu_trace_data),
+
+    // Debug Unit lock-active indication, passed through to io_ss.
+    .dbg_lock_active     (dbg_lock_active),
+
+    // Debug port, terminated at the SPI Slave transport inside periph_ss.
+    .dbg_req_valid       (dbg_req_valid),
+    .dbg_req_ready       (dbg_req_ready),
+    .dbg_req_cmd         (dbg_req_cmd),
+    .dbg_req_addr        (dbg_req_addr),
+    .dbg_req_wdata       (dbg_req_wdata),
+    .dbg_req_size        (dbg_req_size),
+    .dbg_rsp_valid       (dbg_rsp_valid),
+    .dbg_rsp_ready       (dbg_rsp_ready),
+    .dbg_rsp_rdata       (dbg_rsp_rdata),
+    .dbg_rsp_err         (dbg_rsp_err),
 
     // External AHB master interface
     .ext_HADDR           (ext_ahb_m_if_HADDR),
