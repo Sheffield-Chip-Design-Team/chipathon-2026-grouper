@@ -38,6 +38,11 @@ scripts:
   # give way to the environment.
   build_fw_ram:
     cmd: [bash, -c, '"FW_TEST=$${FW_TEST:-fibonnaci} exec $${FUSESOC_REPO_ROOT:-../../..}/sw/scripts/build_fw.sh --link ram --baud $${FW_BAUD:-625000}"']
+  # As build_fw_ram, but defaulting to the heartbeat image the Debug Unit
+  # acceptance tests need (see the debug_unit target). Separate from
+  # build_fw_ram so that target's default does not move for every other one.
+  build_fw_heartbeat:
+    cmd: [bash, -c, '"FW_TEST=$${FW_TEST:-debug_heartbeat} exec $${FUSESOC_REPO_ROOT:-../../..}/sw/scripts/build_fw.sh --link ram --baud $${FW_BAUD:-625000}"']
   # Marks the work root so test_soc.py picks the backdoor test over the UART
   # one. A hook runs with the work root as cwd, and each target has its own, so
   # this cannot leak into another target's run. Same signal-by-file-presence
@@ -136,6 +141,56 @@ targets:
     toplevel: grouper_soc_top
     hooks:
       pre_build: [build_fw]
+
+  # SoC-level Debug Unit acceptance test (hw/tb/top/test_debug.py) against
+  # the real cpu_ss/picorv32, driven entirely through the supported
+  # wire-level debug commands (DBG_ENABLE, BUS_LOCK, BUS_WRITE, BUS_UNLOCK) -
+  # the block-level suite (sharc:soc_ip:ahb_debug_unit_directed) proves
+  # dbg_ctrl's own behaviour against a CPU stub, and the dedicated wire
+  # opcodes themselves (sharc:comms_ip:ahb_spi_s_directed's debug_port
+  # target) against a DebugStub, per the Verification Plan's own split.
+  #
+  # Every assertion this suite makes about the Debug Unit is driven and
+  # checked over the SPI wire: a debug-sourced write is confirmed by a real
+  # BUS_READ of the same address, and a freeze by BUS_READing the counter
+  # sw/tests/test_debug_heartbeat.c keeps running in RAM. Nothing reads
+  # dbg_ctrl, picorv32's reg_pc or the SRAM arrays to decide whether a test
+  # passes, so the test bodies port to a gate-level netlist unchanged.
+  #
+  # --public-flat-rw and --coverage are still here, and only for setup: the
+  # heartbeat image is put into the SRAM macros through the backdoor
+  # (test_soc.py's preload_ram) rather than shifted in over the UART, which
+  # would cost ~65 ms of simulated time and minutes of wall clock per run for
+  # something that is not what this suite is testing. --coverage is load
+  # bearing for that too - without it verilator flattens ram_ss's
+  # gen_macro_ram generate block away and the preload cannot find the arrays.
+  # A gate-level run would need another way in (or to skip the freeze test),
+  # but nothing about the checks themselves would change.
+  #
+  # FW_TEST defaults to the heartbeat image because the freeze test needs a
+  # CPU that is visibly doing something; override it only for a firmware that
+  # also keeps that counter running.
+  #
+  #   fusesoc run --no-export --target=debug_unit sharc:soc_ip:grouper_soc_directed
+  debug_unit:
+    description: SoC-level Debug Unit acceptance tests against the real CPU.
+    filesets: [rtl]
+    flow: sim
+    flow_options:
+      tool: verilator
+      cocotb_module: hw.tb.top.test_debug
+      verilator_options:
+        - -Wno-TIMESCALEMOD
+        - -Wno-fatal
+        - --sv
+        - --trace
+        - --coverage
+        - --public-flat-rw
+      run_options:
+        - --trace
+    toplevel: grouper_soc_top
+    hooks:
+      pre_build: [build_fw_heartbeat, build_bootloader]
 
   # Same test suite over the storage the chip actually has. Worth running any
   # change to ahb_ram or the interconnect against: the macros are single-port,
