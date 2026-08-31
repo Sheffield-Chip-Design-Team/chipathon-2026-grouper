@@ -111,7 +111,7 @@ module spi_s_core #(
     FSM_FLAGS,       // 1-byte lock flags (BUS_LOCK)
     FSM_COUNT,       // 1-byte step count (DBG_STEP)
     FSM_ONE_SHOT,    // no-payload commands: issue on opcode, wait for accept
-    FSM_DUMMY,       // one dummy byte ahead of a response (BUS_READ/DBG_READ/BUS_STATUS)
+    FSM_DUMMY,       // one dummy byte ahead of a response (BUS_READ/DBG_READ/BUS_STATUS, FAST_READ)
     FSM_READ_DATA,
     FSM_WRITE_DATA
   } spi_state_t;
@@ -338,7 +338,32 @@ module spi_s_core #(
             spi_address       <= {8'b0, address_shift[22:0], spi_mosi};
             address_bit_count <= 6'd0;
 
-            if (spi_command == SPI_READ || spi_command == FAST_READ)
+            // FAST_READ (0x0B) differs from READ (0x03) by exactly the
+            // 8 wait cycles the APS6404L datasheet's section 8.5 table gives
+            // it -- one byte on this 8-bit-framed wire -- inserted between
+            // the address phase and the first data bit (GRPR-SPIS-003 takes
+            // the command set from that datasheet; hw/tb/models/aps6404l.py
+            // models the same 8, FAST_READ_WAIT).
+            //
+            // Treating it as a bare synonym for READ, as an earlier version
+            // of this decode did, is worse than not accepting the opcode at
+            // all: a host that already speaks the PSRAM protocol -- which is
+            // the entire reason this command set is APS6404L-compatible
+            // (§ Purpose) -- clocks its dummy byte, this block hands it a
+            // data byte for it, and every byte of the response lands one
+            // position late. It reads plausible data that is silently wrong,
+            // rather than failing.
+            //
+            // FSM_DUMMY already consumes exactly one byte before
+            // FSM_READ_DATA, so the fix is a routing change, not new state.
+            // FAST_WRITE (0x0A) needs no such thing: it has no wait cycles
+            // to mirror, being an opcode this design defines itself rather
+            // than one the datasheet specifies -- see GRPR-SPIS-005 and the
+            // note in hw/tb/models/aps6404l.py's opcode table, which lists no
+            // 0x0A at all.
+            if (spi_command == FAST_READ)
+              spi_state <= FSM_DUMMY;
+            else if (spi_command == SPI_READ)
               spi_state <= FSM_READ_DATA;
             else
               spi_state <= FSM_WRITE_DATA;
@@ -387,8 +412,13 @@ module spi_s_core #(
         end
 
         else if (spi_state == FSM_DUMMY) begin
-          // One dummy byte covers the debug-port round trip (GRPR-SPIS-046)
-          // before the fixed-length response phase starts.
+          // One dummy byte, for either of two unrelated reasons:
+          //   - a debug read (BUS_READ/DBG_READ/BUS_STATUS) uses it to cover
+          //     the debug-port round trip (GRPR-SPIS-046) before its response
+          //     phase starts;
+          //   - FAST_READ uses it to reproduce the APS6404L's 8 wait cycles,
+          //     which is the only thing distinguishing it from READ.
+          // Both want exactly one byte consumed here, so they share the state.
           if (rx_byte_done)
             spi_state <= FSM_READ_DATA;
         end

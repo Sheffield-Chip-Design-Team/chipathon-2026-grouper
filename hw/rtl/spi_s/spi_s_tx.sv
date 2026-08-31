@@ -15,6 +15,16 @@ module spi_s_tx #(
 
   input  logic                  flush,
 
+  // Discard anything still queued or in flight, at a frame boundary. Unlike
+  // `flush` (CTRL.SOFT_RESET, a host-commanded reset of the whole block)
+  // this is asserted per frame by the debug transport, which owns the queue
+  // only for the length of one command: a response is meaningless once its
+  // frame has ended, and a byte left behind would be handed to the *next*
+  // frame as if it belonged there, offsetting that whole response by a byte.
+  // The legacy FIFO path deliberately does not assert this - TXDATA written
+  // between frames is supposed to survive until the host clocks it out.
+  input  logic                  frame_flush,
+
   // Wire side
   input  logic                  spi_ss,
   input  logic                  launch_edge,
@@ -47,6 +57,7 @@ module spi_s_tx #(
   logic [DATA_WIDTH-1:0] hold;
   logic                  hold_valid;
   logic                  load;
+  logic                  reload;
   logic                  src_valid;
   logic [DATA_WIDTH-1:0] src_data;
 
@@ -56,7 +67,7 @@ module spi_s_tx #(
   ) u_fifo (
     .clk   (clk),
     .rst_n (rst_n),
-    .flush (flush),
+    .flush (flush || frame_flush),
     .wdata (wdata),
     .write (write && !full),
     .read  (fifo_read),
@@ -74,7 +85,7 @@ module spi_s_tx #(
       hold_valid  <= 1'b0;
       fifo_read_r <= 1'b0;
     end
-    else if (flush) begin
+    else if (flush || frame_flush) begin
       hold        <= '0;
       hold_valid  <= 1'b0;
       fifo_read_r <= 1'b0;
@@ -87,7 +98,11 @@ module spi_s_tx #(
         hold_valid <= 1'b1;
       end
 
-      if (load && !ext_valid)
+      // Both arms consume the holding register, so both have to free it -
+      // see the note above `reload`. Missing it here would leave hold_valid
+      // set on a byte already shifted out, so fifo_read never refills and
+      // the rest of the burst repeats that byte.
+      if ((load || reload) && !ext_valid)
         hold_valid <= 1'b0;
     end
   end
@@ -97,7 +112,26 @@ module spi_s_tx #(
   assign src_valid = ext_valid ? 1'b1     : hold_valid;
   assign src_data  = ext_valid ? ext_data : hold;
 
-  assign load = !spi_ss && send_en && !busy && src_valid;
+  // A byte ends on the launch edge that retires its last bit. `reload` is
+  // that edge with another byte already waiting, and it loads on the spot
+  // rather than letting busy drop and picking the next byte up a cycle later.
+  //
+  // That extra cycle was a real off-by-one on the wire. A mid-byte bit moves
+  // to MISO *on* its launch edge, one clock before the master's sample edge;
+  // a byte boundary handled in two steps (launch edge clears busy, next clock
+  // loads) put the new byte's MSB on MISO one clock later than that, i.e.
+  // level with the sample edge instead of ahead of it. The master therefore
+  // still saw the previous bit and every byte after the first came back with
+  // bit 7 dropped - 0xAD read back as 0x2D. Only the first byte of a frame
+  // was right, which is why a payload with bit 7 clear in every byte (say
+  // 0x12345678) could not see this at all.
+  //
+  // `load` keeps its original meaning: the first byte of a frame, when
+  // nothing is shifting yet. Both arms feed the same shift/bit_count/busy
+  // update below.
+  assign load   = !spi_ss && send_en && !busy && src_valid;
+  assign reload = !spi_ss && send_en && busy && src_valid &&
+                  launch_edge && (bit_count == 3'd7);
 
   // Nothing to send when the host clocks the data phase.
   assign underrun = !spi_ss && send_en && !busy && !src_valid && launch_edge;
@@ -108,13 +142,13 @@ module spi_s_tx #(
       bit_count <= '0;
       busy      <= 1'b0;
     end
-    else if (flush) begin
+    else if (flush || frame_flush) begin
       shift     <= '0;
       bit_count <= '0;
       busy      <= 1'b0;
     end
     else begin
-      if (load) begin
+      if (load || reload) begin
         shift     <= src_data;
         bit_count <= 3'd0;
         busy      <= 1'b1;
