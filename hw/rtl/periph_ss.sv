@@ -50,6 +50,24 @@ module periph_ss #(
   input  logic [35:0]                trace_data,
   /* verilator lint_on UNUSED */
 
+  // Debug Unit lock-active indication (GRPR-DBG-044), passed straight
+  // through to io_ss's pad-3 output-enable gate (GRPR-GPIO-016).
+  input  logic                       dbg_lock_active,
+
+  // Debug port pass-through: ahb_spi_s is the master (it frames commands
+  // from its wire/register-window sides), cpu_ss is the slave. This block
+  // just forwards between them, so its own directions mirror ahb_spi_s's.
+  output logic                       dbg_req_valid,
+  input  logic                       dbg_req_ready,
+  output logic [3:0]                 dbg_req_cmd,
+  output logic [31:0]                dbg_req_addr,
+  output logic [31:0]                dbg_req_wdata,
+  output logic [1:0]                 dbg_req_size,
+  input  logic                       dbg_rsp_valid,
+  output logic                       dbg_rsp_ready,
+  input  logic [31:0]                dbg_rsp_rdata,
+  input  logic                       dbg_rsp_err,
+
   // External AHB master interface
   output logic [EXT_ADDR_WIDTH-1:0]  ext_HADDR,
   output logic [2:0]                 ext_HBURST,
@@ -434,8 +452,9 @@ logic [3:0] mux_qspi_sio_oe;
 
 
   ahb_spi_s #(
-    .ADDR_WIDTH (ADDR_WIDTH),
-    .DATA_WIDTH (DATA_WIDTH)
+    .ADDR_WIDTH    (ADDR_WIDTH),
+    .DATA_WIDTH    (DATA_WIDTH),
+    .DEBUG_PORT_EN (1)
   ) u_spi_s (
     .HCLK         (HCLK),
     .HRESETn      (HRESETn),
@@ -468,12 +487,22 @@ logic [3:0] mux_qspi_sio_oe;
     .dbg_rsp_rdata (32'b0),
     .dbg_rsp_err   (1'b0),
 
-    .spi_ss       (mux_spi_s_ss_i),
-    .spi_sck      (mux_spi_s_sck_i),
-    .spi_mosi     (mux_spi_s_mosi_i),
-    .spi_miso     (mux_spi_s_miso_o),
+    .spi_s_ss     (mux_spi_s_ss_i),
+    .spi_s_sck    (mux_spi_s_sck_i),
+    .spi_s_mosi   (mux_spi_s_mosi_i),
+    .spi_s_miso   (mux_spi_s_miso_o),
 
-    .irq          ()
+    // Debug port (GRPR-DBG-042 on the cpu_ss side; ahb_spi_s is the master).
+    .dbg_req_valid (dbg_req_valid),
+    .dbg_req_ready (dbg_req_ready),
+    .dbg_req_cmd   (dbg_req_cmd),
+    .dbg_req_addr  (dbg_req_addr),
+    .dbg_req_wdata (dbg_req_wdata),
+    .dbg_req_size  (dbg_req_size),
+    .dbg_rsp_valid (dbg_rsp_valid),
+    .dbg_rsp_ready (dbg_rsp_ready),
+    .dbg_rsp_rdata (dbg_rsp_rdata),
+    .irq           ( )
   );
   //--- Input/Output Subsystem (GPIO MUX) -----------------------------------------------------------------
 
@@ -526,7 +555,10 @@ logic [3:0] mux_qspi_sio_oe;
     .gpio_ie         (gpio_ie),
     .gpio_pu         (gpio_pu),
     .gpio_pd         (gpio_pd),
-    .gpio_sync_en_n  (gpio_sync_en_n)
+    .gpio_sync_en_n  (gpio_sync_en_n),
+
+    // Debug Unit lock-active indication (GRPR-GPIO-016's pad-3 gate).
+    .dbg_lock_active (dbg_lock_active)
   );
 
   //--- External Peripheral -------------------------------------------------------------------------

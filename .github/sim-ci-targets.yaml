@@ -165,6 +165,17 @@ targets:
     coverage_scope: full
     fw_test: ""
 
+  - name: ahb_spi_s_debug_port
+    group: directed_tb
+    core: sharc:comms_ip:ahb_spi_s_directed
+    fusesoc_target: debug_port
+    kind: cocotb
+    fusesoc_args: ""
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: ""
+
   # --- Top level -----------------------------------------------------------
   #
   # Everything below builds firmware through sw/scripts/build_fw.sh, so all of
@@ -344,3 +355,14 @@ targets:
     fail_ok: false
     coverage_scope: full
     fw_test: "spi_m"
+
+  - name: debug_bring_up
+    group: directed_tb
+    core: sharc:soc_ip:grouper_soc_directed
+    fusesoc_target: debug_unit
+    kind: cocotb
+    fusesoc_args: "--no-export"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: "debug_heartbeat"

@@ -1,0 +1,52 @@
+CAPI=2:
+
+name: sharc:soc_ip:spi_dbg_directed:0.0.1
+description: SPI Slave + Debug Unit integration testbench (hw/tb/debug/test_spi_dbg.py)
+
+# The seam neither block-level bench covers: ahb_spi_s (the debug transport)
+# wired straight to dbg_ctrl (the Debug Unit), with only the CPU side stubbed
+# in Python.
+#
+#   sharc:comms_ip:ahb_spi_s_directed  --target=debug_port
+#       ahb_spi_s against a Python DebugStub  -- transport only
+#   sharc:soc_ip:ahb_debug_unit_directed
+#       dbg_ctrl against a Python CpuStub     -- debug unit only
+#   this core
+#       the two real blocks against each other -- the seam
+#
+# A response-phase timing bug between the two therefore only reproduced at the
+# full SoC level (sharc:soc_ip:grouper_soc_directed --target=debug_unit),
+# where each diagnosis loop costs a ~90 us firmware boot and a rebuild. This
+# bench reaches the same wire behaviour in a few microseconds with no CPU, no
+# RAM and no pad mux, so the SPI master model's own timing can be checked
+# against the RTL directly.
+#
+#   fusesoc run --no-export sharc:soc_ip:spi_dbg_directed
+
+filesets:
+  rtl:
+    depend:
+      - sharc:comms_ip:ahb_spi_s:0.0.1
+      - sharc:soc_ip:ahb_debug_unit:0.0.1
+
+  tb:
+    files:
+      - spi_dbg_top.sv: {file_type: systemVerilogSource}
+
+targets:
+  default:
+    description: Directed cocotb tests over the real SPI wire protocol.
+    flow: sim
+    flow_options:
+      tool: verilator
+      cocotb_module: hw.tb.debug.test_spi_dbg
+      verilator_options:
+        - -Wno-TIMESCALEMOD
+        - -Wno-fatal
+        - --sv
+        - --trace
+        - --coverage
+      run_options:
+        - --trace
+    filesets: [rtl, tb]
+    toplevel: spi_dbg_top

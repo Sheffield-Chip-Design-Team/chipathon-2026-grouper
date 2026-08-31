@@ -1,8 +1,8 @@
 # GPIO Mux Verification Plan
 
-**Design doc:** [GPIO Mux](../../design/blocks/GPIO%20Mux.md)
+**Design doc:** [GPIO Mux](../../design/blocks/GPIO%20Mux%20Specification.md)
 **Source:** [Schematic Review](../../Schematic%20Review.md) §5 "Verification Summary" — block-level testbench architecture (GPIO VIP ↔ DUT ↔ AHB VIP ↔ Scoreboard).
-**DV status:** No RTL, no VIP, no tests exist yet — this block is pre-RTL per the Schematic Review's own TODO list (see [GPIO Mux § Status](../../design/blocks/GPIO%20Mux.md)).
+**DV status:** No RTL, no VIP, no tests exist yet — this block is pre-RTL per the Schematic Review's own TODO list (see [GPIO Mux § Status](../../design/blocks/GPIO%20Mux%20Specification.md)).
 
 ---
 
@@ -26,7 +26,7 @@ Per the Schematic Review's block-level testbench diagram: **GPIO VIP (active) �
         └───────────────┘
 ```
 
-Note this block has two distinct DUT roles per [GPIO Mux § Purpose](../../design/blocks/GPIO%20Mux.md#purpose): a firmware-facing GPIO register block, and a physical pin router shared with SPI Master/Slave/QSPI/UART. The testbench above covers the GPIO-register role directly; the pin-routing role can only be verified once the pin-sharing scheme (currently an open item) is defined — see below.
+Note this block has two distinct DUT roles per [GPIO Mux § Purpose](../../design/blocks/GPIO%20Mux%20Specification.md#purpose): a firmware-facing GPIO register block, and a physical pin router shared with SPI Master/Slave/QSPI/UART. The testbench above covers the GPIO-register role directly; the pin-routing role can only be verified once the pin-sharing scheme (currently an open item) is defined — see below.
 
 ## Verification Components Needed
 
@@ -45,7 +45,7 @@ Note this block has two distinct DUT roles per [GPIO Mux § Purpose](../../desig
 | `V-GPIO-CHK-001` | Check | Each input passes through exactly 2 synchronizing flops before being visible to internal logic; measure observed latency matches `DEPTH=2` | `GRPR-GPIO-001` | Scoreboard, cross-check against `hw/rtl/common/sync.sv` behavior (same component UART's RX path already relies on) |
 | `V-GPIO-STM-002` | Stimulus | Drive AHB register read/write traffic to the `GPIO CTRL` region | `GRPR-GPIO-002` | New directed test, AHB3Lite agent |
 | `V-GPIO-CHK-002` | Check | Register decode matches the `GPIO CTRL` memory-map region exactly (see [Grouper SoC Specification § Memory Map](../../design/Grouper%20SoC%20Specification.md#memory-map)) | `GRPR-GPIO-002` | Scoreboard |
-| `V-GPIO-STM-003` | Stimulus | Exercise mux routing across all peripherals sharing physical pins (SPI M/S, QSPI, UART) | `GRPR-GPIO-003` | **Blocked** — cannot be written concretely until the pin-sharing scheme in [GPIO Mux § Open Items](../../design/blocks/GPIO%20Mux.md#open-items) is defined |
+| `V-GPIO-STM-003` | Stimulus | Exercise mux routing across all peripherals sharing physical pins (SPI M/S, QSPI, UART) | `GRPR-GPIO-003` | **Blocked** — cannot be written concretely until the pin-sharing scheme in [GPIO Mux § Open Items](../../design/blocks/GPIO%20Mux%20Specification.md#open-items) is defined |
 | `V-GPIO-COV-001` | Coverage | Every peripheral-to-pin routing combination exercised at least once | `GRPR-GPIO-003` | **Blocked** — same dependency as `V-GPIO-STM-003` |
 
 ## Suggested Tests
@@ -57,5 +57,5 @@ Note this block has two distinct DUT roles per [GPIO Mux § Purpose](../../desig
 
 ## Open Items
 
-- This entire block is pre-RTL; the traceability matrix above has two items (`V-GPIO-STM-003`, `V-GPIO-COV-001`) that cannot be made concrete until [GPIO Mux § Open Items](../../design/blocks/GPIO%20Mux.md#open-items) (the pin-sharing scheme) is resolved at the design level. Verification planning for the pin-routing role should be revisited once that design work lands.
+- This entire block is pre-RTL; the traceability matrix above has two items (`V-GPIO-STM-003`, `V-GPIO-COV-001`) that cannot be made concrete until [GPIO Mux § Open Items](../../design/blocks/GPIO%20Mux%20Specification.md#open-items) (the pin-sharing scheme) is resolved at the design level. Verification planning for the pin-routing role should be revisited once that design work lands.
 - No scoreboard, no GPIO VIP, no tests exist yet for any part of this block.

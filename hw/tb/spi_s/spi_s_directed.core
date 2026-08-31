@@ -24,10 +24,9 @@ targets:
     filesets: [rtl]
     toplevel: ahb_spi_s
 
-  # elaborate with DEBUG_PORT_EN and test debug port
   debug_port:
-    <<: *directed
-    description: Directed tests for the debug transport (DEBUG_PORT_EN=1)
+    description: Same TB with the dedicated debug opcode set elaborated in (DEBUG_PORT_EN=1)
+    flow: sim
     flow_options:
       tool: verilator
       cocotb_module: hw.tb.spi_s.test_spi_s_debug
@@ -39,3 +38,5 @@ targets:
         - -GDEBUG_PORT_EN=1
       run_options:
         - --trace
+    filesets: [rtl]
+    toplevel: ahb_spi_s

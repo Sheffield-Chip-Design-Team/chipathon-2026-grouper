@@ -36,7 +36,7 @@ AHB-Lite-controlled QPI master compatible with the APS6404L PSRAM and Micron N25
 
 ## Block Diagram
 
-Main blocks: Control/Status Registers, Init + QPI Transaction FSM, Buffer/Address Control, Command/Address Data Path, SCK + SIO Direction Control. External connections route via the [GPIO Mux](GPIO%20Mux.md) to the APS6404L PSRAM and NOR flash. Key signals: `qspi_ce_n`, `qspi_sck`, `qspi_sio_i/o/oe[3:0]`; device pins `CE#`, `SCK`, `SIO[3:0]`.
+Main blocks: Control/Status Registers, Init + QPI Transaction FSM, Buffer/Address Control, Command/Address Data Path, SCK + SIO Direction Control. External connections route via the [GPIO Mux](GPIO%20Mux%20Specification.md) to the APS6404L PSRAM and NOR flash. Key signals: `qspi_ce_n`, `qspi_sck`, `qspi_sio_i/o/oe[3:0]`; device pins `CE#`, `SCK`, `SIO[3:0]`.
 
 ## Parameters and Configurations
 
@@ -195,7 +195,7 @@ FIFO and multi-byte transfer support are outside the initial proposal.
 
 ## Clocking Strategy
 
-`GRPR-QSPI-016`: QSPI control/transfer logic and SCK run from the system clock (source names this "`IQ_CLK`", which is Trouper terminology dropped here — see clock-plan open item in [SPI Master § Parameters](SPI%20Master.md#parameters-and-configurations), same 32 MHz-vs-other-values inconsistency applies to QSPI). SCK runs at the configured QPI clock rate during memory transfers and remains low while idle.
+`GRPR-QSPI-016`: QSPI control/transfer logic and SCK run from the system clock (source names this "`IQ_CLK`", which is Trouper terminology dropped here — see clock-plan open item in [SPI Master § Parameters](SPI%20Master%20Specification.md#parameters-and-configurations), same 32 MHz-vs-other-values inconsistency applies to QSPI). SCK runs at the configured QPI clock rate during memory transfers and remains low while idle.
 
 ## Reset Strategy
 
@@ -204,7 +204,7 @@ FIFO and multi-byte transfer support are outside the initial proposal.
 
 ## CDC Strategy
 
-`GRPR-QSPI-018`: Single clock domain with optional input synchronisers, handled externally in the [GPIO Mux](GPIO%20Mux.md) (consistent with SPI Master's CDC note). Cross-domain controls are registered or handshaked.
+`GRPR-QSPI-018`: Single clock domain with optional input synchronisers, handled externally in the [GPIO Mux](GPIO%20Mux%20Specification.md) (consistent with SPI Master's CDC note). Cross-domain controls are registered or handshaked.
 
 ## Performance Targets
 
@@ -222,7 +222,7 @@ TBD after RTL synthesis (per source).
 
 - `GRPR-QSPI-015` — the proposed status register definition is included above and remains subject to design review.
 - IOs — the "three four-bit SIO buses onto one physical bus" description needs clarification.
-- Clock frequency inconsistency shared with SPI Master (see [SPI Master § Parameters](SPI%20Master.md#parameters-and-configurations)) applies here too.
+- Clock frequency inconsistency shared with SPI Master (see [SPI Master § Parameters](SPI%20Master%20Specification.md#parameters-and-configurations)) applies here too.
 - No sustained-throughput / storage-sizing requirement currently exists for QSPI's real (non-replay) use case — needs deriving if one is actually needed.
 - Size estimate not yet available.
 

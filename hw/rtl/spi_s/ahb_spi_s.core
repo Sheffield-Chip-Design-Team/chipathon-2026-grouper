@@ -6,6 +6,9 @@ description: AHB-Lite wrapped spi_s (RTL only, no testbench)
 filesets:
   rtl:
     files:
+      - spi_s_rx.sv:      {file_type: systemVerilogSource}
+      - spi_s_tx.sv:      {file_type: systemVerilogSource}
+      - spi_s_core.sv:    {file_type: systemVerilogSource}
       - ahb_spi_s.sv:     {file_type: systemVerilogSource}
     depend:
       - sharc:common_ip:common:0.0.1
