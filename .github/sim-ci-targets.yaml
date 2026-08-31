@@ -365,4 +365,4 @@ targets:
     success_pattern: ""
     fail_ok: false
     coverage_scope: full
-    fw_test: "heartbeat"
+    fw_test: "debug_heartbeat"
