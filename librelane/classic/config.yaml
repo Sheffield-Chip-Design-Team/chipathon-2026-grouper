@@ -131,7 +131,7 @@ SYNTH_ABC_DFF: true
 # SYNTH_ABC_USE_MFS3: true # - this breaks picorv32 synth - leave it disabled
 
 # ---------------------------------------------------------------------------
-# Floorplan: 1650 x 1100 (landscape).
+# Floorplan: 1675 x 1100 (landscape).
 #
 # Ported wholesale from the landscape branch's
 # config_1650x1100_keepdlyc_fanout32.yaml -- job 4340, the only variant measured
@@ -183,7 +183,7 @@ SYNTH_ABC_DFF: true
 #----------------------------------------------------------------------------
 
 FP_SIZING: absolute
-DIE_AREA: [0.0, 0.0, 1650, 1100]
+DIE_AREA: [0.0, 0.0, 1675, 1100]
 
 # RAM Macro Placement
 MACROS:
