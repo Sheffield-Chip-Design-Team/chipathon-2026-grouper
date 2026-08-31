@@ -163,6 +163,38 @@ fusesoc run --no-export --target=debug_port sharc:comms_ip:ahb_spi_s_directed
 | `V-SPIS-DIR-051` | `test_debug_disabled_uses_fifo_path`  | With `CTRL.DEBUG_PORT_EN` clear, no request is issued and the byte lands in the RX FIFO                              | `-035`         |
 | `V-SPIS-DIR-052` | `test_request_is_byte_sized`        | `dbg_req_size` is 0: the SPI frame is a byte stream                                                                    | `-030`         |
 
+### `GRPR-SPIS-036` … `-040` — the Debug Unit register window
+
+Firmware's path to the Debug Unit register file, through a second sub-aperture in
+this block's 4 KiB region at offset `0x100`. See
+[SPI Slave § Debug Unit Register Window](../../design/blocks/SPI%20Slave%20Specification.md#debug-unit-register-window).
+
+**None of these are implemented.** The window is specified but no RTL backs it —
+`SPIS-SPEC-016` lists what is missing, and `SPIS-SPEC-011` records that offset
+`0x100` currently *aliases onto* the block's own `CTRL`, so a test written today
+would exercise the alias rather than the window. These rows exist so that
+implementing the window is a test-passing event rather than an unverified change.
+
+| Item              | Test                                    | What it does                                                                                                                                | Requirement    |
+| ----------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| `V-SPIS-DIR-053` | `test_window_reg_roundtrip`             | Write then read every offset `0x100`–`0x124` against the `DebugStub`; each lands as one `REG_READ`/`REG_WRITE` at the matching Debug offset  | `-036`, `-037` | ⬜ new |
+| `V-SPIS-DIR-054` | `test_window_does_not_alias_own_regs`   | A write to `0x100` leaves the block's own `CTRL` at `0x000` unchanged, and the reverse. **This is the row that fails today** (`SPIS-SPEC-011`) | `-036`         | ⬜ new |
+| `V-SPIS-DIR-055` | `test_window_stalls_for_roundtrip`      | `HREADYOUT` is held low for the debug-port round trip and the access completes as one AHB transfer, within the `GRPR-DBG-034` bound          | `-038`         | ⬜ new |
+| `V-SPIS-DIR-056` | `test_window_error_is_two_cycles`       | A `dbg_rsp_err` response produces a two-cycle AHB ERROR — `HRESP` high with `HREADYOUT` low, then high                                       | `-038`         | ⬜ new |
+| `V-SPIS-DIR-057` | `test_window_ignores_debug_port_en`     | The window answers with `CTRL.DEBUG_PORT_EN` clear. The lockdown-reversibility property: firmware must not be able to lock itself out        | `-039`         | ⬜ new |
+| `V-SPIS-DIR-058` | `test_window_yields_to_wire_side`       | An AHB window access issued mid-SPI-frame is stalled, not dropped or errored; the wire-side transfer completes unperturbed and the AHB access then completes | `-040` | ⬜ new |
+| `V-SPIS-CHK-025` | *(check)*                               | No path other than the window reaches the Debug Unit registers, and no window access reaches anything else                                   | `-037`         | ⬜ new |
+
+`V-SPIS-DIR-055` must use the concurrent `count_waits_task()` helper in
+`hw/tb/spi_s/test_spi_s.py` — `ahb_read`/`ahb_write` compute `waits` internally
+but do not return it.
+
+`V-SPIS-DIR-058` is the one worth writing carefully. It is the only row that
+exercises two initiators contending for a port that allows one outstanding
+request (`GRPR-DBG-005`), and the failure it guards against — a dropped wire-side
+byte — is invisible from the AHB side. Drive the AHB access at several offsets
+within the SPI frame, not just one.
+
 ### Known limitations
 
 Rows for the open items in
@@ -255,19 +287,19 @@ Per the Schematic Review's block-level testbench diagram: **SPI VIP (passive) �
 | `V-SPIS-CHK-008`  | Check    | SPI clock sweep up to 4 MHz with no transaction corruption, and confirmation that corruption *does* appear above roughly `HCLK`/4 — the limit is a property of the oversampling design, so the boundary is worth demonstrating               | `GRPR-SPIS-011`                  | SPI host-role driver, scoreboard      |
 | `V-SPIS-CHK-009`  | Check    | Throughput reaches 0.5 MB/s under back-to-back burst writes                                                                                                                                                                                  | `GRPR-SPIS-012`                  | Scoreboard timing check               |
 | `V-SPIS-CHK-010`  | Check    | One payload byte received every 2 µs at maximum SPI clock, sustained over a representative burst                                                                                                                                             | `GRPR-SPIS-013`                  | Scoreboard timing check               |
-| `V-SPIS-STM-009`  | Stimulus | Build with `DEBUG_PORT_EN` set and unset; drive debug opcodes in both                                                                                                                                                                        | `GRPR-SPIS-014`                  | New directed test                     |
+| `V-SPIS-STM-009`  | Stimulus | Build with `DEBUG_PORT_EN` set and unset; drive the data commands in both                                                                                                                                                                        | `GRPR-SPIS-014`                  | New directed test                     |
 | `V-SPIS-CHK-011`  | Check    | With the parameter unset, no debug port exists and the register map and behaviour are identical to a pre-feature build                                                                                                                       | `GRPR-SPIS-014`                  | Elaboration + scoreboard              |
-| `V-SPIS-STM-010`  | Stimulus | Drive each debug opcode of § Debug Command Encoding, with its full address and data phases                                                                                                                                                   | `GRPR-SPIS-015`                  | New directed test                     |
-| `V-SPIS-COV-003`  | Coverage | Every debug opcode exercised; every legacy opcode still exercised alongside                                                                                                                                                                  | `GRPR-SPIS-015`                  | Coverage collector                    |
-| `V-SPIS-STM-011`  | Stimulus | Drive debug opcodes with `CTRL.DEBUG_PORT_EN` clear                                                                                                                                                                                          | `GRPR-SPIS-016`                  | New directed test                     |
-| `V-SPIS-CHK-012`  | Check    | They are ignored and the debug port is not disturbed                                                                                                                                                                                         | `GRPR-SPIS-016`                  | Debug-port monitor                    |
+| `V-SPIS-STM-010`  | Stimulus | Drive each retargeted data command of § Debug Bus Access, with its 24-bit address and payload phases                                                                                                                                                   | `GRPR-SPIS-015`                  | New directed test                     |
+| `V-SPIS-COV-003`  | Coverage | All four data commands exercised retargeted and non-retargeted                                                                                                                                                                  | `GRPR-SPIS-015`                  | Coverage collector                    |
+| `V-SPIS-STM-011`  | Stimulus | Drive the four data commands with `CTRL.DEBUG_PORT_EN` clear                                                                                                                                                                                          | `GRPR-SPIS-016`                  | New directed test                     |
+| `V-SPIS-CHK-012`  | Check    | They use the FIFO data path and the debug port is not disturbed (`GRPR-SPIS-035`)                                                                                                                                                                                         | `GRPR-SPIS-016`                  | Debug-port monitor                    |
 | `V-SPIS-CHK-013`  | Check    | At most one debug request outstanding; read response bytes stall until the response arrives                                                                                                                                                  | `GRPR-SPIS-017`                  | Debug-port monitor                    |
-| `V-SPIS-STM-012`  | Stimulus | Deassert `SS` part-way through each phase of each debug opcode                                                                                                                                                                               | `GRPR-SPIS-018`                  | New directed test                     |
+| `V-SPIS-STM-012`  | Stimulus | Deassert `SS` part-way through each phase of a retargeted command                                                                                                                                                                               | `GRPR-SPIS-018`                  | New directed test                     |
 | `V-SPIS-CHK-014`  | Check    | The command aborts cleanly with the debug port left idle, not mid-handshake                                                                                                                                                                  | `GRPR-SPIS-018`                  | Debug-port monitor, assertion         |
 | `V-SPIS-CHK-015`  | Check    | `CTRL.SOFT_RESET` resets the command FSM and aborts an outstanding debug request                                                                                                                                                             | `GRPR-SPIS-019`                  | Scoreboard                            |
 | `V-SPIS-CHK-016`  | Check    | `DEBUG_PORT_EN` = 0 elaborates with no debug logic present                                                                                                                                                                                   | `GRPR-SPIS-020`                  | Elaboration check                     |
-| `V-SPIS-STM-013`  | Stimulus | Abort a debug command at every phase boundary by raising `SS`, then immediately issue `BUS_UNLOCK` on a fresh transaction — with the CPU halted throughout, so no AHB access is available                                                    | `GRPR-SPIS-022`                  | New directed test                     |
-| `V-SPIS-CHK-017`  | Check    | The decoder returns to idle on every such abort and the following `BUS_UNLOCK` is decoded correctly, proving a host can always resynchronise and release a lock over SPI alone                                                               | `GRPR-SPIS-022`                  | Scoreboard, debug-port monitor        |
+| `V-SPIS-STM-013`  | Stimulus | Abort a retargeted command at every phase boundary by raising `SS`, then issue a fresh command on a new transaction — with no AHB access available                                                    | `GRPR-SPIS-022`                  | New directed test                     |
+| `V-SPIS-CHK-017`  | Check    | The decoder returns to idle on every such abort and the following command is decoded correctly, proving a host can always resynchronise over SPI alone                                                               | `GRPR-SPIS-022`                  | Scoreboard, debug-port monitor        |
 | `V-SPIS-STM-014`  | Stimulus | Drive `TXDATA` writes and `RXDATA` reads at every `HSIZE` (byte/half/word) and every legal `HADDR[1:0]` offset, against an RX/TX FIFO held at empty, partial and full occupancy                                                              | `GRPR-SPIS-025`, `-026`, `-027`  | ⬜ new                                 |
 | `V-SPIS-CHK-018`  | Check    | The RX FIFO accepts exactly `FIFO_DEPTH` bytes and returns them in arrival order; `RX_LEVEL`, `RX_EMPTY` and `RX_FULL` agree with the true occupancy at every step                                                                          | `GRPR-SPIS-023`                  | ⬜ new                                 |
 | `V-SPIS-CHK-019`  | Check    | The TX FIFO accepts exactly `FIFO_DEPTH` bytes and transmits them in queue order; `TX_EMPTY`/`TX_FULL` agree with occupancy                                                                                                                 | `GRPR-SPIS-024`                  | ⬜ new                                 |
