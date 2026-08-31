@@ -165,9 +165,6 @@ targets:
     coverage_scope: full
     fw_test: ""
 
-  # The debug transport is behind the DEBUG_PORT_EN parameter, so the default
-  # leg above elaborates it out. This leg builds it in and runs the debug-path
-  # suite against the DebugStub in hw/tb/spi_s/spi_s_utils.py.
   - name: ahb_spi_s_debug_port
     group: directed_tb
     core: sharc:comms_ip:ahb_spi_s_directed
@@ -358,3 +355,14 @@ targets:
     fail_ok: false
     coverage_scope: full
     fw_test: "spi_m"
+
+  - name: debug_bring_up
+    group: directed_tb
+    core: sharc:soc_ip:grouper_soc_directed
+    fusesoc_target: debug_unit
+    kind: cocotb
+    fusesoc_args: "--no-export"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: "heartbeat"
