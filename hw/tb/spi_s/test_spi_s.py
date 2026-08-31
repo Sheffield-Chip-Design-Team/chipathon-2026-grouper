@@ -26,13 +26,13 @@ from hw.tb.spi_s.spi_s_utils import (
     ADDR_IRQ_STATUS,
     CTRL_CPHA,
     CTRL_CPOL,
-    DebugStub,
     FIFO_DEPTH,
     IRQ_OVERFLOW,
     IRQ_OVERRUN,
     IRQ_RX_VALID,
     IRQ_UNDERFLOW,
     IRQ_UNDERRUN,
+    OP_FAST_READ,
     OP_SPI_READ,
     OP_SPI_WRITE,
     STATUS_RX_EMPTY,
@@ -416,6 +416,66 @@ async def test_spi_transmit_byte(dut):
         f"Expected MISO = 0x{test_byte:02X}, got 0x{got[0]:02X}"
 
 
+# TEST 8b
+@spi_s_test()
+async def test_fast_read_consumes_wait_byte(dut):
+    """FAST_READ inserts the APS6404L's wait cycles before its data phase.
+
+    0x0B differs from 0x03 (READ) by exactly the 8 wait cycles the datasheet's
+    section 8.5 table gives it - one byte on this 8-bit-framed wire - between
+    the address phase and the first data bit (GRPR-SPIS-003/-005;
+    hw/tb/models/aps6404l.py models the same 8 as FAST_READ_WAIT).
+
+    An earlier decode treated FAST_READ as a bare synonym for READ and
+    consumed no wait byte at all. That is worse than refusing the opcode: a
+    host already speaking the PSRAM protocol - the entire reason this command
+    set is APS6404L-compatible - clocks its wait byte, gets a data byte for
+    it, and reads a whole response shifted one byte late without any error to
+    notice.
+    """
+    await init_test(dut)
+    await enable(dut)
+
+    payload = [0xDE, 0xAD]
+    for byte in payload:
+        assert await ahb_write(dut, ADDR_TXDATA, byte, size=HSIZE_BYTE) == 0
+
+    got = await spi_read_frame(dut, len(payload), address=0x000000,
+                               opcode=OP_FAST_READ)
+
+    assert got == payload, (
+        f"FAST_READ returned {[hex(b) for b in got]}, expected "
+        f"{[hex(b) for b in payload]} - the wait byte is not being consumed"
+    )
+
+
+# TEST 8c
+@spi_s_test()
+async def test_fast_read_and_read_differ_by_one_byte(dut):
+    """The wait byte is real: framing FAST_READ without it shifts the data.
+
+    Deliberately frames FAST_READ with no wait byte (dummy=0, i.e. exactly
+    how a READ is framed) and confirms the first byte back is *not* the
+    queued one. Without this the test above would still pass if the RTL
+    ignored the wait byte and the helper simply never sent it, so this is
+    what makes the pair meaningful rather than self-consistent.
+    """
+    await init_test(dut)
+    await enable(dut)
+
+    test_byte = 0xA5
+    assert await ahb_write(dut, ADDR_TXDATA, test_byte, size=HSIZE_BYTE) == 0
+
+    got = await spi_read_frame(dut, 1, address=0x000000,
+                               opcode=OP_FAST_READ, dummy=0)
+
+    assert got[0] != test_byte, (
+        f"FAST_READ framed with no wait byte still returned 0x{test_byte:02X} "
+        f"- the wait byte is not being consumed, so FAST_READ is behaving as "
+        f"a synonym for READ"
+    )
+
+
 # --------------------------------------------------------------------------
 # FIFOs, packed access, interrupts  (GRPR-SPIS-023 .. -029)
 # --------------------------------------------------------------------------
@@ -707,12 +767,14 @@ async def test_mode3_transfer(dut):
     await init_test(dut)
     await enable(dut, extra=CTRL_CPOL | CTRL_CPHA)
 
-    # Mode 3 idles SCK high; sampling is still on the rising edge.
+    # Mode 3 idles SCK high and samples on the leading (falling) edge. The
+    # driver must produce that waveform, not a mode-0 one with the CTRL bits
+    # set -- otherwise this test passes against a block that ignores CPHA.
     dut.spi_sck.value = 1
     await RisingEdge(dut.HCLK)
 
     payload = [0x96]
-    await spi_frame(dut, OP_SPI_WRITE, 0x60, payload=payload)
+    await spi_frame(dut, OP_SPI_WRITE, 0x60, payload=payload, mode=3)
 
     status, _ = await ahb_read(dut, ADDR_STATUS)
     assert rx_level(status) == 1, \
@@ -721,6 +783,33 @@ async def test_mode3_transfer(dut):
     got, _ = await ahb_read(dut, ADDR_RXDATA, size=HSIZE_BYTE)
     assert got == payload[0], \
         f"mode 3: expected 0x{payload[0]:02X}, got 0x{got:02X}"
+
+
+# TEST 21b
+@spi_s_test()
+async def test_mode1_transfer(dut):
+    """Mode 1 (CPOL=0, CPHA=1) transfers correctly (SPIS-SPEC-005).
+
+    Modes 0 and 3 both sample on the leading edge, so neither distinguishes a
+    block that implements CPOL and ignores CPHA. Mode 1 is the cheapest case
+    that does: CPOL and CPHA disagree, so the sampling edge moves.
+    """
+    await init_test(dut)
+    await enable(dut, extra=CTRL_CPHA)
+
+    dut.spi_sck.value = 0
+    await RisingEdge(dut.HCLK)
+
+    payload = [0x96]
+    await spi_frame(dut, OP_SPI_WRITE, 0x60, payload=payload, mode=1)
+
+    status, _ = await ahb_read(dut, ADDR_STATUS)
+    assert rx_level(status) == 1, \
+        f"mode 1: RX_LEVEL {rx_level(status)}, expected 1"
+
+    got, _ = await ahb_read(dut, ADDR_RXDATA, size=HSIZE_BYTE)
+    assert got == payload[0], \
+        f"mode 1: expected 0x{payload[0]:02X}, got 0x{got:02X}"
 
 
 # TEST 22
