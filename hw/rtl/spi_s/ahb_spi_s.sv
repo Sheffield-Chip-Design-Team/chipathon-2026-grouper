@@ -5,7 +5,7 @@
 //
 // Register map (GRPR-SPIS-001):
 //   0x00 CTRL        R/W   ENABLE[0] SOFT_RESET[1] CPHA[2] CPOL[3]
-//                          DEBUG_PORT_EN[4]
+//                          (bit 4 reserved -- see GRPR-SPIS-030, withdrawn)
 //   0x04 STATUS      RO    BUSY[0] RX_VALID[1] TX_READY[2] DEBUG_BUSY[3]
 //                          RX_EMPTY[4] RX_FULL[5] TX_EMPTY[6] TX_FULL[7]
 //                          RX_LEVEL[11:8]
@@ -58,10 +58,9 @@ module ahb_spi_s #(
   input logic                   spi_mosi,
   output logic                  spi_miso,
 
-  // Debug port. This block is a debug *transport*: it frames SPI commands
-  // into requests and never masters a bus itself. See the Debug Unit
-  // document's "Debug Port Interface" for the normative definition.
-  
+  // Debug port. 
+  // This block is a debug *transport*: it frames SPI commands
+  // into requests and never masters a bus itself. 
   output logic                  dbg_req_valid,
   input  logic                  dbg_req_ready,
   output logic [3:0]            dbg_req_cmd,
@@ -79,27 +78,22 @@ module ahb_spi_s #(
 
   localparam int       SPI_S_DATA_W = 8;
 
-  localparam bit [1:0] ADDR_CTRL    = 2'b00;
-  localparam bit [1:0] ADDR_STATUS  = 2'b01;
-  localparam bit [1:0] ADDR_TXDATA  = 2'b10;
-  localparam bit [1:0] ADDR_RXDATA  = 2'b11;
-  
+  // Six registers now, so the decode is HADDR[4:2] rather than the HADDR[3:2]
+  // that four needed. Offsets above IRQ_EN are reserved and error, matching
+  // ADDR_SPI_M_MAX in the SPI Master.
+  localparam bit [2:0] ADDR_CTRL      = 3'd0;
+  localparam bit [2:0] ADDR_STATUS    = 3'd1;
+  localparam bit [2:0] ADDR_TXDATA    = 3'd2;
+  localparam bit [2:0] ADDR_RXDATA    = 3'd3;
+  localparam bit [2:0] ADDR_IRQ_STS   = 3'd4;
+  localparam bit [2:0] ADDR_IRQ_EN    = 3'd5;
+  localparam bit [2:0] ADDR_SPI_S_MAX = ADDR_IRQ_EN;
+
   // Control registers
   logic                     ctrl_enable;
   logic                     ctrl_soft_reset;
-  
-  // Status registers
-  logic                     status_busy;
-  logic                     status_rx_valid;
-  logic                     status_tx_ready;
-  
-  // SPI data registers
-  logic [SPI_S_DATA_W-1:0]   tx_data;
-  logic [SPI_S_DATA_W-1:0]   rx_data;
-
-  // SPI shift register and bit counter
-  logic [SPI_S_DATA_W-1:0]   rx_shift;
-  logic [2:0]                bit_count;
+  logic                     ctrl_cpha;
+  logic                     ctrl_cpol;
 
   // IRQ_STATUS / IRQ_EN. Bit 3 is reserved: the SPI Master's CFG_ERR has no
   // analogue here, and leaving the position vacant keeps the two maps aligned
@@ -161,7 +155,7 @@ module ahb_spi_s #(
 // AHB address phase decode
 //------------------------------------------------------
 
-  assign access      = HREADYIN && HSEL && (HTRANS != No_Transfer);
+  assign access      = HREADYIN && HSEL && (HTRANS == HTRANS_NONSEQ || HTRANS == HTRANS_SEQ);
   assign read_enable = access && ~HWRITE;
 
   assign word_address = access ? HADDR[4:2] : '0;
@@ -369,7 +363,6 @@ module ahb_spi_s #(
     .enable        (ctrl_enable),
     .cpol          (ctrl_cpol),
     .cpha          (ctrl_cpha),
-    .debug_port_en (ctrl_debug_port_en),
     .flush         (fifo_flush),
 
     .spi_ss        (spi_ss),
@@ -418,11 +411,10 @@ module ahb_spi_s #(
 
   always_ff @(posedge HCLK, negedge HRESETn) begin
     if (~HRESETn) begin
-      ctrl_enable        <= 1'b0;
+      ctrl_enable        <= 1'b1;
       ctrl_soft_reset    <= 1'b0;
       ctrl_cpha          <= 1'b0;
       ctrl_cpol          <= 1'b0;
-      ctrl_debug_port_en <= (DEBUG_PORT_EN != 0);
 
       int_rx_valid  <= 1'b0;
       int_underrun  <= 1'b0;
@@ -447,7 +439,7 @@ module ahb_spi_s #(
               ctrl_soft_reset    <= HWDATA[1];
               ctrl_cpha          <= HWDATA[2];
               ctrl_cpol          <= HWDATA[3];
-              ctrl_debug_port_en <= (DEBUG_PORT_EN != 0) ? HWDATA[4] : 1'b0;
+              // Bit 4 is reserved: read 0, write 0 (GRPR-SPIS-030, withdrawn).
 
               // SOFT_RESET is a strobe, not a mode: it self-clears in the
               // cycle it acts (SPIS-SPEC-006). Leaving it set made every
@@ -510,7 +502,7 @@ module ahb_spi_s #(
         ADDR_CTRL:
           HRDATA = {
             27'b0,
-            ctrl_debug_port_en,
+            1'b0,       // bit 4 reserved (GRPR-SPIS-030, withdrawn)
             ctrl_cpol,
             ctrl_cpha,
             ctrl_soft_reset,
