@@ -101,9 +101,9 @@ async def reset_dut(dut):
     dut.HSEL.value = 0
     dut.HREADYIN.value = 1
 
-    dut.spi_ss.value = 1
-    dut.spi_sck.value = 0
-    dut.spi_mosi.value = 0
+    dut.spi_s_ss.value = 1
+    dut.spi_s_sck.value = 0
+    dut.spi_s_mosi.value = 0
 
     dut.dbg_req_ready.value = 0
     dut.dbg_rsp_valid.value = 0
@@ -401,14 +401,14 @@ async def test_reserved_opcode_produces_nothing(dut):
     await init_test(dut)
 
     stub = DebugStub(dut).start()
-    dut.spi_ss.value = 0
+    dut.spi_s_ss.value = 0
     await RisingEdge(dut.HCLK)
     await _shift_byte(dut, 0x56)
     # Follow with some clocked bytes the way a host might if it mistakenly
     # thought this opened a framed command; nothing should be interpreted.
     await _shift_byte(dut, 0xFF)
     await _shift_byte(dut, 0xFF)
-    dut.spi_ss.value = 1
+    dut.spi_s_ss.value = 1
     await RisingEdge(dut.HCLK)
     for _ in range(4):
         await RisingEdge(dut.HCLK)
@@ -487,11 +487,11 @@ async def test_ss_deassertion_aborts_without_disturbing_lock(dut):
     await init_test(dut)
 
     stub = DebugStub(dut).start()
-    dut.spi_ss.value = 0
+    dut.spi_s_ss.value = 0
     await RisingEdge(dut.HCLK)
     await _shift_byte(dut, OP_BUS_LOCK)
     # Abort before the flags byte completes.
-    dut.spi_ss.value = 1
+    dut.spi_s_ss.value = 1
     await RisingEdge(dut.HCLK)
     for _ in range(4):
         await RisingEdge(dut.HCLK)

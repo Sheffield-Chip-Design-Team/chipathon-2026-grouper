@@ -25,10 +25,10 @@ module spi_dbg_top (
   input  logic        rst_n,
 
   // Wire side, driven by the Python SPI master.
-  input  logic        spi_ss,
-  input  logic        spi_sck,
-  input  logic        spi_mosi,
-  output logic        spi_miso,
+  input  logic        spi_s_ss,
+  input  logic        spi_s_sck,
+  input  logic        spi_s_mosi,
+  output logic        spi_s_miso,
 
   // CpuStub's side of dbg_ctrl's bus request.
   output logic        dbg_own,
@@ -82,10 +82,10 @@ module spi_dbg_top (
     .HREADYIN      (1'b1),
     .HSEL          (1'b0),
 
-    .spi_ss        (spi_ss),
-    .spi_sck       (spi_sck),
-    .spi_mosi      (spi_mosi),
-    .spi_miso      (spi_miso),
+    .spi_s_ss        (spi_s_ss),
+    .spi_s_sck       (spi_s_sck),
+    .spi_s_mosi      (spi_s_mosi),
+    .spi_s_miso      (spi_s_miso),
 
     .dbg_req_valid (dbg_req_valid),
     .dbg_req_ready (dbg_req_ready),

@@ -519,10 +519,10 @@ logic [3:0] mux_qspi_sio_oe;
 
     // TODO - add IRQs
 
-    .spi_ss       (mux_spi_s_ss_i),
-    .spi_sck      (mux_spi_s_sck_i),
-    .spi_mosi     (mux_spi_s_mosi_i),
-    .spi_miso     (mux_spi_s_miso_o),
+    .spi_s_ss     (mux_spi_s_ss_i),
+    .spi_s_sck    (mux_spi_s_sck_i),
+    .spi_s_mosi   (mux_spi_s_mosi_i),
+    .spi_s_miso   (mux_spi_s_miso_o),
 
     // Debug port (GRPR-DBG-042 on the cpu_ss side; ahb_spi_s is the master).
     .dbg_req_valid (dbg_req_valid),
@@ -534,7 +534,7 @@ logic [3:0] mux_qspi_sio_oe;
     .dbg_rsp_valid (dbg_rsp_valid),
     .dbg_rsp_ready (dbg_rsp_ready),
     .dbg_rsp_rdata (dbg_rsp_rdata),
-    .dbg_rsp_err   (dbg_rsp_err)
+    .irq           ( )
   );
 
 `endif

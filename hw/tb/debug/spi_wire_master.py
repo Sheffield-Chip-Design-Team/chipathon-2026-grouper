@@ -1,4 +1,4 @@
-"""An SPI master driving spi_ss/spi_sck/spi_mosi directly, mode 0.
+"""An SPI master driving spi_s_ss/spi_s_sck/spi_s_mosi directly, mode 0.
 
 Same wire protocol as hw/tb/debug/spi_pad_master.py (SPI Slave
 Specification.md § Debug Command Encoding) but against pins rather than
@@ -62,9 +62,9 @@ class SpiWireMaster:
         self.sck_half = sck_half
 
     async def idle(self):
-        self.dut.spi_ss.value = 1
-        self.dut.spi_sck.value = 0
-        self.dut.spi_mosi.value = 0
+        self.dut.spi_s_ss.value = 1
+        self.dut.spi_s_sck.value = 0
+        self.dut.spi_s_mosi.value = 0
         await ClockCycles(self.clk, 2)
 
     async def _shift_byte(self, value, capture=False):
@@ -81,27 +81,27 @@ class SpiWireMaster:
             # instead reads the *next* bit, shifting the whole response left
             # by one position -- a STATUS of 0x09 decoding as 0x12.
             if capture:
-                received = (received << 1) | int(self.dut.spi_miso.value)
+                received = (received << 1) | int(self.dut.spi_s_miso.value)
 
             # SCK low half: present this bit on MOSI.
-            self.dut.spi_mosi.value = (value >> i) & 1
-            self.dut.spi_sck.value = 0
+            self.dut.spi_s_mosi.value = (value >> i) & 1
+            self.dut.spi_s_sck.value = 0
             await ClockCycles(self.clk, self.sck_half)
 
             # SCK high half: the master's sample edge for MOSI.
-            self.dut.spi_sck.value = 1
+            self.dut.spi_s_sck.value = 1
             await ClockCycles(self.clk, self.sck_half)
 
-        self.dut.spi_sck.value = 0
+        self.dut.spi_s_sck.value = 0
         return received
 
     async def _frame(self, body):
         """SS low, `body`, SS high -- one complete frame."""
-        self.dut.spi_ss.value = 0
+        self.dut.spi_s_ss.value = 0
         await ClockCycles(self.clk, self.sck_half)
         result = await body()
         await ClockCycles(self.clk, self.sck_half)
-        self.dut.spi_ss.value = 1
+        self.dut.spi_s_ss.value = 1
         await ClockCycles(self.clk, self.sck_half)
         return result
 

@@ -127,28 +127,28 @@ async def _shift_byte(dut, value, capture=False, mode=0):
 
         if cpha:
             # Leading edge launches, trailing edge samples.
-            dut.spi_mosi.value = anti
+            dut.spi_s_mosi.value = anti
             await RisingEdge(dut.HCLK)
-            dut.spi_sck.value = active
+            dut.spi_s_sck.value = active
             await RisingEdge(dut.HCLK)
 
-            dut.spi_mosi.value = bit
+            dut.spi_s_mosi.value = bit
             await RisingEdge(dut.HCLK)
-            dut.spi_sck.value = idle
+            dut.spi_s_sck.value = idle
             await RisingEdge(dut.HCLK)
             if capture:
-                received = (received << 1) | int(dut.spi_miso.value)
+                received = (received << 1) | int(dut.spi_s_miso.value)
         else:
             # Leading edge samples, trailing edge launches.
-            dut.spi_mosi.value = bit
+            dut.spi_s_mosi.value = bit
             await RisingEdge(dut.HCLK)
-            dut.spi_sck.value = active
+            dut.spi_s_sck.value = active
             await RisingEdge(dut.HCLK)
             if capture:
-                received = (received << 1) | int(dut.spi_miso.value)
+                received = (received << 1) | int(dut.spi_s_miso.value)
 
-            dut.spi_mosi.value = anti
-            dut.spi_sck.value = idle
+            dut.spi_s_mosi.value = anti
+            dut.spi_s_sck.value = idle
             await RisingEdge(dut.HCLK)
     return received
 
@@ -168,7 +168,7 @@ async def spi_frame(dut, opcode, address=0, payload=(), read_len=0, mode=0,
 
     Returns the list of bytes seen on MISO during the data phase.
     """
-    dut.spi_ss.value = 0
+    dut.spi_s_ss.value = 0
     await RisingEdge(dut.HCLK)
 
     await _shift_byte(dut, opcode, mode=mode)
@@ -185,7 +185,7 @@ async def spi_frame(dut, opcode, address=0, payload=(), read_len=0, mode=0,
     for _ in range(read_len):
         out.append(await _shift_byte(dut, 0x00, capture=True, mode=mode))
 
-    dut.spi_ss.value = 1
+    dut.spi_s_ss.value = 1
     await RisingEdge(dut.HCLK)
     return out
 
@@ -218,7 +218,7 @@ async def spi_read_frame(dut, count, address=0, opcode=OP_SPI_READ, dummy=None):
 
 async def dbg_bus_write_frame(dut, address, payload, mode=0):
     """OP_BUS_WRITE: 32-bit address, then N payload bytes."""
-    dut.spi_ss.value = 0
+    dut.spi_s_ss.value = 0
     await RisingEdge(dut.HCLK)
 
     await _shift_byte(dut, OP_BUS_WRITE, mode=mode)
@@ -227,14 +227,14 @@ async def dbg_bus_write_frame(dut, address, payload, mode=0):
     for byte in payload:
         await _shift_byte(dut, byte, mode=mode)
 
-    dut.spi_ss.value = 1
+    dut.spi_s_ss.value = 1
     await RisingEdge(dut.HCLK)
 
 
 async def dbg_bus_read_frame(dut, address, count, mode=0):
     """OP_BUS_READ: 32-bit address, one dummy byte, then `count` response
     bytes captured from MISO."""
-    dut.spi_ss.value = 0
+    dut.spi_s_ss.value = 0
     await RisingEdge(dut.HCLK)
 
     await _shift_byte(dut, OP_BUS_READ, mode=mode)
@@ -246,7 +246,7 @@ async def dbg_bus_read_frame(dut, address, count, mode=0):
     for _ in range(count):
         out.append(await _shift_byte(dut, 0x00, capture=True, mode=mode))
 
-    dut.spi_ss.value = 1
+    dut.spi_s_ss.value = 1
     await RisingEdge(dut.HCLK)
     return out
 
@@ -254,7 +254,7 @@ async def dbg_bus_read_frame(dut, address, count, mode=0):
 async def dbg_bus_status_frame(dut, mode=0):
     """OP_BUS_STATUS: one dummy byte, then the fixed 4-byte STATUS word,
     MSB-first. Returns the 32-bit value."""
-    dut.spi_ss.value = 0
+    dut.spi_s_ss.value = 0
     await RisingEdge(dut.HCLK)
 
     await _shift_byte(dut, OP_BUS_STATUS, mode=mode)
@@ -264,7 +264,7 @@ async def dbg_bus_status_frame(dut, mode=0):
     for _ in range(4):
         value = (value << 8) | await _shift_byte(dut, 0x00, capture=True, mode=mode)
 
-    dut.spi_ss.value = 1
+    dut.spi_s_ss.value = 1
     await RisingEdge(dut.HCLK)
     return value
 
@@ -272,7 +272,7 @@ async def dbg_bus_status_frame(dut, mode=0):
 async def dbg_read_frame(dut, selector, mode=0):
     """OP_DBG_READ (STATE_READ): 1 selector byte, 1 dummy byte, then the
     fixed 4-byte response word, MSB-first. Returns the 32-bit value."""
-    dut.spi_ss.value = 0
+    dut.spi_s_ss.value = 0
     await RisingEdge(dut.HCLK)
 
     await _shift_byte(dut, OP_DBG_READ, mode=mode)
@@ -283,7 +283,7 @@ async def dbg_read_frame(dut, selector, mode=0):
     for _ in range(4):
         value = (value << 8) | await _shift_byte(dut, 0x00, capture=True, mode=mode)
 
-    dut.spi_ss.value = 1
+    dut.spi_s_ss.value = 1
     await RisingEdge(dut.HCLK)
     return value
 
@@ -292,50 +292,50 @@ async def dbg_bus_lock_frame(dut, mode_bit=0, mode=0):
     """OP_BUS_LOCK: 1 flags byte. Bit 0 is the LOCK_MODE override; this
     transport always presents wdata[8]=1 (GRPR-SPIS-047), so the flags byte
     itself only ever carries the mode bit."""
-    dut.spi_ss.value = 0
+    dut.spi_s_ss.value = 0
     await RisingEdge(dut.HCLK)
 
     await _shift_byte(dut, OP_BUS_LOCK, mode=mode)
     await _shift_byte(dut, mode_bit & 0x01, mode=mode)
 
-    dut.spi_ss.value = 1
+    dut.spi_s_ss.value = 1
     await RisingEdge(dut.HCLK)
 
 
 async def dbg_bus_unlock_frame(dut, mode=0):
     """OP_BUS_UNLOCK: opcode only, no payload."""
-    dut.spi_ss.value = 0
+    dut.spi_s_ss.value = 0
     await RisingEdge(dut.HCLK)
     await _shift_byte(dut, OP_BUS_UNLOCK, mode=mode)
-    dut.spi_ss.value = 1
+    dut.spi_s_ss.value = 1
     await RisingEdge(dut.HCLK)
 
 
 async def dbg_resume_frame(dut, mode=0):
     """OP_DBG_RESUME: opcode only, no payload."""
-    dut.spi_ss.value = 0
+    dut.spi_s_ss.value = 0
     await RisingEdge(dut.HCLK)
     await _shift_byte(dut, OP_DBG_RESUME, mode=mode)
-    dut.spi_ss.value = 1
+    dut.spi_s_ss.value = 1
     await RisingEdge(dut.HCLK)
 
 
 async def dbg_enable_frame(dut, mode=0):
     """OP_DBG_ENABLE: opcode only, no payload, no response (GRPR-SPIS-043)."""
-    dut.spi_ss.value = 0
+    dut.spi_s_ss.value = 0
     await RisingEdge(dut.HCLK)
     await _shift_byte(dut, OP_DBG_ENABLE, mode=mode)
-    dut.spi_ss.value = 1
+    dut.spi_s_ss.value = 1
     await RisingEdge(dut.HCLK)
 
 
 async def dbg_step_frame(dut, count, mode=0):
     """OP_DBG_STEP: 1 count byte."""
-    dut.spi_ss.value = 0
+    dut.spi_s_ss.value = 0
     await RisingEdge(dut.HCLK)
     await _shift_byte(dut, OP_DBG_STEP, mode=mode)
     await _shift_byte(dut, count & 0xFF, mode=mode)
-    dut.spi_ss.value = 1
+    dut.spi_s_ss.value = 1
     await RisingEdge(dut.HCLK)
 
 

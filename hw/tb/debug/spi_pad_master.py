@@ -2,7 +2,7 @@
 
 hw/tb/spi_s/spi_s_utils.py's `_shift_byte`/`dbg_*_frame` helpers speak the
 same wire protocol (SPI Slave Specification.md § Debug Command Encoding) but
-drive `dut.spi_ss`/`spi_sck`/`spi_mosi` directly against the block-level DUT
+drive `dut.spi_s_ss`/`spi_s_sck`/`spi_s_mosi` directly against the block-level DUT
 (ahb_spi_s). At the SoC level those pins sit behind io_ss's mux on GPIO pads
 0-3 (docs/hardware/design/Grouper SoC Specification.md § GPIO Multiplexing
 Scheme), so a SoC-level SPI host has to drive `gpio_in` bits instead -- this

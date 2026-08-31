@@ -53,10 +53,10 @@ module ahb_spi_s #(
   input logic                   HSEL,
 
   // SPI interface
-  input logic                   spi_ss,
-  input logic                   spi_sck,
-  input logic                   spi_mosi,
-  output logic                  spi_miso,
+  input logic                   spi_s_ss,
+  input logic                   spi_s_sck,
+  input logic                   spi_s_mosi,
+  output logic                  spi_s_miso,
 
   // Debug port. 
   // This block is a debug *transport*: it frames SPI commands
@@ -365,10 +365,10 @@ module ahb_spi_s #(
     .cpha          (ctrl_cpha),
     .flush         (fifo_flush),
 
-    .spi_ss        (spi_ss),
-    .spi_sck       (spi_sck),
-    .spi_mosi      (spi_mosi),
-    .spi_miso      (spi_miso),
+    .spi_s_ss        (spi_s_ss),
+    .spi_s_sck       (spi_s_sck),
+    .spi_s_mosi      (spi_s_mosi),
+    .spi_s_miso      (spi_s_miso),
 
     .rx_read       (rx_read),
     .rx_rdata      (rx_rdata),

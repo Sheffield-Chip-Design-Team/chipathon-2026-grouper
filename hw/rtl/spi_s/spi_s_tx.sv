@@ -26,7 +26,7 @@ module spi_s_tx #(
   input  logic                  frame_flush,
 
   // Wire side
-  input  logic                  spi_ss,
+  input  logic                  spi_s_ss,
   input  logic                  launch_edge,
   output logic                  miso,
 
@@ -129,12 +129,12 @@ module spi_s_tx #(
   // `load` keeps its original meaning: the first byte of a frame, when
   // nothing is shifting yet. Both arms feed the same shift/bit_count/busy
   // update below.
-  assign load   = !spi_ss && send_en && !busy && src_valid;
-  assign reload = !spi_ss && send_en && busy && src_valid &&
+  assign load   = !spi_s_ss && send_en && !busy && src_valid;
+  assign reload = !spi_s_ss && send_en && busy && src_valid &&
                   launch_edge && (bit_count == 3'd7);
 
   // Nothing to send when the host clocks the data phase.
-  assign underrun = !spi_ss && send_en && !busy && !src_valid && launch_edge;
+  assign underrun = !spi_s_ss && send_en && !busy && !src_valid && launch_edge;
 
   always_ff @(posedge clk, negedge rst_n) begin
     if (~rst_n) begin
@@ -153,7 +153,7 @@ module spi_s_tx #(
         bit_count <= 3'd0;
         busy      <= 1'b1;
       end
-      else if (!spi_ss && launch_edge && busy) begin
+      else if (!spi_s_ss && launch_edge && busy) begin
         shift     <= {shift[DATA_WIDTH-2:0], 1'b0};
         bit_count <= (bit_count == 3'd7) ? 3'd0 : (bit_count + 3'd1);
         if (bit_count == 3'd7)

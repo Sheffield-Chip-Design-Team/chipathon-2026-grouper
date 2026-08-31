@@ -129,9 +129,9 @@ async def reset_dut(dut):
     dut.HSEL.value = 0
     dut.HREADYIN.value = 1
 
-    dut.spi_ss.value = 1
-    dut.spi_sck.value = 0
-    dut.spi_mosi.value = 0
+    dut.spi_s_ss.value = 1
+    dut.spi_s_sck.value = 0
+    dut.spi_s_mosi.value = 0
 
     # Debug port: no unit connected by default, so requests are never accepted
     # and the FIFO path is what runs.
@@ -150,20 +150,20 @@ async def reset_dut(dut):
 async def spi_send_byte(dut, data):
     """Send one byte over the SPI interface (MSB first)."""
 
-    dut.spi_ss.value = 0
+    dut.spi_s_ss.value = 0
 
     for i in range(7, -1, -1):
-        dut.spi_mosi.value = (data >> i) & 1
+        dut.spi_s_mosi.value = (data >> i) & 1
 
         await RisingEdge(dut.HCLK)
 
-        dut.spi_sck.value = 1
+        dut.spi_s_sck.value = 1
         await RisingEdge(dut.HCLK)
 
-        dut.spi_sck.value = 0
+        dut.spi_s_sck.value = 0
         await RisingEdge(dut.HCLK)
 
-    dut.spi_ss.value = 1
+    dut.spi_s_ss.value = 1
 
 # TEST 1
 @spi_s_test()
@@ -770,7 +770,7 @@ async def test_mode3_transfer(dut):
     # Mode 3 idles SCK high and samples on the leading (falling) edge. The
     # driver must produce that waveform, not a mode-0 one with the CTRL bits
     # set -- otherwise this test passes against a block that ignores CPHA.
-    dut.spi_sck.value = 1
+    dut.spi_s_sck.value = 1
     await RisingEdge(dut.HCLK)
 
     payload = [0x96]
@@ -797,7 +797,7 @@ async def test_mode1_transfer(dut):
     await init_test(dut)
     await enable(dut, extra=CTRL_CPHA)
 
-    dut.spi_sck.value = 0
+    dut.spi_s_sck.value = 0
     await RisingEdge(dut.HCLK)
 
     payload = [0x96]
@@ -822,13 +822,13 @@ async def test_status_busy(dut):
     status, _ = await ahb_read(dut, ADDR_STATUS)
     assert not (status & STATUS_BUSY), "BUSY set while idle"
 
-    dut.spi_ss.value = 0
+    dut.spi_s_ss.value = 0
     await RisingEdge(dut.HCLK)
     await RisingEdge(dut.HCLK)
 
     assert int(dut.u_core.busy.value) == 1, "BUSY not set during a transaction"
 
-    dut.spi_ss.value = 1
+    dut.spi_s_ss.value = 1
     await RisingEdge(dut.HCLK)
     await RisingEdge(dut.HCLK)
 

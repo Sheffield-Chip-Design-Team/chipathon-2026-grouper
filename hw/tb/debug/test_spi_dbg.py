@@ -45,9 +45,9 @@ async def bring_up(dut, memory=None):
     cocotb.start_soon(Clock(dut.clk, CLK_PERIOD_NS, units="ns").start())
 
     dut.rst_n.value = 0
-    dut.spi_ss.value = 1
-    dut.spi_sck.value = 0
-    dut.spi_mosi.value = 0
+    dut.spi_s_ss.value = 1
+    dut.spi_s_sck.value = 0
+    dut.spi_s_mosi.value = 0
     dut.dbg_ready.value = 0
     dut.dbg_rdata.value = 0
     dut.dbg_bus_error.value = 0
@@ -126,7 +126,7 @@ async def test_status_before_lock_has_no_lock_bits(dut):
     the same frame that returns 0x09 under a lock must return neither
     LOCK_ACTIVE nor CPU_HALTED before one is taken.
 
-    MISO is driven here because this bench drives spi_miso directly rather
+    MISO is driven here because this bench drives spi_s_miso directly rather
     than through io_ss, whose pad output-enable follows dbg_lock_active
     (GRPR-GPIO-016) -- at the SoC level this same read reaches the pad only
     while a lock is held.

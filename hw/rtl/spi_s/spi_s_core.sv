@@ -27,10 +27,10 @@ module spi_s_core #(
   input  logic                  flush,
 
   // Wire side
-  input  logic                  spi_ss,
-  input  logic                  spi_sck,
-  input  logic                  spi_mosi,
-  output logic                  spi_miso,
+  input  logic                  spi_s_ss,
+  input  logic                  spi_s_sck,
+  input  logic                  spi_s_mosi,
+  output logic                  spi_s_miso,
 
   // RX FIFO read side
   input  logic                  rx_read,
@@ -121,7 +121,7 @@ module spi_s_core #(
   logic [7:0]  spi_command;
   logic [31:0] spi_address;
   // The top bit shifts out as the last address bit lands: spi_address takes
-  // it from spi_mosi directly, so address_shift's own top bit is never read
+  // it from spi_s_mosi directly, so address_shift's own top bit is never read
   // back. Sized for the wider of the two address phases (32-bit); the legacy
   // 24-bit phase uses only the low 24 bits of the same shift register.
   /* verilator lint_off UNUSEDSIGNAL */
@@ -207,7 +207,7 @@ module spi_s_core #(
 
   always_ff @(posedge clk, negedge rst_n)
     if (~rst_n) spi_sck_d <= 1'b0;
-    else        spi_sck_d <= spi_sck;
+    else        spi_sck_d <= spi_s_sck;
 
   // CPOL and CPHA both select which SCK edge samples and which launches, and
   // both do it by the same inversion: CPOL because idle-high reverses the
@@ -217,10 +217,10 @@ module spi_s_core #(
   logic edge_invert;
   assign edge_invert = cpol ^ cpha;
 
-  assign sample_edge = edge_invert ? (!spi_sck &&  spi_sck_d)
-                                   : ( spi_sck && !spi_sck_d);
-  assign launch_edge = edge_invert ? ( spi_sck && !spi_sck_d)
-                                   : (!spi_sck &&  spi_sck_d);
+  assign sample_edge = edge_invert ? (!spi_s_sck &&  spi_sck_d)
+                                   : ( spi_s_sck && !spi_sck_d);
+  assign launch_edge = edge_invert ? ( spi_s_sck && !spi_sck_d)
+                                   : (!spi_s_sck &&  spi_sck_d);
 
 //------------------------------------------------------
 // Command framing FSM
@@ -232,7 +232,7 @@ module spi_s_core #(
   logic dbg_opcode_en;
   assign dbg_opcode_en = (DEBUG_PORT_EN != 0);
 
-  assign busy = !spi_ss && (spi_state != FSM_IDLE);
+  assign busy = !spi_s_ss && (spi_state != FSM_IDLE);
 
   always_ff @(posedge clk, negedge rst_n) begin
     if (~rst_n) begin
@@ -260,7 +260,7 @@ module spi_s_core #(
       one_shot_issued   <= 1'b0;
     end
     else begin
-      if (spi_ss) begin
+      if (spi_s_ss) begin
         // SS high returns the decoder to idle, which is how a host
         // resynchronises after an aborted frame (GRPR-SPIS-022). It does not
         // disturb the Debug Unit's own state, including an active lock
@@ -277,18 +277,18 @@ module spi_s_core #(
       // A read burst (legacy or BUS_READ) advances when the Debug Unit
       // accepts each request. Outside the sample_edge guard because the
       // handshake is paced by the bus, not by SCK.
-      if (!spi_ss && dbg_active_ext && dbg_is_read &&
+      if (!spi_s_ss && dbg_active_ext && dbg_is_read &&
           dbg_req_valid && dbg_req_ready)
         spi_address <= spi_address + 32'd1;
 
       // FSM_ONE_SHOT commands (BUS_LOCK/BUS_UNLOCK/DBG_RESUME/DBG_ENABLE)
       // have no data phase to pace them, so they latch here as soon as the
       // debug port accepts, independent of sample_edge.
-      if (!spi_ss && (spi_state == FSM_ONE_SHOT) &&
+      if (!spi_s_ss && (spi_state == FSM_ONE_SHOT) &&
           dbg_req_valid && dbg_req_ready)
         one_shot_issued <= 1'b1;
 
-      if (!spi_ss && sample_edge) begin
+      if (!spi_s_ss && sample_edge) begin
 
         if (spi_state == FSM_COMMAND) begin
           if (rx_byte_done) begin
@@ -332,10 +332,10 @@ module spi_s_core #(
           spi_address <= spi_address + 32'd1;
 
         else if (spi_state == FSM_ADDRESS) begin
-          address_shift <= {address_shift[30:0], spi_mosi};
+          address_shift <= {address_shift[30:0], spi_s_mosi};
 
           if (address_bit_count == 6'd23) begin
-            spi_address       <= {8'b0, address_shift[22:0], spi_mosi};
+            spi_address       <= {8'b0, address_shift[22:0], spi_s_mosi};
             address_bit_count <= 6'd0;
 
             // FAST_READ (0x0B) differs from READ (0x03) by exactly the
@@ -374,10 +374,10 @@ module spi_s_core #(
         end
 
         else if (spi_state == FSM_ADDR32) begin
-          address_shift <= {address_shift[30:0], spi_mosi};
+          address_shift <= {address_shift[30:0], spi_s_mosi};
 
           if (address_bit_count == 6'd31) begin
-            spi_address       <= {address_shift[30:0], spi_mosi};
+            spi_address       <= {address_shift[30:0], spi_s_mosi};
             address_bit_count <= 6'd0;
 
             if (spi_command == OP_BUS_READ)
@@ -461,8 +461,8 @@ module spi_s_core #(
     .clk         (clk),
     .rst_n       (rst_n),
     .flush       (flush),
-    .spi_ss      (spi_ss),
-    .spi_mosi    (spi_mosi),
+    .spi_s_ss      (spi_s_ss),
+    .spi_s_mosi    (spi_s_mosi),
     .sample_edge (sample_edge),
     .push_en     (rx_push_en),
     .byte_done   (rx_byte_done),
@@ -501,7 +501,7 @@ module spi_s_core #(
   // FIFO path is untouched - TXDATA a host wrote between frames is supposed
   // to survive until it is clocked out.
   logic dbg_frame_flush;
-  assign dbg_frame_flush = spi_ss && dbg_active_ext;
+  assign dbg_frame_flush = spi_s_ss && dbg_active_ext;
 
   spi_s_tx #(
     .DATA_WIDTH (DATA_WIDTH),
@@ -511,7 +511,7 @@ module spi_s_core #(
     .rst_n       (rst_n),
     .flush       (flush),
     .frame_flush (dbg_frame_flush),
-    .spi_ss      (spi_ss),
+    .spi_s_ss      (spi_s_ss),
     .launch_edge (launch_edge),
     .miso        (spi_miso_int),
     .send_en     (spi_state == FSM_READ_DATA),
@@ -526,7 +526,7 @@ module spi_s_core #(
   );
 
   // ENABLE gates the wire output only; the block still frames what it sees.
-  assign spi_miso = (enable && !spi_ss) ? spi_miso_int : 1'b0;
+  assign spi_s_miso = (enable && !spi_s_ss) ? spi_miso_int : 1'b0;
 
   // The debug path has no TX FIFO to run dry, so underrun is a FIFO-path
   // event only.
@@ -639,7 +639,7 @@ module spi_s_core #(
   logic read_req_outstanding;
   logic [1:0] read_lookahead;
 
-  assign dbg_req_valid = !spi_ss && dbg_active_ext &&
+  assign dbg_req_valid = !spi_s_ss && dbg_active_ext &&
                          ((dbg_is_write && (spi_state == FSM_WRITE_DATA) && rx_byte_done) ||
                           // BUS_READ's first request is issuable from FSM_DUMMY
                           // onward, same as the fixed-length path and for the
@@ -695,7 +695,7 @@ module spi_s_core #(
       read_req_outstanding <= 1'b0;
       read_lookahead       <= 2'd0;
     end
-    else if (flush || spi_ss) begin
+    else if (flush || spi_s_ss) begin
       read_req_outstanding <= 1'b0;
       read_lookahead       <= 2'd0;
     end
@@ -757,7 +757,7 @@ module spi_s_core #(
       fixed_len_word       <= '0;
       fixed_len_push_idx   <= '0;
     end
-    else if (flush || spi_ss) begin
+    else if (flush || spi_s_ss) begin
       fixed_len_push_state <= PUSH_IDLE;
       fixed_len_word       <= '0;
       fixed_len_push_idx   <= '0;

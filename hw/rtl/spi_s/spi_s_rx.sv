@@ -15,8 +15,8 @@ module spi_s_rx #(
   input  logic                  flush,
 
   // Wire side
-  input  logic                  spi_ss,
-  input  logic                  spi_mosi,
+  input  logic                  spi_s_ss,
+  input  logic                  spi_s_mosi,
   input  logic                  sample_edge,
 
   // Framing. push_en qualifies the completed byte as payload.
@@ -36,15 +36,15 @@ module spi_s_rx #(
 );
 
   // The top bit is shifted out as each byte completes: byte_data takes it
-  // from spi_mosi directly, so shift[7] itself is never read back.
+  // from spi_s_mosi directly, so shift[7] itself is never read back.
   /* verilator lint_off UNUSEDSIGNAL */
   logic [DATA_WIDTH-1:0] shift;
   /* verilator lint_on UNUSEDSIGNAL */
   logic [2:0]            bit_count;
   logic                  push;
 
-  assign byte_data = {shift[DATA_WIDTH-2:0], spi_mosi};
-  assign byte_done = !spi_ss && sample_edge && (bit_count == 3'd7);
+  assign byte_data = {shift[DATA_WIDTH-2:0], spi_s_mosi};
+  assign byte_done = !spi_s_ss && sample_edge && (bit_count == 3'd7);
 
   // Gated on !full here rather than inside the FIFO: small_sync_fifo holds
   // its write pointer when full but still executes memory[wptr] <= wdata, so
@@ -61,11 +61,11 @@ module spi_s_rx #(
       shift     <= '0;
       bit_count <= '0;
     end
-    else if (spi_ss) begin
+    else if (spi_s_ss) begin
       bit_count <= '0;
     end
     else if (sample_edge) begin
-      shift     <= {shift[DATA_WIDTH-2:0], spi_mosi};
+      shift     <= {shift[DATA_WIDTH-2:0], spi_s_mosi};
       bit_count <= (bit_count == 3'd7) ? 3'd0 : (bit_count + 3'd1);
     end
   end
