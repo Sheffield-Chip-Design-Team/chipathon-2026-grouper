@@ -68,6 +68,7 @@ filesets:
       - hw/rtl/interconnect/ahb_stub_slave.sv:            {file_type: systemVerilogSource}
       - hw/rtl/interconnect_ss.sv:                        {file_type: systemVerilogSource}
 
+      - hw/rtl/debug/dbg_ctrl.sv:                         {file_type: systemVerilogSource}
       - hw/rtl/cpu_ss.sv:                                 {file_type: systemVerilogSource}
       - hw/rtl/rom_ss.sv:                                 {file_type: systemVerilogSource}
       - hw/rtl/ram_ss.sv:                                 {file_type: systemVerilogSource}
