@@ -37,7 +37,7 @@ permitted.
 | ID              | Requirement                                                                                                           |
 | --------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `GRPR-SPIS-004` | The block shall receive and transmit data over the SPI interface, with that data accessible through the AHB-Lite bus. |
-| `GRPR-SPIS-005` | The block shall support `SPI_READ`, `FAST_READ`, `SPI_WRITE`, and `FAST_WRITE` commands.                              |
+| `GRPR-SPIS-005` | The block shall support `SPI_READ`, `FAST_READ`, `SPI_WRITE`, and `FAST_WRITE` commands. `FAST_READ` shall insert the APS6404L's 8 wait cycles (one byte on this 8-bit-framed wire) between its address phase and its first data bit, per the datasheet's § 8.5 table; `SPI_READ` shall insert none. This is the **only** difference between the two, there being no memory array behind either — see `SPIS-SPEC-018`. |
 | `GRPR-SPIS-006` | The block shall occupy a 4 KiB region of the AHB peripheral aperture, containing two decoded sub-apertures: its own registers at offset `0x000`, and the Debug Unit register window of `GRPR-SPIS-036` at offset `0x100`. |
 
 ### Buffering and Interrupts
@@ -716,6 +716,44 @@ TBD (per source).
   block's own design states, and it is a third category besides: a debug bus
   error is neither the host outrunning firmware nor firmware mis-sizing an
   access. It needs its own bit.
+- `SPIS-SPEC-018` — **`FAST_READ` and `FAST_WRITE` are thinner than their names
+  suggest, and one of them was wrong.** On the APS6404L, `FAST_READ` (`0x0B`)
+  differs from `READ` (`0x03`) by 8 wait cycles inserted after the address,
+  which exist to cover the PSRAM's internal array access at SCK rates the
+  no-wait `READ` cannot sustain. Neither reason survives here: the bytes come
+  from this block's TX FIFO, which firmware has already filled, so there is no
+  array latency to cover — and the 24-bit address is captured and then never
+  read on this path (nothing consumes `spi_address` except the debug opcodes).
+
+  The wait cycles are nonetheless **kept and now implemented**, because the
+  point of `GRPR-SPIS-003`/`-005` is that a controller already speaking the
+  PSRAM protocol needs no bespoke framing. An earlier decode treated
+  `FAST_READ` as a bare synonym for `READ` and consumed no wait byte, which is
+  worse than not accepting the opcode: such a host clocks its wait byte, gets a
+  data byte for it, and reads a response shifted one byte late with nothing to
+  signal the error. Fixed by routing `FAST_READ` through the existing
+  `FSM_DUMMY` state, which already consumes exactly one byte; covered by
+  `test_fast_read_consumes_wait_byte` and
+  `test_fast_read_and_read_differ_by_one_byte`.
+
+  `FAST_WRITE` (`0x0A`) is **not** an APS6404L opcode — the datasheet's SPI
+  command table has no `0x0A`, and `hw/tb/models/aps6404l.py` models none. It
+  is an opcode this design defines itself, and it has no wait cycles to
+  mirror, so it remains identical to `SPI_WRITE`. `GRPR-SPIS-005` requires it,
+  so it stays, but the name implies a datasheet lineage it does not have and
+  a future revision may want to either drop it or document it as
+  Grouper-specific.
+
+  Worth noting for anyone weighing whether the legacy command set earns its
+  place: in RTL it is cheap — four localparams, one decode arm, the
+  `FSM_ADDRESS` state and three `!dbg_active_ext` qualifiers, with the FIFOs,
+  shift paths and data-phase states all shared with the debug opcodes. The
+  cost has been in specification, not gates: three withdrawn requirements
+  (`GRPR-SPIS-030`, `-031`, `-016`) that went on to produce two incorrect
+  claims in the Debug Unit document. That is a documentation-hygiene problem
+  rather than an argument for removal, and removing the commands would delete
+  this block's stated purpose (§ Purpose) to save roughly twenty lines.
+
 ## Verification Cross-Reference
 
 | Req ID          | Verification Item(s)                                                                 |
