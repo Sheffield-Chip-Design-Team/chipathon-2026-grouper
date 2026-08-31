@@ -56,25 +56,46 @@ VERILOG_FILES:
 - dir::../../hw/rtl/common/shift_reg.sv
 - dir::../../hw/rtl/common/small_sync_fifo.sv
 - dir::../../hw/rtl/common/sync.sv
+- dir::../../hw/rtl/common/clk_div_prog.sv
+# picorv32 CPU
 - dir::../../ip/picorv32/picorv32.v
+# Debug Controller
+- dir::../../hw/rtl/debug/dbg_ctrl.sv
+# GPIO Controller
 - dir::../../hw/rtl/gpio/ahb_gpio_ctrl.sv
+# SPI slave
+- dir::../../hw/rtl/spi_s/spi_s_rx.sv
+- dir::../../hw/rtl/spi_s/spi_s_tx.sv
+- dir::../../hw/rtl/spi_s/spi_s_core.sv
 - dir::../../hw/rtl/spi_s/ahb_spi_s.sv
-- dir::../../hw/rtl/uart/uart_clk_div.sv
+# SPI master
+- dir::../../hw/rtl/spi_m/spi_m_rx.sv
+- dir::../../hw/rtl/spi_m/spi_m_tx.sv
+- dir::../../hw/rtl/spi_m/spi_m_core.sv
+- dir::../../hw/rtl/spi_m/ahb_spi_m.sv
+# QSPI
+- dir::../../hw/rtl/qspi/qspi.sv
+- dir::../../hw/rtl/qspi/ahb_qspi.sv
+# UART
 - dir::../../hw/rtl/uart/uart_rx.sv
 - dir::../../hw/rtl/uart/uart_tx.sv
 - dir::../../hw/rtl/uart/uart.sv
 - dir::../../hw/rtl/uart/ahb_uart.sv
+# Interconnect
 - dir::../../hw/rtl/interconnect/ahb_debug.sv
 - dir::../../hw/rtl/interconnect/ahb_conn_buff.sv
 - dir::../../hw/rtl/interconnect/ahb_stub_slave.sv
 - dir::../../hw/rtl/interconnect_ss.sv
+# Memories
 - dir::../../hw/rtl/rom_ss.sv
 - dir::../../hw/rtl/ram_ss.sv
 - dir::../../hw/pd/wrappers/gf180mcu_ocd_sram_1024x8m8wm1_wrapper.sv
+# IO, CPU, Peripheral and Digital Subsystems
 - dir::../../hw/rtl/io_ss.sv
 - dir::../../hw/rtl/cpu_ss.sv
 - dir::../../hw/rtl/periph_ss.sv
 - dir::../../hw/rtl/digital_ss.sv
+# TOP level rtl
 - dir::../../hw/rtl/grouper_soc_top.sv
 
 # CHIP core wrapper: the pin-flattening shell that is this flow's DESIGN_NAME.
@@ -85,20 +106,10 @@ VERILOG_INCLUDE_DIRS:
 - dir::../../sw/boot
 
 VERILOG_DEFINES:
-# Stubs ahb_spi_s out to ahb_stub_slave in periph_ss (periph_ss.sv:436). The
-# RAM is NOT stubbed -- ram_ss builds the real macros unconditionally, see
-# below.
-- DRY_RUN
-# Build the ROM contents from code.vmem (continuous assigns) rather than
+# Build the ROM contents from boot.vmem (continuous assigns) rather than
 # $readmemh, which has no synthesisable equivalent - standard cells have no
 # initial-value mechanism, so this is what actually produces a mask ROM.
 - ROM_INIT_CONST
-
-# NOTE: there is no MACRO_RAM define on this branch's RTL. ram_ss.sv gates the
-# macros on a USE_MACRO_RAM *parameter* (ram_ss.sv:4) which defaults to 1, and
-# digital_ss does not override it -- so gen_macro_ram is always taken and the
-# MACROS block below always has something to place. The define this config used
-# to set was inert here and has been removed rather than left to mislead.
 
 #---------------------------------------------------------------------------
 # Elaboration + Synthesis
@@ -110,19 +121,13 @@ SLANG_ARGUMENTS: ['--keep-hierarchy']
 SYNTH_HIERARCHY_MODE: deferred_flatten
 
 # OFF because ON makes Magic streamout die with "stack smashing" on this RTL's
-# deep hierarchy, in BOTH flatten and deferred_flatten (jobs 4296, 4314 -- 4296
-# ground in Magic for 121 minutes before dying). OFF got the flow to step 74.
-
-# Cost: the netlist no longer carries readable instance names, so the
-#   grep -o '[^ ]*u_sram_macro' <run>/*-yosys-synthesis/*.nl.v | sort -u
-# check recommended in the MACROS block below only works against a run made
-# while this was still true. Confirm the macro instance paths from an older run
-# rather than re-deriving them after this change.
+# deep hierarchy, in BOTH flatten and deferred_flatten 
 SYNTH_AUTONAME: false
 
-SYNTH_STRATEGY: "AREA 0"
+SYNTH_STRATEGY: "AREA 3"   # Optimise for Area
 SYNTH_SIZING: true
 SYNTH_ABC_DFF: true
+
 # SYNTH_ABC_USE_MFS3: true # - this breaks picorv32 synth - leave it disabled
 
 # ---------------------------------------------------------------------------
