@@ -153,7 +153,7 @@ class PadModel:
     def set_pads(self, value, mask=PAD_MASK):
         """Drive `value` onto the pads selected by `mask`."""
         self.drive = (self.drive & ~mask) | (value & mask)
-        log.debug("pads <= 0x%04x (mask 0x%04x)", value & mask, mask)
+        # log.debug("pads <= 0x%04x (mask 0x%04x)", value & mask, mask)
 
     def driven_out(self):
         """What the SoC is currently driving, on the pads it has enabled."""
