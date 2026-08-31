@@ -4,12 +4,11 @@ module cpu_ss #(
   parameter int ROM_ADDR_WIDTH = 8,
   parameter int RAM_ADDR_WIDTH = 10,
   parameter int NUM_IRQ = 1,
-  parameter bit ENABLE_TRACE = 1'b0    // sim-only instruction trace, consumed by ahb_debug
+  parameter bit ENABLE_TRACE = 1'b0    
 ) (
-  
   // Clock and Reset
-  input logic HCLK,
-  input logic HRESETn,
+  input logic                        HCLK,
+  input logic                        HRESETn,
 
   // ROM Interface
   output logic [ROM_ADDR_WIDTH-1:0] rom_addr,
@@ -25,97 +24,140 @@ module cpu_ss #(
   input  logic [31:0]               ram_rdata,
 
   // AHB Master Interface
-  // AHB Master signals
-  output logic [ADDR_WIDTH-1:0] HADDR,
-  output logic [2:0]            HBURST,
-  output logic                  HMASTLOCK,
-  output logic [3:0]            HPROT,
-  output logic [2:0]            HSIZE,
-  output logic [1:0]            HTRANS,
-  output logic [DATA_WIDTH-1:0] HWDATA,
-  output logic                  HWRITE,
+  // Master Signals
+  output logic [ADDR_WIDTH-1:0]     HADDR,
+  output logic [2:0]                HBURST,
+  output logic                      HMASTLOCK,
+  output logic [3:0]                HPROT,
+  output logic [2:0]                HSIZE,
+  output logic [1:0]                HTRANS,
+  output logic [DATA_WIDTH-1:0]     HWDATA,
+  output logic                      HWRITE,
+  // Slave Signals
+  input logic [DATA_WIDTH-1:0]      HRDATA,
+  input logic                       HREADY,
+  input logic                       HRESP,
 
-  // AHB Slave Signals
-  input logic [DATA_WIDTH-1:0]  HRDATA,
-  input logic                   HREADY,
-  input logic                   HRESP,
+  // Debug Request port (Slave) (GRPR-DBG-001).
+  input  logic                      dbg_req_valid,
+  output logic                      dbg_req_ready,
+  input  logic [3:0]                dbg_req_cmd,
+  input  logic [ADDR_WIDTH-1:0]     dbg_req_addr,
+  input  logic [DATA_WIDTH-1:0]     dbg_req_wdata,
+  input  logic [1:0]                dbg_req_size,
+  output logic                      dbg_rsp_valid,
+  input  logic                      dbg_rsp_ready,
+  output logic [DATA_WIDTH-1:0]     dbg_rsp_rdata,
+  output logic                      dbg_rsp_err,
 
-  // Interrupts
-  input logic [NUM_IRQ-1:0]     irq,
+  // Lock-active indication (GRPR-DBG-044), consumed outside cpu_ss by
+  // io_ss's pad-3 output-enable gate.
+  output logic                      dbg_lock_active,
 
-  // Instruction trace (all zeroes unless ENABLE_TRACE)
-  output logic                  trace_valid,
-  output logic [35:0]           trace_data
+  // Interrupts input
+  input logic [NUM_IRQ-1:0]         irq,
+
+  // Instruction trace 
+  output logic                      trace_valid,
+  output logic [35:0]               trace_data
 );
 
   import ahb3lite_pkg::*;
 
+  // -- Internal Signals ------------------------------------------------
+
+  // CLock and Reset
   logic         cpu_rst_n;      // Reset used by CPU
   logic         bus_error;      // AHB bus error
 
-  // picorv32 outputs this design deliberately does not consume: traps are
-  // routed back as IRQ 1 by the CPU itself, instruction/data fetches take the
-  // same path here, the low two address bits are always zero (HADDR_byte is
-  // derived from the strobes instead), and nothing acknowledges
-  // end-of-interrupt.
-  /* verilator lint_off UNUSEDSIGNAL */
+  // Unused CPU outputs
   logic         trap;           // CPU trap signal
   logic         mem_instr;
   logic [31:0]  eoi;
-  /* verilator lint_on UNUSEDSIGNAL */
 
-  // Drives the RAM write port - see the look-ahead discussion further down.
-  logic [31:0]  mem_la_wdata;
+  // Drives the RAM write port
+  logic [31:0]           mem_la_wdata;
 
   // Memory interface
-  logic         mem_valid;
-  logic         mem_ready;
-  logic [31:0]  mem_addr;
-  logic [31:0]  mem_wdata;
-  // Only [0] is read, by the bank switch decode below - the memories and the
-  // AHB bridge take their strobes from the look-ahead group instead.
-  /* verilator lint_off UNUSEDSIGNAL */
-  logic [ 3:0]  mem_wstrb;
-  /* verilator lint_on UNUSEDSIGNAL */
-  logic [31:0]  mem_rdata;
+  logic                  mem_valid;
+  logic                  mem_ready;      // completion, whoever owns the bus
+  logic                  cpu_mem_ready;  // ... as seen by picorv32
+  logic [ADDR_WIDTH-1:0] mem_addr;
+  logic [DATA_WIDTH-1:0]           mem_wdata;
+  logic [ 3:0]           mem_wstrb;
+  logic [DATA_WIDTH-1:0]           mem_rdata;
 
-  // Look-Ahead Interface
-  logic         mem_la_req;     // the CPU is actually asking for something
-  logic         mem_la_read;
-  logic         mem_la_write;
-  /* verilator lint_off UNUSEDSIGNAL */
-  logic [31:0]  mem_la_addr;    // [1:0] always zero - word-aligned by picorv32
-  /* verilator lint_on UNUSEDSIGNAL */
-  logic [ 3:0]  mem_la_wstrb;
+  // Look-Ahead Interface.
+  logic                  cpu_la_read;
+  logic                  cpu_la_write;
+  logic [31:0]           cpu_la_addr;
+  logic [31:0]           cpu_la_wdata;
+  logic [ 3:0]           cpu_la_wstrb;
+
+  logic                  mem_la_req;     // the owner is actually asking for something
+  logic                  mem_la_read;
+  logic                  mem_la_write;
+  logic [31:0]           mem_la_addr;    // [1:0] always zero - word-aligned by picorv32
+  logic [ 3:0]           mem_la_wstrb;
 
   // IRQ Interface
-  logic [31:0]  irq_int;
+  logic [31:0]           irq_int;
 
   // Trace Interface
-  logic         cpu_trace_valid;
-  logic [35:0]  cpu_trace_data;
+  logic                  cpu_trace_valid;
+  logic [35:0]           cpu_trace_data;
 
   // Address decode
-  logic rom_sel;
-  logic ram_sel;
-  logic bs_sel;
-  logic ahb_sel;
-  logic ram_sel_r;
-  logic bs_sel_r;
-  logic ahb_sel_r;
+  logic                  rom_sel;
+  logic                  ram_sel;
+  logic                  bs_sel;
+  logic                  ahb_sel;
+  logic                  ram_sel_r;
+  logic                  bs_sel_r;
+  logic                  ahb_sel_r;
 
-  // AHB decode 
-  logic [1:0] HADDR_byte;
+  // AHB decode
+  logic [1:0]            HADDR_byte;
+
+  // Debug Unit signals
+  logic                  dbg_own;      // debug owns the bus this cycle
+  logic                  dbg_req;      // a transfer is being requested
+  logic                  dbg_write;
+  logic [ADDR_WIDTH-1:0] dbg_addr;
+  logic [31:0]           dbg_wdata;
+  logic [3:0]            dbg_wstrb;
+  logic                  dbg_ready;    // transfer completed this cycle
+  logic [31:0]           dbg_rdata;
+  logic                  dbg_bus_error; // the just-completed debug transfer errored
+  logic                  cpu_freeze;    // stall picorv32 (freeze-style lock, between steps)
+  logic                  cpu_rst_req;   // hold picorv32 in reset (reset-style lock)
+
+  // Debug-side Memory registers
+  logic [31:0]           dbg_wdata_r;
+  logic [31:0]           dbg_addr_r;
+  logic [ 3:0]           dbg_wstrb_r;
+
+  // A debug-sourced RAM read waiting on ram_ss's registered output
+  // (dbg_ram_read_pending, see the note above dbg_ready's assignment).
+  logic                 dbg_ram_read_pending;
+  logic                 dbg_bus_active;
+  logic                 dbg_ram_read_start;
 
   // Hidden register for bank switch
-  logic bank_switch;
-  logic bank_switch_write;
+  logic                 bank_switch;
+  logic                 bank_switch_write;
+  logic [31:0]          bank_switch_wdata;
+  logic                 bank_switch_valid;
 
   // IRQ 0-2 Can also be triggered by the CPU internally
   // IRQ 0 - Timer Interrupt
   // IRQ 1 - EBREAK/ECALL or Illegal Instruction
   // IRQ 2 - BUS Error (Unalign Memory Access) + Used for invalid memory address
   assign irq_int = {{(29-NUM_IRQ){1'b0}}, irq, bus_error, 2'b0};
+
+  //--------------------------------------------------------------------------
+  // Picorv32 CPU with RV32EMC Configuration + Trace enabled
+  //--------------------------------------------------------------------------
 
   picorv32 #(
     // PICORV32 Configuration Parameters
@@ -155,18 +197,18 @@ module cpu_ss #(
     // Memory interface
     .mem_valid    (mem_valid),
     .mem_instr    (mem_instr),
-    .mem_ready    (mem_ready),
+    .mem_ready    (cpu_mem_ready),
     .mem_addr     (mem_addr),
     .mem_wdata    (mem_wdata),
     .mem_wstrb    (mem_wstrb),
     .mem_rdata    (mem_rdata),
 
 	  // Look-Ahead Interface
-    .mem_la_read  (mem_la_read),
-    .mem_la_write (mem_la_write),
-    .mem_la_addr  (mem_la_addr),
-    .mem_la_wdata (mem_la_wdata),
-    .mem_la_wstrb (mem_la_wstrb),
+    .mem_la_read  (cpu_la_read),
+    .mem_la_write (cpu_la_write),
+    .mem_la_addr  (cpu_la_addr),
+    .mem_la_wdata (cpu_la_wdata),
+    .mem_la_wstrb (cpu_la_wstrb),
 
 	  // Pico Co-Processor Interface (PCPI)
 	  .pcpi_valid   (),
@@ -192,21 +234,208 @@ module cpu_ss #(
   assign trace_valid = ENABLE_TRACE && cpu_trace_valid;
   assign trace_data  = ENABLE_TRACE ? cpu_trace_data : '0;
 
-  // convert native memory signals to AHB-Lite equivalents:
-  assign bank_switch_write = bs_sel_r && mem_wstrb[0] == 1'b1 && mem_addr == 32'h7fff_fffc;
+  //--------------------------------------------------------------------------
+  // CPU Stall Logic (GRPR-DBG-020, GRPR-DBG-025, GRPR-DBG-027, GRPR-DBG-043)
+  //--------------------------------------------------------------------------
 
+  // Holding mem_ready low stalls picorv32 mid-transfer (GRPR-SOC-020).
+  // A freeze preserves architectural state because the CPU simply waits: its
+  // program counter and register file are untouched, and it resumes on the
+  // instruction it stalled on once the freeze lifts.
+  //
+  // Gated on dbg_own as well as cpu_freeze. cpu_freeze alone is not enough:
+  // the two are independent (a STEP or a DBG_RESUME clears cpu_freeze while
+  // the lock, and so dbg_own, is still held, GRPR-DBG-025/-027), and in that
+  // window the ownership mux above still routes mem_la_*/mem_rdata to and
+  // from the *debug* port. Completing a transfer for the CPU then hands it a
+  // transaction it never issued, carrying the debug port's read data instead
+  // of its own instruction fetch -- picorv32 retires that as an instruction,
+  // and the program is gone. Observed as the PC collapsing from the
+  // heartbeat loop to ~0 within 2.6 us of a DBG_RESUME issued before
+  // BUS_UNLOCK, after which the counter never advances again.
+  //
+  // The gate is dbg_bus_active -- the debug unit's actual transfer -- and not
+  // dbg_own, which is LOCK_ACTIVE for the whole lock (dbg_ctrl.sv). Gating on
+  // dbg_own would stall the CPU for the entire lock and a STEP could never
+  // retire anything, which is exactly the independence GRPR-DBG-025 needs.
+  // dbg_bus_active is asserted only while a debug-sourced read or write is in
+  // flight, so between those the mux above is back on the CPU's own signals
+  // and a stepped or resumed CPU runs against real memory.
+  //
+  // Within a debug transfer the CPU simply waits, mid-transfer and with its
+  // architectural state intact, exactly as it does under a freeze, and picks
+  // up on the instruction it stalled on once the transfer completes -- the
+  // same guarantee GRPR-DBG-043 already requires of a lock.
+
+  assign cpu_mem_ready = mem_ready && !cpu_freeze && !dbg_bus_active;
+
+  //--------------------------------------------------------------------------
+  // Debug Unit
+  //--------------------------------------------------------------------------
+
+  dbg_ctrl #(
+    .ADDR_WIDTH       (ADDR_WIDTH),
+    .DATA_WIDTH       (DATA_WIDTH)
+    
+  ) u_dbg_ctrl (
+    .clk              (HCLK),
+    .rst_n            (HRESETn),
+
+    .dbg_req_valid    (dbg_req_valid),
+    .dbg_req_ready    (dbg_req_ready),
+    .dbg_req_cmd      (dbg_req_cmd),
+    .dbg_req_addr     (dbg_req_addr),
+    .dbg_req_wdata    (dbg_req_wdata),
+    .dbg_req_size     (dbg_req_size),
+    .dbg_rsp_valid    (dbg_rsp_valid),
+    .dbg_rsp_ready    (dbg_rsp_ready),
+    .dbg_rsp_rdata    (dbg_rsp_rdata),
+    .dbg_rsp_err      (dbg_rsp_err),
+
+    .dbg_lock_active  (dbg_lock_active),
+
+    .dbg_own          (dbg_own),
+    .dbg_req          (dbg_req),
+    .dbg_write        (dbg_write),
+    .dbg_addr         (dbg_addr),
+    .dbg_wdata        (dbg_wdata),
+    .dbg_wstrb        (dbg_wstrb),
+    .dbg_ready        (dbg_ready),
+    .dbg_rdata        (dbg_rdata),
+    .dbg_bus_error    (dbg_bus_error),
+
+    .cpu_freeze       (cpu_freeze),
+    .cpu_rst_req      (cpu_rst_req),
+
+    .cpu_trace_valid  (cpu_trace_valid),
+    .cpu_trace_data   (cpu_trace_data)
+  );
+
+  assign dbg_bus_error = dbg_own && bus_error;
+
+  //--------------------------------------------------------------------------
+  // Debug Memory Delay Registers
+  //--------------------------------------------------------------------------
+  
+  // Register dbg write signals so that data falls in the data phase
+  always_ff @(posedge HCLK, negedge HRESETn) begin
+    if (~HRESETn) begin
+      dbg_wdata_r <= '0;
+      dbg_addr_r  <= '0;
+      dbg_wstrb_r <= '0;
+    end else if (mem_la_write) begin
+      dbg_wdata_r <= mem_la_wdata;
+      dbg_addr_r  <= mem_la_addr;
+      dbg_wstrb_r <= mem_la_wstrb;
+    end
+  end
+
+  // A RAM read takes one clock cycle from the SRAM macro.
+  // so ram_rdata is only valid the cycle *after* ram_read
+  //
+  // Only the first cycle of a debug RAM read counts as "just started" --
+  // !dbg_ram_read_pending catches that one cycle; every later cycle of the
+  // same still-outstanding read has dbg_ram_read_pending already set, so
+  // this term drops out and dbg_ready is governed purely by ram_sel_r
+  // below. Without that qualifier, dbg_req/mem_la_read staying asserted
+  // for as long as dbg_ready stays low made this condition true every
+  // cycle, permanently forcing dbg_ready to 0 -- a hang, not just a
+  // one-cycle delay.
+
+  always_ff @(posedge HCLK, negedge HRESETn) begin
+    if (~HRESETn) begin
+      dbg_ram_read_pending <= 1'b0;
+    end else if (dbg_ram_read_start) begin
+      dbg_ram_read_pending <= 1'b1;
+    end else if (dbg_ram_read_pending && ram_sel_r) begin
+      dbg_ram_read_pending <= 1'b0;
+    end
+  end
+
+  assign dbg_ready = dbg_own && mem_ready &&
+                      (dbg_ram_read_start ? 1'b0 :
+                       dbg_ram_read_pending ? ram_sel_r : 1'b1);
+
+  assign dbg_ram_read_start = !dbg_ram_read_pending && dbg_bus_active && mem_la_read && ram_sel;
+  assign dbg_rdata = mem_rdata;
+
+  //--------------------------------------------------------------------------
+  // Bus Ownership Mux (GRPR-DBG-008)
+  //--------------------------------------------------------------------------
+
+  // Keyed on dbg_bus_active -- the debug unit's own transfer -- rather than on
+  // dbg_own, which is LOCK_ACTIVE for the whole lock (dbg_ctrl.sv).
+  //
+  // A lock and a transfer are not the same window. STEP and DBG_RESUME both
+  // clear cpu_freeze while the lock is still held (GRPR-DBG-025/-027), so the
+  // CPU is meant to execute during part of a lock; keying the mux on dbg_own
+  // pointed mem_la_* at a debug port that was not asking for anything, so the
+  // CPU's own fetches and stores never reached memory at all while its
+  // mem_ready said they had completed. picorv32 retired whatever mem_rdata
+  // happened to hold, and the program was gone -- the PC collapsed from the
+  // heartbeat loop to ~0 within 2.6 us of a DBG_RESUME issued before
+  // BUS_UNLOCK, after which the counter never advanced again.
+  //
+  // Exclusivity is preserved by cpu_mem_ready below, which stalls the CPU for
+  // as long as a debug transfer is in flight: the debug unit still wins every
+  // cycle it actually wants the bus, and the CPU waits mid-transfer with its
+  // architectural state intact, exactly as it does under a freeze.
+
+  assign dbg_bus_active = dbg_own && dbg_req;
+
+  assign mem_la_read  = dbg_bus_active ? !dbg_write : cpu_la_read;
+  assign mem_la_write = dbg_bus_active ?  dbg_write : cpu_la_write;
+  assign mem_la_addr  = dbg_bus_active ? dbg_addr  : cpu_la_addr;
+  assign mem_la_wdata = dbg_bus_active ? dbg_wdata : cpu_la_wdata;
+  assign mem_la_wstrb = dbg_bus_active ? dbg_wstrb : cpu_la_wstrb;
+
+  //--------------------------------------------------------------------------
+  // Bank Switch Logic
+  //--------------------------------------------------------------------------
+  //
+  // The bank switch is detected a stage late, against bs_sel_r, so the address
+  // and strobe have to come from the matching stage - mem_addr/mem_wstrb for
+  // the CPU, the registered copies for debug. mem_valid is picorv32's own
+  // transfer-in-progress flag and has no debug analogue, so the debug arm uses
+  // its registered request instead.
+  //
+  // A debug-sourced bank switch is what makes the alternate boot path work
+  // (GRPR-SOC-022): a host writes an image into RAM, flips the bank, and the
+  // CPU restarts on it. That means the reset below fires on a debug write too,
+  // which is intended - and it is also why GRPR-DBG-021 forbids this write
+  // during a freeze-style lock, where resetting the CPU would destroy the very
+  // state the freeze exists to preserve.
+
+  assign bank_switch_write =
+    bs_sel_r && (dbg_own  ? (dbg_wstrb_r[0] && dbg_addr_r == 32'h7fff_fffc)
+                          : (mem_wstrb[0]   && mem_addr   == 32'h7fff_fffc));
+
+  assign bank_switch_wdata = dbg_own ? dbg_wdata_r : mem_wdata;
+  assign bank_switch_valid = dbg_own ? 1'b1 : mem_valid;
+
+  // cpu_rst_req (GRPR-DBG-019, reset-style lock) holds the CPU in reset for
+  // as long as the debug unit asserts it, unlike the bank-switch reset below,
+  // which is a one-cycle pulse. Both share this flop because picorv32 has a
+  // single resetn input; cpu_rst_req is checked first so a reset-style lock
+  // taken mid-bank-switch still holds, and release only takes effect once
+  // cpu_rst_req itself has been dropped by the debug unit.
   always_ff @(posedge HCLK, negedge HRESETn)
     if (~HRESETn) begin
       bank_switch <= 0; // Start with ROM at address 0 on HRESETn
       cpu_rst_n <= '0;  // Reset CPU when HRESETn active
-    end else if (mem_valid && bank_switch_write) begin // Use mem_valid to detect CPU reset
-      bank_switch <= mem_wdata[0]; // Update bank switch value
+    end else if (cpu_rst_req) begin
+      cpu_rst_n <= '0; // Debug unit reset-style lock: hold in reset
+    end else if (bank_switch_valid && bank_switch_write) begin
+      bank_switch <= bank_switch_wdata[0]; // Update bank switch value
       cpu_rst_n <= '0; // Reset CPU to boot from swapped RAM
     end else begin
       cpu_rst_n <= '1; // Release CPU reset
     end
 
-  // Select output interfaces based on address decode
+  //--------------------------------------------------------------------------
+  // Access Target MUX 
+  //--------------------------------------------------------------------------
+
   always_comb begin
     rom_sel = '0;
     ram_sel = '0;
@@ -231,37 +460,31 @@ module cpu_ss #(
     endcase
   end
 
-  // mem_la_addr only means anything while the CPU is actually asking for
-  // something. Between accesses picorv32 leaves an ALU operand on it -
-  // "mem_la_addr = (mem_do_prefetch || mem_do_rinst) ? next_pc :
-  // {reg_op1[31:2], 2'b00}" - so the decode above is free-running over data.
-  // That is harmless for rom_read/ram_read, which are already qualified by
-  // mem_la_read, but the registered selects below drive mem_ready and
-  // bus_error, so they have to see a real request or the CPU takes a fault
-  // over an address it never issued.
-  //
-  // This is exactly what a value in flight through the bootloader's tx_uint()
-  // did: shifting 0xff800093 left a byte at a time put 0x8000_9300 on
-  // mem_la_addr, which decodes as AHB, and the resulting phantom data phase
-  // sampled HRESP off an idle bus - a bus error IRQ for a transfer that never
-  // happened. HTRANS was already gated this way and correctly stayed IDLE.
+  //--------------------------------------------------------------------------
+  // RAM and ROM output ports 
+  //--------------------------------------------------------------------------
+
+  // ROM  
+  assign rom_addr = mem_la_addr[2 +: ROM_ADDR_WIDTH];
+  assign rom_read = rom_sel && mem_la_read;
+
+  // RAM
+  assign ram_addr  = mem_la_addr[2 +: RAM_ADDR_WIDTH];
+  assign ram_wdata = mem_la_wdata;
+  assign ram_wstrb = mem_la_wstrb;
+  assign ram_write = ram_sel && mem_la_write;
+  // Use lookahead signal for read so we don't need to delay mem_ready
+  assign ram_read  = ram_sel && mem_la_read;
+
+  //--------------------------------------------------------------------------
+  // AHB output port
+  //--------------------------------------------------------------------------
+
+  // Ensure that HTRANS is only set when a read or write is triggered by the core.
   assign mem_la_req = mem_la_read || mem_la_write;
 
-  // Register for next cycle (prevents circular logic)
-  always_ff @(posedge HCLK, negedge HRESETn)
-    if (~HRESETn) begin
-      ram_sel_r <= '0;
-      bs_sel_r  <= '0;
-    end else begin
-      ram_sel_r <= ram_sel && mem_la_req;
-      bs_sel_r  <= bs_sel  && mem_la_req;
-    end
-
   // The AHB data phase outlasts its address phase whenever a slave stretches
-  // HREADY - ahb_uart does it on a busy FIFO, and every error response is two
-  // cycles - so this is a transfer-outstanding flag rather than a delayed
-  // copy of the select. Setting it takes priority so back-to-back transfers
-  // stay pipelined.
+  // Handle stalls and keep AHB pipelined otherwise
   always_ff @(posedge HCLK, negedge HRESETn) begin
     if (~HRESETn) begin
       ahb_sel_r <= '0;
@@ -273,57 +496,6 @@ module cpu_ss #(
       ahb_sel_r <= '0;
     end
   end
-
-  always_comb begin
-    mem_rdata = rom_rdata;
-    mem_ready = 1'b1; // Single cycle reads for ROM/RAM/BS
-    bus_error = 1'b0; // No bus errors for ROM/RAM/BS access
-    if (ram_sel_r) begin
-      mem_rdata = ram_rdata;
-    end else if (bs_sel_r) begin
-      mem_rdata = {31'b0, bank_switch};
-    end else if (ahb_sel_r) begin
-      mem_rdata = HRDATA;
-      mem_ready = HREADY;
-      // An AHB error response is two cycles, HREADY low then high. Take it on
-      // the completing cycle only, so one failed transfer raises one IRQ.
-      bus_error = HRESP && HREADY;
-    end
-  end
-  
-  assign rom_addr = mem_la_addr[2 +: ROM_ADDR_WIDTH];
-  assign rom_read = rom_sel && mem_la_read;
-
-  // The RAM port is driven entirely from picorv32's look-ahead group. That
-  // pairing is load bearing, not stylistic: ram_addr comes from mem_la_addr,
-  // so the write enable and the write data have to come from the same stage.
-  //
-  // Qualifying the write with mem_wstrb instead - which belongs to mem_addr,
-  // a stage later - lets the two disagree, and the write then lands at
-  // whatever address the look-ahead has already moved on to. The bank switch
-  // made that fatal: storing to BANK_SWITCH_ADDR resets the CPU, mem_la_addr
-  // jumps to PROGADDR_RESET, ram_sel goes high because RAM has just been
-  // swapped to zero, and mem_wstrb is still holding 4'hf from the store that
-  // caused all this. The result was a write of the bank switch value over the
-  // reset vector, one cycle before the CPU fetched it - so the freshly booted
-  // image always trapped on its first instruction.
-  //
-  // mem_la_write cannot do that: it is gated by resetn and only asserts in
-  // the cycle that issues the address (picorv32.v, "assign mem_la_write =
-  // resetn && !mem_state && mem_do_wdata"). picorv32 builds mem_wstrb out of
-  // it the same way - "mem_wstrb <= mem_la_wstrb & {4{mem_la_write}}".
-  //
-  // This also closes the wider version of the same hole: on a multi-cycle
-  // transfer mem_wstrb stays asserted for the whole transfer while
-  // mem_la_addr is free to move, so an AHB write stalled by HREADY could
-  // previously scribble into RAM.
-  assign ram_addr  = mem_la_addr[2 +: RAM_ADDR_WIDTH];
-  assign ram_wdata = mem_la_wdata;
-  assign ram_wstrb = mem_la_wstrb;
-  assign ram_write = ram_sel && mem_la_write;
-  // Use lookahead signal for read so we don't need to delay mem_ready
-  assign ram_read  = ram_sel && mem_la_read;
-  
   // convert native memory signals to AHB-Lite equivalents:
   // confusingly mem_la_wstrb is for read and write whereas mem_wstrb is only for write
   always_comb begin
@@ -361,13 +533,46 @@ module cpu_ss #(
       end
     endcase
   end
-
+  
   // TODO - make sure the cpu_ss is fully protocol compliant
   assign HADDR      = {mem_la_addr[31:2], HADDR_byte[1:0]}; // Last 2 bits of mem_addr are always 0, so calculate from mem_wstrb
   assign HBURST     = '0;      // no burst transactions
   assign HMASTLOCK  = '0;      // no locked transactions (single master)
   assign HPROT      = 4'b0001; // this will default to data fetch (user access, non-bufferable, non-cacheable)
   assign HTRANS     = (ahb_sel && (mem_la_read || mem_la_write)) ? HTRANS_NONSEQ : HTRANS_IDLE;  // Non-Sequential or Idle only
-  assign HWDATA     = mem_wdata;
+  assign HWDATA     = dbg_own ? dbg_wdata_r : mem_wdata;
   assign HWRITE     = mem_la_write;
+  
+  //--------------------------------------------------------------------------
+  // Response Logic
+  //--------------------------------------------------------------------------
+
+  // Register for next cycle (prevents circular logic)
+  always_ff @(posedge HCLK, negedge HRESETn) begin
+    if (~HRESETn) begin
+      ram_sel_r <= '0;
+      bs_sel_r  <= '0;
+    end else begin
+      ram_sel_r <= ram_sel && mem_la_req;
+      bs_sel_r  <= bs_sel  && mem_la_req;
+    end
+  end
+
+  always_comb begin
+    mem_rdata = rom_rdata;
+    mem_ready = 1'b1; // Single cycle reads for ROM/RAM/BS
+    bus_error = 1'b0; // No bus errors for ROM/RAM/BS access
+    if (ram_sel_r) begin
+      mem_rdata = ram_rdata;
+    end else if (bs_sel_r) begin
+      mem_rdata = {31'b0, bank_switch};
+    end else if (ahb_sel_r) begin
+      mem_rdata = HRDATA;
+      mem_ready = HREADY;
+      // An AHB error response is two cycles, HREADY low then high. Take it on
+      // the completing cycle only, so one failed transfer raises one IRQ.
+      bus_error = HRESP && HREADY;
+    end
+  end
+
 endmodule
