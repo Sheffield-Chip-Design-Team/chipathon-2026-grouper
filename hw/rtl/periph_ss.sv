@@ -473,20 +473,6 @@ logic [3:0] mux_qspi_sio_oe;
     .HREADYIN     (spi_s_HREADYIN),
     .HSEL         (spi_s_HSEL),
 
-    // Debug transport. No Debug Unit exists yet, so the port is tied off:
-    // dbg_req_ready low means no request is ever accepted and the FIFO path
-    // is what runs.
-    .dbg_req_valid (),
-    .dbg_req_ready (1'b0),
-    .dbg_req_cmd   (),
-    .dbg_req_addr  (),
-    .dbg_req_wdata (),
-    .dbg_req_size  (),
-    .dbg_rsp_valid (1'b0),
-    .dbg_rsp_ready (),
-    .dbg_rsp_rdata (32'b0),
-    .dbg_rsp_err   (1'b0),
-
     .spi_s_ss     (mux_spi_s_ss_i),
     .spi_s_sck    (mux_spi_s_sck_i),
     .spi_s_mosi   (mux_spi_s_mosi_i),
@@ -502,6 +488,7 @@ logic [3:0] mux_qspi_sio_oe;
     .dbg_rsp_valid (dbg_rsp_valid),
     .dbg_rsp_ready (dbg_rsp_ready),
     .dbg_rsp_rdata (dbg_rsp_rdata),
+    .dbg_rsp_err   (dbg_rsp_err),
     .irq           ( )
   );
   //--- Input/Output Subsystem (GPIO MUX) -----------------------------------------------------------------
