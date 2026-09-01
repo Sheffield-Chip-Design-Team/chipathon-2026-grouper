@@ -106,7 +106,21 @@ GRT_RESIZER_HOLD_SLACK_MARGIN: 0.3
 PL_TARGET_DENSITY_PCT: 35
 GRT_ALLOW_CONGESTION: true
 
-# Fix antenna violations after DRT
+# ---------------------------------------------------------------------------
+# ANTENNA REPAIR
+# ---------------------------------------------------------------------------
+# Enable the heuristic diode pass here too -- its gating variable defaults to
+# False, so it has never run. It clamps long nets using global-route
+# wirelength, ahead of detailed routing.
+RUN_HEURISTIC_DIODE_INSERTION: true
+HEURISTIC_ANTENNA_THRESHOLD: 20
+GRT_ANTENNA_MARGIN: 20 # %
+
+# DRT's antenna reroute is left ON here, unlike the classic core flow. The
+# job-4296 result that justifies turning it off (a converged 4-violation route
+# regressing to 128) was measured on grouper_soc_chip_core, NOT on this
+# padring design, which is a different netlist at a different density. Do not
+# copy the 0 across without measuring this flow first.
 DRT_ANTENNA_REPAIR_ITERS: 10
 DRT_ANTENNA_REPAIR_MARGIN: 10 # %
 

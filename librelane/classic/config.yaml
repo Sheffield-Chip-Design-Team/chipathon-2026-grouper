@@ -674,9 +674,6 @@ PL_RESIZER_SETUP_MAX_BUFFER_PCT: 40
 DESIGN_REPAIR_MAX_SLEW_PCT: 10
 DESIGN_REPAIR_MAX_CAP_PCT:  10
 
-# Routing / ESD
-DIODE_ON_PORTS: in
-
 # ---------------------------------------------------------------------------
 # Route
 # ---------------------------------------------------------------------------
@@ -700,11 +697,36 @@ RT_MAX_LAYER: Metal5
 PL_MAX_DISPLACEMENT_X: 800
 PL_MAX_DISPLACEMENT_Y: 500
 
-# Fix antenna violations after DRT
-DRT_ANTENNA_REPAIR_ITERS: 0    # DRT's antenna reroute took a converged 4-violation
-                               # route to 128 (job 4296, drt-run-0 vs drt-run-1).
-                               # Antennas are already repaired at step 40 (94 -> 0,
-                               # 97 diodes) and the post-route count was 0 regardless.
+# ---------------------------------------------------------------------------
+# ANTENNA REPAIR
+# ---------------------------------------------------------------------------
+#
+# Kept in lockstep with config_centered_rams.yaml -- see the long-form
+# rationale there. Summary: the last measured run left 13 net / 13 pin
+# violations, ALL of them "(Side area)" perimeter-ratio failures against a 400
+# limit (Metal3 9, Metal4 3, Metal2 1), most within 1.6x of the limit.
+#
+# The gap was that Odb.HeuristicDiodeInsertion had never run -- its gating
+# variable defaults to False, and flow.log recorded it being skipped. It
+# inserts diodes on long nets using global-route wirelength, before detailed
+# routing commits, which is the failure mode above. The step 40 repair pass
+# that did run is reactive and is what left the 13 behind.
+RUN_HEURISTIC_DIODE_INSERTION: true
+HEURISTIC_ANTENNA_THRESHOLD: 20
+
+# Chip-edge ESD/antenna on the I/O boundary; separate mechanism from the above.
+DIODE_ON_PORTS: in
+
+# Margin above the limit so a net landing at 399 does not become a violation
+# once detailed routing perturbs it. 10 -> 20 because the two smallest
+# failures (432, 435) sit inside a 10% band of 400.
+GRT_ANTENNA_MARGIN: 20 # %
+
+# DRT's own antenna reroute STAYS OFF -- measured, not cautious: it took a
+# converged 4-violation route to 128 (job 4296, drt-run-0 vs drt-run-1). It
+# repairs by rip-up-and-reroute and creates antennas faster than it clears
+# them here. The fix above is upstream of it, so this can stay 0.
+DRT_ANTENNA_REPAIR_ITERS: 0
 DRT_ANTENNA_REPAIR_MARGIN: 10 # %
 
 # ---------------------------------------------------------------------------
@@ -718,7 +740,7 @@ DEFAULT_CORNER: nom_tt_025C_3v30
 STA_CORNERS:
   - nom_tt_025C_3v30
   - min_ff_n40C_3v60
-  # - max_ss_125C_3v00
+  - max_ss_125C_3v00
 
 LIB:
   "*_tt_025C_3v30":
