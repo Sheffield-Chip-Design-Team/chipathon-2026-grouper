@@ -1,6 +1,6 @@
 # UART Verification Plan
 
-**Design doc:** [UART](../../design/blocks/UART.md)
+**Design doc:** [UART](../../design/blocks/UART%20Specification.md)
 **Source:** [Schematic Review](../../Schematic%20Review.md) §5 "Verification Summary" — block-level testbench architecture (UART VIP ↔ DUT ↔ AHB VIP ↔ Scoreboard).
 **DV status:** Most-mature block. `hw/dv/ahb_uart/` (pyuvm test + sequences) and `hw/dv/uvc/uart/`, `hw/dv/uvc/ahb3lite/` (reusable UVCs) already exist, but the pyuvm flow is blocked on a missing scoreboard. `hw/tb/uart/test_uart.py` is a standalone directed cocotb testbench that runs today — **29 tests, 29 passing** — see [Directed Verification](#directed-verification).
 
@@ -152,7 +152,7 @@ A **single-cycle** `HRESP` — what this block did until recently — passes eve
 
 ### Known limitations
 
-Rows for the `L*` entries in [UART § Known Limitations](../../design/blocks/UART.md#known-limitations). These pin down what the RTL *does*, so a fix shows up as a test change rather than a silent behaviour change.
+Rows for the `L*` entries in [UART § Known Limitations](../../design/blocks/UART%20Specification.md#known-limitations). These pin down what the RTL *does*, so a fix shows up as a test change rather than a silent behaviour change.
 
 | Item | Test | What it does | Limitation |
 |---|---|---|---|

@@ -1,3 +1,5 @@
+// SPI master core: clock divider + transmit path + receive path.
+
 module spi_m_core #(
   parameter int CLK_DIV_BITS = 8,
   parameter int DATA_WIDTH = 8,
@@ -28,17 +30,19 @@ module spi_m_core #(
 
   output logic                    busy,
   output logic                    done,
-  
+
   // FIFO interfaces
   input  logic                    flush_tx_fifo,
   input  logic [DATA_WIDTH-1:0]   tx_data,
   input  logic                    tx_write,
   output logic                    tx_full,
   output logic                    tx_empty,
+  output logic                    tx_underrun,
   input  logic                    flush_rx_fifo,
   input  logic                    rx_read,
   output logic                    rx_full,
   output logic                    rx_empty,
+  output logic                    rx_overrun,
   output logic [DATA_WIDTH-1:0]   rx_data,
 
   // SPI interface
@@ -47,24 +51,35 @@ module spi_m_core #(
   input  logic                    spi_miso,
   output logic                    spi_cs_n
 );
- 
+
   logic spi_clk_en;
+  logic data_phase;
+  logic sck_sample;
+  logic sck_launch;
   logic received;
 
-  spi_clk_div #(
-    .CLK_DIV_BITS(CLK_DIV_BITS)
-  ) u_clk_div (
-    .clk      (clk),
-    .rst_n    (rst_n),
-    .enable   (enable),
-    .clk_div  (clk_div),
-    .zero     (spi_clk_en)
+  // ------------------------------------------------------------------------------
+  // Programmable Clock Divider
+  // ------------------------------------------------------------------------------
+  // Pulses once per SCK half period: SCK = clk / (2 * (clk_div + 1)).
+
+  clk_div_prog #(
+    .CLK_DIV_BITS    (CLK_DIV_BITS)
+  ) u_clk_div_prog (
+    .clk             (clk),
+    .rst_n           (rst_n),
+    .enable          (enable),
+    .clk_div         (clk_div),
+    .zero            (spi_clk_en)
   );
+
+  // ------------------------------------------------------------------------------
+  // Transmit Path
+  // ------------------------------------------------------------------------------
 
   spi_m_tx #(
     .DATA_WIDTH (DATA_WIDTH),
     .FIFO_DEPTH (FIFO_DEPTH)
-    
   ) u_spi_m_tx (
     .clk            (clk),
     .rst_n          (rst_n),
@@ -91,28 +106,39 @@ module spi_m_core #(
     .busy           (busy),
     .done           (done),
 
+    .data_phase     (data_phase),
+    .sck_sample     (sck_sample),
+    .sck_launch     (sck_launch),
+
     .flush_tx_fifo  (flush_tx_fifo),
     .tx_data        (tx_data),
     .tx_write       (tx_write),
     .tx_full        (tx_full),
     .tx_empty       (tx_empty),
+    .tx_underrun    (tx_underrun),
 
     .spi_mosi       (spi_mosi),
     .spi_sck        (spi_sck),
     .spi_cs_n       (spi_cs_n)
-);
+  );
 
- spi_m_rx #(
+  // ------------------------------------------------------------------------------
+  // Receive Path
+  // ------------------------------------------------------------------------------
+  // Only captures during the read data phase 
+
+  spi_m_rx #(
     .DATA_WIDTH (DATA_WIDTH),
     .FIFO_DEPTH (FIFO_DEPTH)
-    
- ) u_spi_m_rx (
+  ) u_spi_m_rx (
     .clk            (clk),
     .rst_n          (rst_n),
-    .spi_clk_en    (spi_clk_en),
 
-    .enable         (enable),
-    .received       (received),
+    .rx_active      (data_phase && dir),
+    .sck_sample     (sck_sample),
+
+    .received       (),
+    .rx_overrun     (rx_overrun),
 
     .flush_rx_fifo  (flush_rx_fifo),
     .rx_read        (rx_read),

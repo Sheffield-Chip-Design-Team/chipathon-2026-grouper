@@ -39,7 +39,7 @@ module uart #(
 
   logic uart_clk_en;
 
-  uart_clk_div #(
+  clk_div_prog #(
     .CLK_DIV_BITS(CLK_DIV_BITS)
   ) u_clk_div (
     .clk      (clk),

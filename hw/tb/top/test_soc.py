@@ -6,11 +6,11 @@ model plus GPIO pattern generators the firmware can be scored against.
 
     CORE=sharc:soc_ip:grouper_soc_directed
 
-    FW_TEST=gpio fusesoc run --no-export $CORE                  # plain
-    FW_TEST=gpio fusesoc run --no-export --target=debug $CORE   # + ahb_debug
-    FW_TEST=gpio fusesoc run --no-export --target=trace $CORE   # + instruction trace
+    FW_TEST=gpio_echo fusesoc run --no-export $CORE                  # plain
+    FW_TEST=gpio_echo fusesoc run --no-export --target=debug $CORE   # + ahb_debug
+    FW_TEST=gpio_echo fusesoc run --no-export --target=trace $CORE   # + instruction trace
 
-    COCOTB_LOG_LEVEL=DEBUG FW_TEST=gpio fusesoc run --no-export $CORE
+    COCOTB_LOG_LEVEL=DEBUG FW_TEST=gpio_echo fusesoc run --no-export $CORE
 
 FW_TEST picks the firmware top level from sw/tests. The `trace` target writes
 cpu.trace, which hw/tb/top/trace_decode.py turns into cpu_trace.dis in the
@@ -40,6 +40,15 @@ from cocotb.triggers import (
     with_timeout,
 )
 
+from hw.tb.models.aps6404l import (
+    FAST_READ_WAIT as APS_FAST_READ_WAIT,
+    OP_FAST_READ as APS_OP_FAST_READ,
+    OP_READ as APS_OP_READ,
+    OP_RESET as APS_OP_RESET,
+    OP_RESET_EN as APS_OP_RESET_EN,
+    OP_WRITE as APS_OP_WRITE,
+)
+from hw.tb.models.spi_psram_pads import PsramPadSlave
 from hw.tb.tb_utils import bootloader
 from hw.tb.top import trace_decode
 
@@ -82,11 +91,20 @@ RX_BIT_PS = round(1e12 / RX_BAUD)
 NUM_GPIO = 16
 PAD_MASK = (1 << NUM_GPIO) - 1
 
-# Pad split agreed with sw/tests/test_gpio.c.
+# Pad split agreed with sw/tests/test_gpio_regs.c and test_gpio_echo.c.
 IN_PADS = 0x00FF                      # testbench drives these
 OUT_PADS = 0xFF00                     # firmware drives these
 
-# Must match GPIO_ECHO_COUNT in sw/tests/test_gpio.c.
+# QSPI alternate-function pad assignment.
+QSPI_SCK   = 8
+QSPI_CE_N0 = 9
+QSPI_CE_N1 = 10
+QSPI_SIO0  = 11
+QSPI_SIO1  = 12
+QSPI_SIO2  = 13
+QSPI_SIO3  = 14
+
+# Must match GPIO_ECHO_COUNT in sw/tests/test_gpio_echo.c.
 GPIO_ECHO_COUNT = 64
 
 # A whole test's worth of simulated time. The firmware prints at 19200 baud,
@@ -135,7 +153,7 @@ class PadModel:
     def set_pads(self, value, mask=PAD_MASK):
         """Drive `value` onto the pads selected by `mask`."""
         self.drive = (self.drive & ~mask) | (value & mask)
-        log.debug("pads <= 0x%04x (mask 0x%04x)", value & mask, mask)
+        # log.debug("pads <= 0x%04x (mask 0x%04x)", value & mask, mask)
 
     def driven_out(self):
         """What the SoC is currently driving, on the pads it has enabled."""
@@ -435,7 +453,6 @@ async def uart_rx_send_str(dut, text):
     for char in text:
         await uart_rx_send(dut, char)
 
-
 async def uart_rx_send_bytes(dut, data):
     """Send a raw byte string into the DUT's uart_rx, back to back.
 
@@ -445,6 +462,111 @@ async def uart_rx_send_bytes(dut, data):
     """
     for value in data:
         await uart_rx_send(dut, value)
+
+# --------------------------------------------------------------------------
+# QSPI
+# --------------------------------------------------------------------------
+
+def pad_out(dut, pin):
+    return (int(dut.gpio_out.value) >> pin) & 1
+
+
+def pad_oe(dut, pin):
+    return (int(dut.gpio_oe.value) >> pin) & 1
+
+
+async def wait_qspi_select(dut):
+    """Wait until PSRAM CE# is asserted and QSPI owns the pads."""
+
+    while True:
+        await RisingEdge(dut.clk)
+        await Timer(1, unit="ps")
+
+        if (
+            pad_oe(dut, QSPI_SCK)
+            and pad_oe(dut, QSPI_CE_N0)
+            and pad_out(dut, QSPI_CE_N0) == 0
+        ):
+            return
+
+
+async def wait_qspi_deselect(dut):
+    """Wait until PSRAM CE# returns high."""
+
+    while True:
+        await RisingEdge(dut.clk)
+        await Timer(1, unit="ps")
+
+        if pad_out(dut, QSPI_CE_N0) == 1:
+            return
+
+
+async def wait_qspi_rising_edge(dut):
+    """Detect one rising QSPI SCK edge using the SoC clock."""
+
+    previous = pad_out(dut, QSPI_SCK)
+
+    while True:
+        await RisingEdge(dut.clk)
+        await Timer(1, unit="ps")
+
+        current = pad_out(dut, QSPI_SCK)
+
+        if previous == 0 and current == 1:
+            return
+
+        previous = current
+
+
+async def capture_single_spi_byte(dut):
+    """Capture one MSB-first byte transmitted on SIO0 in SPI mode 0."""
+
+    await wait_qspi_select(dut)
+
+    value = 0
+
+    for _ in range(8):
+        await wait_qspi_rising_edge(dut)
+
+        assert pad_oe(dut, QSPI_SIO0) == 1
+
+        value = (
+            (value << 1)
+            | pad_out(dut, QSPI_SIO0)
+        )
+
+    await wait_qspi_deselect(dut)
+
+    return value
+
+
+async def capture_quad_transaction(dut, groups=10):
+    """Capture MSB-first 4-bit groups from SIO[3:0]."""
+
+    await wait_qspi_select(dut)
+
+    values = []
+
+    for _ in range(groups):
+        await wait_qspi_rising_edge(dut)
+
+        sio_oe = (
+            int(dut.gpio_oe.value)
+            >> QSPI_SIO0
+        ) & 0xF
+
+        assert sio_oe == 0xF
+
+        nibble = (
+            int(dut.gpio_out.value)
+            >> QSPI_SIO0
+        ) & 0xF
+
+        values.append(nibble)
+
+    await wait_qspi_deselect(dut)
+
+    return values
 
 # --------------------------------------------------------------------------
 # Bootloader
@@ -525,18 +647,17 @@ async def load_firmware(dut, uart, image="firmware.bin", addr=bootloader.RAM_BAS
 # --------------------------------------------------------------------------
 #
 # Sending the image over the UART costs ~280 ms of simulated time and ~18 minutes of wall
-# clock.
-
-# `boot_preload` writes the image straight into the SRAM macros and then still
-# sends 'B' - the bank switch, the CPU reset and the refetch from RAM all stay
-# under test, and only the bulk transfer is skipped.
+# clock. So the `default` target writes it straight into the SRAM macros and
+# then still sends 'B' - the bank switch, the CPU reset and the refetch from
+# RAM all stay under test, and only the bulk transfer is skipped. `boot` is the
+# target that still does it the honest way.
 
 RAM_LANES = 4
 
 def ram_lane_arrays(dut):
     """Handles to the four byte-lane SRAM macro arrays.
 
-    Needs the signals to be public, which the boot_preload target arranges with
+    Needs the signals to be public, which the `default` target arranges with
     verilator's --public-flat-rw. Without it the traversal fails, so say so
     rather than letting an AttributeError surface with no explanation.
     """
@@ -549,7 +670,7 @@ def ram_lane_arrays(dut):
     except AttributeError as exc:
         raise AssertionError(
             f"cannot reach the SRAM macro arrays for a backdoor preload ({exc}). "
-            f"This needs verilator's --public-flat-rw, which the boot_preload "
+            f"This needs verilator's --public-flat-rw, which the `default` "
             f"target sets, and USE_MACRO_RAM=1 in hw/rtl/ram_ss.sv"
         ) from None
 
@@ -611,8 +732,8 @@ def cpu_state(dut):
     """A snapshot of cpu_ss's bank switch and CPU handshake, or None.
 
     Only reachable when the target made signals public (--public-flat-rw, i.e.
-    boot_preload). Returns None rather than raising so it can be called from an
-    error path without masking the original failure.
+    the `default` target). Returns None rather than raising so it can be called
+    from an error path without masking the original failure.
     """
     try:
         cpu = dut.u_grouper_soc_dig_ss.u_cpu_ss
@@ -854,7 +975,7 @@ async def expect_test_result(uart, name, timeout_ms=SIM_TIMEOUT_MS):
 # Firmware that needs the testbench to do something - drive a console, stream
 # GPIO - has its own test below. Everything else only has to run to completion.
 FW_TEST = os.environ.get("FW_TEST", "")
-DRIVEN_FW = ("uart_echo", "gpio")
+DRIVEN_FW = ("uart_echo", "gpio_echo", "qspi", "spi_m")
 
 # Whether the ROM holds the bootloader rather than an application image, which
 # is what the `boot` target builds. The file's presence and content is the
@@ -867,7 +988,7 @@ DRIVEN_FW = ("uart_echo", "gpio")
 ROM_IS_BOOTLOADER = "bootloader" in firmware_id()
 
 # Whether to skip the UART transfer and write the image into the SRAM macros
-# directly. The boot_preload target drops ram_preload.txt in the work root,
+# directly. The `default` target drops ram_preload.txt in the work root,
 # because that target is also the only one that passes verilator
 # --public-flat-rw - without which the backdoor is not reachable at all. So the
 # marker and the ability to act on it always arrive together.
@@ -922,13 +1043,13 @@ def soc_test(**kwargs):
 async def test_preloaded_boot(dut):
     """The bank switch boots an image that was placed in RAM by the backdoor.
 
-    The `boot_preload` target. Same ending as test_bootloader_load - greeting,
+    The `default` target. Same ending as test_bootloader_load - greeting,
     'B', then the image has to report itself - but the image gets into RAM by
     a direct write to the SRAM macros instead of ~600 UART writes. That trades
     ~18 minutes of wall clock for a few seconds, at the cost of not exercising
     the bootloader's 'W' path, which the `boot` target still covers.
     """
-    _, uart = await bring_up(dut)
+    pads, uart = await bring_up(dut)
     watch_bus_error(dut)
 
     await uart.wait_for(bootloader.GREETING)
@@ -977,8 +1098,12 @@ async def test_preloaded_boot(dut):
         previous = cycles
         log_cpu_state(dut, f"+{cycles} clk after bank switch")
 
+    # Driven firmware is handed to its driver here rather than being expected
+    # to report on its own - see score_firmware(). BOOT_TIMEOUT_MS still bounds
+    # the self-reporting case, where the image only has to reach its first
+    # print.
     try:
-        await expect_test_result(uart, "preloaded boot", timeout_ms=BOOT_TIMEOUT_MS)
+        await score_firmware(dut, pads, uart, timeout_ms=BOOT_TIMEOUT_MS)
     except AssertionError:
         log_cpu_state(dut, "at timeout")
         raise
@@ -999,7 +1124,7 @@ async def test_bootloader_load(dut):
     separated: the first says the link dropped something, the second says the
     image or the bank switch is wrong.
     """
-    _, uart = await bring_up(dut)
+    pads, uart = await bring_up(dut)
 
     # The bootloader prints this once its UART is up and it is ready for a
     # command. Sending before it appears would be dropped.
@@ -1008,7 +1133,7 @@ async def test_bootloader_load(dut):
     await load_firmware(dut, uart, verify=True)
     await bootloader_boot(dut)
 
-    await expect_test_result(uart, "bootloader")
+    await score_firmware(dut, pads, uart)
 
 
 @soc_test(skip=FW_TEST in DRIVEN_FW or ROM_IS_BOOTLOADER)
@@ -1023,8 +1148,28 @@ async def test_firmware_runs(dut):
     await expect_test_result(uart, FW_TEST or "firmware")
 
 
-@soc_test(skip=FW_TEST != "uart_echo" or ROM_IS_BOOTLOADER)
-async def test_uart_echo(dut):
+# --------------------------------------------------------------------------
+# Stimulus drivers
+# --------------------------------------------------------------------------
+#
+# Firmware that needs the testbench to do something lives here rather than
+# inside a single cocotb test, because there are two ways to arrive at a
+# running image:
+#
+#   fw_rom/debug/trace   the application is in the ROM and runs from reset, so
+#                        the per-firmware tests below drive it directly.
+#   default/boot         the ROM holds the bootloader, and an application only
+#                        starts part way through test_preloaded_boot /
+#                        test_bootloader_load, after the bank switch.
+#
+# Both paths score the same image, so each driver is written once and called
+# from either. Before this split the bootloader paths ended in a bare
+# expect_test_result(), which no driven firmware can ever satisfy: uart_echo
+# sits in g_getline() and gpio_echo sits in its echo loop, so neither reaches
+# TEST_RESULT without stimulus, and the leg failed on the boot timeout.
+
+
+async def drive_uart_echo(dut, uart):
     """The interactive echo firmware (sw/tests/test_uart_echo.c).
 
     Replaces the two `uart_rx_send` bursts that grouper_soc_hello_tb.sv keys
@@ -1032,8 +1177,6 @@ async def test_uart_echo(dut):
     count is what makes this robust: the firmware can print as much as it
     likes before asking, and the testbench still waits for the right moment.
     """
-    _, uart = await bring_up(dut)
-
     # The firmware prints no prompt - it starts reading immediately after the
     # harness banner, so that is the sync point.
     await uart.wait_for("TEST_BEGIN: uart_echo")
@@ -1047,17 +1190,14 @@ async def test_uart_echo(dut):
     await expect_test_result(uart, "uart_echo")
 
 
-@soc_test(skip=FW_TEST != "gpio" or ROM_IS_BOOTLOADER)
-async def test_gpio_patterns(dut):
+async def drive_gpio_patterns(dut, pads, uart):
     """Stream GPIO patterns at the CPU and score what it echoes back.
 
     The firmware drives the high byte with whatever it reads on the low byte
-    (sw/tests/test_gpio.c). Each pattern is held until the echo appears, so
-    nothing is dropped and the check is exact rather than statistical.
+    (sw/tests/test_gpio_echo.c). Each pattern is held until the echo appears,
+    so nothing is dropped and the check is exact rather than statistical.
     """
-    pads, uart = await bring_up(dut)
-
-    # Phase 1 of the firmware is self-checking against the pad model above.
+    # The firmware writes the pad-electrical registers before it starts.
     await uart.wait_for("GPIO_ECHO_READY")
 
     # Checked here rather than in its own test: booting the SoC costs ~17 ms
@@ -1091,4 +1231,181 @@ async def test_gpio_patterns(dut):
     log.info("all %d patterns echoed correctly", len(patterns))
 
     await uart.wait_for("GPIO_ECHO_DONE")
-    await expect_test_result(uart, "gpio")
+    await expect_test_result(uart, "gpio_echo")
+
+
+async def drive_qspi(dut, uart):
+    """Verify CPU-driven QSPI traffic reaches the external pads."""
+
+    # First transaction from test_qspi.c:
+    # bare 0x35 command in single-bit SPI mode.
+    opcode = await capture_single_spi_byte(dut)
+
+    log.info(
+        "QSPI single-bit command: 0x%02x",
+        opcode,
+    )
+
+    assert opcode == 0x35
+
+    # Second transaction:
+    # A5 + 123456 + C3 in quad mode.
+    groups = await capture_quad_transaction(
+        dut,
+        groups=10,
+    )
+
+    log.info(
+        "QSPI quad groups: %s",
+        " ".join(f"{x:x}" for x in groups),
+    )
+
+    expected = [
+        0xA, 0x5,              # opcode A5
+        0x1, 0x2, 0x3,
+        0x4, 0x5, 0x6,        # address 123456
+        0xC, 0x3,              # data C3
+    ]
+
+    assert groups == expected, (
+        f"QSPI transaction mismatch: "
+        f"got {groups}, expected {expected}"
+    )
+
+    await uart.wait_for("QSPI_TRANSACTION_DONE")
+    await expect_test_result(uart, "qspi")
+
+async def drive_spi_m(dut, pads, uart):
+    """Run sw/tests/test_spi_m.c against an APS6404L model on the pads.
+
+    The firmware is self-checking - it reads back what it wrote and reports
+    through the usual TEST_RESULT line. What this adds is the other side of
+    the wire: a real device model, so the checks below are against what an
+    APS6404L would actually have seen and returned rather than against a
+    loopback. That is what makes it evidence for GRPR-SPIM-004.
+    """
+    psram = PsramPadSlave(dut, pads).start()
+
+    await uart.wait_for("SPI_M_TRANSACTION_DONE")
+    await expect_test_result(uart, "spi_m")
+
+    psram.stop()
+
+    # Datasheet section 8.6: every read and write must end on a byte boundary
+    # with CE# raised immediately after.
+    psram.device.check_termination()
+
+    opcodes = [record["opcode"] for record in psram.transactions]
+    log.info("APS6404L saw: %s", " ".join(f"0x{op:02x}" for op in opcodes))
+
+    # The firmware's sequence: Reset Enable, Reset, Write, Read, Fast Read.
+    assert opcodes == [
+        APS_OP_RESET_EN, APS_OP_RESET,
+        APS_OP_WRITE, APS_OP_READ, APS_OP_FAST_READ,
+    ], f"unexpected APS6404L command sequence: {opcodes}"
+
+    payload = bytes((0xDE, 0xAD, 0xBE, 0xEF))
+    address = 0x012345
+
+    written = psram.device.last(APS_OP_WRITE)
+    assert written["address"] == address, (
+        f"write went to 0x{written['address']:06x}, expected 0x{address:06x}"
+    )
+    assert written["written"] == payload, (
+        f"device received {written['written'].hex()}, expected {payload.hex()}"
+    )
+
+    # The model's own memory is the independent check that the address phase
+    # and the data phase agreed.
+    assert psram.device.read_memory(address, len(payload)) == payload
+
+    for opcode in (APS_OP_READ, APS_OP_FAST_READ):
+        record = psram.device.last(opcode)
+        assert record["address"] == address, (
+            f"0x{opcode:02x} read from 0x{record['address']:06x}, "
+            f"expected 0x{address:06x}"
+        )
+        assert record["read"].startswith(payload), (
+            f"0x{opcode:02x} returned {record['read'].hex()}, "
+            f"expected it to start with {payload.hex()}"
+        )
+
+    log.info("APS6404L: %d SCK cycles over %d CS# windows",
+             psram.sck_cycles, psram.cs_windows)
+
+    # One window per transaction, and every phase exactly 8 SCK per byte
+    # (GRPR-SPIM-016) with no stray edges: two bare commands, then
+    # command+address+data twice, then the same again with the 8 wait cycles
+    # 'h0B requires.
+    expected_cycles = (
+        8 + 8
+        + (8 + 24 + 8 * len(payload))
+        + (8 + 24 + 8 * len(payload))
+        + (8 + 24 + APS_FAST_READ_WAIT + 8 * len(payload))
+    )
+    assert psram.cs_windows == len(opcodes), (
+        f"{psram.cs_windows} CS# windows for {len(opcodes)} transactions"
+    )
+    assert psram.sck_cycles == expected_cycles, (
+        f"{psram.sck_cycles} SCK cycles, expected {expected_cycles}"
+    )
+
+
+async def score_firmware(dut, pads, uart, timeout_ms=SIM_TIMEOUT_MS):
+    """Score whatever image is running now.
+
+    Driven firmware gets the stimulus it is waiting for; everything else only
+    has to reach TEST_RESULT on its own. This is the single place that knows
+    which is which, so the ROM-boot tests below and the two bootloader tests
+    above agree on how a given FW_TEST is judged.
+
+    timeout_ms applies only to the self-reporting case - a driven image is
+    paced by its own handshake, and each driver sets whatever bound it needs.
+    """
+    if FW_TEST == "uart_echo":
+        await drive_uart_echo(dut, uart)
+    elif FW_TEST == "gpio_echo":
+        await drive_gpio_patterns(dut, pads, uart)
+    elif FW_TEST == "qspi":
+        await drive_qspi(dut, uart)
+    elif FW_TEST == "spi_m":
+        await drive_spi_m(dut, pads, uart)
+    else:
+        await expect_test_result(uart, FW_TEST or "firmware", timeout_ms=timeout_ms)
+
+
+# --------------------------------------------------------------------------
+# Driven firmware, booted straight from the ROM
+# --------------------------------------------------------------------------
+#
+# The fw_rom/debug/trace targets. Under default/boot the same drivers are
+# reached through score_firmware() instead, so these skip when the ROM holds
+# the bootloader - otherwise they would sit waiting for an application that
+# has not been loaded yet.
+
+@soc_test(skip=FW_TEST != "uart_echo" or ROM_IS_BOOTLOADER)
+async def test_uart_echo(dut):
+    """sw/tests/test_uart_echo.c, running from the ROM."""
+    _, uart = await bring_up(dut)
+    await drive_uart_echo(dut, uart)
+
+
+@soc_test(skip=FW_TEST != "gpio_echo" or ROM_IS_BOOTLOADER)
+async def test_gpio_patterns(dut):
+    """sw/tests/test_gpio_echo.c, running from the ROM."""
+    pads, uart = await bring_up(dut)
+    await drive_gpio_patterns(dut, pads, uart)
+
+
+@soc_test(skip=FW_TEST != "qspi" or ROM_IS_BOOTLOADER)
+async def test_qspi(dut):
+    """sw/tests/test_qspi.c, running from the ROM."""
+    _, uart = await bring_up(dut)
+    await drive_qspi(dut, uart)
+
+
+@soc_test(skip=FW_TEST != "spi_m" or ROM_IS_BOOTLOADER)
+async def test_spi_m(dut):
+    """sw/tests/test_spi_m.c against an APS6404L model, running from the ROM."""
+    pads, uart = await bring_up(dut)
+    await drive_spi_m(dut, pads, uart)

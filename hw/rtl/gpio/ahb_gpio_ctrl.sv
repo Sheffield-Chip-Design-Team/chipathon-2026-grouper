@@ -6,7 +6,10 @@
 module ahb_gpio_ctrl #(
   parameter int ADDR_WIDTH = 32,
   parameter int DATA_WIDTH = 32,
-  parameter int NUM_GPIO   = 16
+  parameter int NUM_GPIO   = 16,
+  // Reset defaults for GPIO_ALTSEL/GPIO_IE (GRPR-SOC-027, GRPR-SOC-028):
+  parameter logic [NUM_GPIO-1:0] RESET_ALTSEL = 16'h000F,
+  parameter logic [NUM_GPIO-1:0] RESET_IE     = 16'h0007
 ) (
   input logic                   HCLK,
   input logic                   HRESETn,
@@ -170,10 +173,10 @@ module ahb_gpio_ctrl #(
     if (~HRESETn) begin
       out_r       <= '0;
       oe_r        <= '0;
-      alt_sel_r   <= '0;
+      alt_sel_r   <= RESET_ALTSEL;
       ro_mask_r   <= '0;
       sync_en_n_r <= '0;
-      ie_r        <= '0;
+      ie_r        <= RESET_IE;
       pu_r        <= '0;
       pd_r        <= '0;
       cs_r        <= '0;

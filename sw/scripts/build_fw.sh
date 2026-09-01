@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Build the GrouperSoC bring-up firmware and regenerate sw/code.hex and
-# sw/code.vmem, which the ROM model (hw/rtl/rom/ahb_rom.sv) loads.
+# sw/code.vmem, whichis loaded into the RAM model (hw/rtl/ram_ss.sv) loads.
 #
 # Invoked directly, or via the FuseSoC pre_build hooks declared in
 # grouper_soc.core (targets tb_top and tb_top_debug). Those hooks run with
@@ -214,8 +214,9 @@ fi
 # ENABLE_REGS_16_31=0) plus M and C. Building rv32i* here would emit x16-x31,
 # which the CPU does not have.
 MARCH="-march=rv32emc -mabi=ilp32e"
+
 INCS="-I$SRC_DIR -I$SRC_DIR/lib -I$SRC_DIR/irq -I$SRC_DIR/debug -I$TESTS_DIR"
-INCS="$INCS -I$SRC_DIR/drivers/uart -I$SRC_DIR/drivers/spi_m -I$SRC_DIR/drivers/gpio"
+INCS="$INCS -I$SRC_DIR/drivers/uart -I$SRC_DIR/drivers/spi_m -I$SRC_DIR/drivers/gpio -I$SRC_DIR/drivers/qspi"
 
 # -fno-builtin is load-bearing, not decorative: sw/src/lib defines printf,
 # memcpy and other libc-reserved names, and without it GCC would rewrite calls
@@ -238,11 +239,12 @@ LDFLAGS="$MARCH -nostdlib -Wl,--gc-sections -Wl,-T,$LD_SCRIPT -Wl,-Map,$BUILD_DI
 # so they are not compiled as separate translation units. $TOP_SRC supplies
 # main() and is the only entry that changes with --test.
 SOURCES=(
-    "$BOOT_DIR/start.S"
-    "$BOOT_DIR/reset_handler.c"
+    "$SRC_DIR/start_irq_rv32e.S"
+    "$SRC_DIR/reset_handler.c"
     "$TOP_SRC"
     "$SRC_DIR/irq/irq.c"
     "$SRC_DIR/debug/debug.c"
+    "$SRC_DIR/drivers/qspi/qspi.c"
     "$SRC_DIR/drivers/uart/uart.c"
     "$SRC_DIR/drivers/spi_m/spi_m.c"
     "$SRC_DIR/lib/gio.c"

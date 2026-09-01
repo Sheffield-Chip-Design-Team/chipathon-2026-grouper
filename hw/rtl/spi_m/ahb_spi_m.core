@@ -6,9 +6,8 @@ description: AHB-Lite wrapped SPI master (RTL only, no testbench)
 filesets:
   rtl:
     files:
-      - spi_m_clk_div.sv:             {file_type: systemVerilogSource}
-      - spi_m_rx.sv:                  {file_type: systemVerilogSource}
       - spi_m_tx.sv:                  {file_type: systemVerilogSource}
+      - spi_m_rx.sv:                  {file_type: systemVerilogSource}
       - spi_m_core.sv:                {file_type: systemVerilogSource}
       - ahb_spi_m.sv:                 {file_type: systemVerilogSource}
     depend:

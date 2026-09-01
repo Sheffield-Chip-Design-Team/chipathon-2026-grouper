@@ -51,6 +51,20 @@ RAM_BASE = 0x4000_0000
 # cpu_ss's RAM_ADDR_WIDTH=10 (see hw/rtl/digital_ss.sv), 1024 words.
 RAM_SIZE = 4 * 1024
 
+# The top of RAM is not available to an image. main() in sw/boot/bootloader.c
+# is __attribute__((naked)): it emits no prologue, so it spills its locals to
+# fixed offsets at the sp it starts with, and sw/boot/boot.ld biases _estack
+# down by _boot_frame_bytes so those stores land in real RAM rather than
+# wrapping onto word 0. Those bytes are live for as long as the bootloader is
+# running, which includes every 'W' - an image reaching them would be
+# overwritten by the very command loading it.
+#
+# Keep this in step with _boot_frame_bytes in sw/boot/boot.ld.
+BOOT_STACK_BYTES = 16
+
+# What an image may actually occupy.
+RAM_USABLE = RAM_SIZE - BOOT_STACK_BYTES
+
 WORD_BYTES = 4
 
 
@@ -87,11 +101,15 @@ def image_words(image):
     return list(struct.unpack(f"<{len(data) // WORD_BYTES}I", data))
 
 
-def check_image(words, addr=RAM_BASE, ram_base=RAM_BASE, ram_size=RAM_SIZE):
+def check_image(words, addr=RAM_BASE, ram_base=RAM_BASE, ram_size=RAM_USABLE):
     """Reject an image that would not fit before any of it is sent.
 
     The bootloader does no bounds checking: a 'W' past the end of RAM just
     writes to the aliases of it, quietly corrupting the start of the image.
+
+    `ram_size` defaults to RAM_USABLE, not RAM_SIZE: the top BOOT_STACK_BYTES
+    are the naked bootloader's spill slots and are clobbered while the load is
+    still in progress.
     """
     size = len(words) * WORD_BYTES
     end = ram_base + ram_size
@@ -103,10 +121,12 @@ def check_image(words, addr=RAM_BASE, ram_base=RAM_BASE, ram_size=RAM_SIZE):
         )
     if addr + size > end:
         raise BootloaderError(
-            f"image is {size} bytes at {addr:#010x}, which overruns RAM by "
-            f"{addr + size - end} bytes. RAM is {ram_size} bytes "
-            f"(cpu_ss RAM_ADDR_WIDTH=10) and has to hold code, data, bss and "
-            f"the stack - check the ram.ld link"
+            f"image is {size} bytes at {addr:#010x}, which overruns the "
+            f"usable window by {addr + size - end} bytes. RAM is {RAM_SIZE} "
+            f"bytes (cpu_ss RAM_ADDR_WIDTH=10), of which the top "
+            f"{RAM_SIZE - ram_size} are the bootloader's spill slots, leaving "
+            f"{ram_size} to hold code, data, bss and the stack - check the "
+            f"ram.ld link"
         )
     if addr % WORD_BYTES:
         raise BootloaderError(f"load address {addr:#010x} is not word aligned")

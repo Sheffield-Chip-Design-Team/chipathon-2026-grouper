@@ -8,6 +8,8 @@
 
 #include "irq.h"
 
+
+
 // Interactive echo test. The top-level testbench drives this by sending
 // "test\n" then "exit\n" over UART RX, each keyed off seeing a newline from
 // the DUT (hw/tb/top/grouper_soc_hello_tb.sv), so the expected transcript is:

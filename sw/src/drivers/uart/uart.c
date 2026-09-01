@@ -1,8 +1,20 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "config.h"
 #include "uart.h"
 #include "debug.h"
+// AHB_UART_BASE and SYS_CLK_HZ live in config.h - they describe the SoC, not
+// this driver, and gtime.h needs the clock too.
+
+// Baud rate init_uart() configures. Overridable from the build so a
+// simulation can run the link far faster than the silicon default - see
+// --baud/FW_BAUD in sw/scripts/build_fw.sh and build_bootloader.sh. Anything
+// driving the other end of the link has to be told the same value; the build
+// scripts publish it as uart_baud.txt next to the ROM image.
+#ifndef UART_BAUD_RATE
+#define UART_BAUD_RATE 19200
+#endif
 
 // AHB_UART_BASE and the UART_*_ADDR register offsets now live in uart.h.
 

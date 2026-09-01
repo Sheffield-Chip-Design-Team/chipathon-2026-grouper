@@ -139,7 +139,18 @@ targets:
     kind: cocotb
     fusesoc_args: ""
     success_pattern: ""
-    fail_ok: true
+    fail_ok: false
+    coverage_scope: full
+    fw_test: ""
+
+  - name: ahb_spi_m_directed
+    group: directed_tb
+    core: sharc:comms_ip:ahb_spi_m_directed
+    fusesoc_target: default
+    kind: cocotb
+    fusesoc_args: ""
+    success_pattern: ""
+    fail_ok: false
     coverage_scope: full
     fw_test: ""
 
@@ -151,6 +162,17 @@ targets:
     fusesoc_args: ""
     success_pattern: ""
     fail_ok: true
+    coverage_scope: full
+    fw_test: ""
+
+  - name: ahb_spi_s_debug_port
+    group: directed_tb
+    core: sharc:comms_ip:ahb_spi_s_directed
+    fusesoc_target: debug_port
+    kind: cocotb
+    fusesoc_args: ""
+    success_pattern: ""
+    fail_ok: false
     coverage_scope: full
     fw_test: ""
 
@@ -169,10 +191,11 @@ targets:
   # target it implies DEBUG_PERIPH=true, CPU_TRACE=true and debug firmware -
   # so this leg exercises a 9-slave fabric, not the 8-slave one that tapes out.
   # Switch to tb_top for a run that matches the shipping configuration.
+  
   - name: grouper_soc_tb_top
     group: directed_tb
     core: sharc:soc_ip:grouper_soc_tb
-    fusesoc_target: tb_top_trace
+    fusesoc_target: default
     kind: log-grep
     fusesoc_args: "--no-export"
     success_pattern: "Bye!"
@@ -182,18 +205,29 @@ targets:
 
   # --- Top-level software tests --------------------------------------------
   #
-  # One leg per firmware top level in sw/tests. hw/tb/top/test_soc.py reads
-  # FW_TEST and selects which of its cocotb tests apply: the generic
-  # test_firmware_runs (assert the g_test harness prints TEST_RESULT: PASS) for
-  # most, and a dedicated stimulus-driving test for uart_echo and gpio.
+  # One leg per firmware top level in sw/tests. These all run the `default`
+  # target, so the ROM holds the bootloader and the image is preloaded into
+  # RAM; hw/tb/top/test_soc.py's score_firmware() then reads FW_TEST and picks
+  # how to judge it - the generic "assert the g_test harness prints
+  # TEST_RESULT: PASS" for most, or one of the stimulus drivers for uart_echo,
+  # gpio_echo and qspi, which never self-report because they are waiting on the
+  # testbench.
+  #
+  # Every image here is linked for RAM (sw/boot/ram.ld), where code, rodata,
+  # data, bss and the stack share 4 KiB. That budget is what split the former
+  # sw_gpio, sw_stdlib_fmt and sw_stdlib_str legs below - see the note in
+  # CLAUDE.md before adding a leg or growing a test.
   #
   # sw/tests/test_busfault_repro.c is deliberately absent: its own header calls
-  # it a scratch repro for the stdlib_str bus error, not a regression test.
+  # it a scratch repro for a stdlib_str bus error, not a regression test. Note
+  # that no bus error is reachable from these tests any more - what used to be
+  # blamed on one was an off-by-one expectation in test_mem(), fixed in
+  # sw/tests/test_stdlib_mem.c.
 
   - name: sw_fibonnaci
     group: directed_tb
     core: sharc:soc_ip:grouper_soc_directed
-    fusesoc_target: trace
+    fusesoc_target: default
     kind: cocotb
     fusesoc_args: "--no-export"
     success_pattern: ""
@@ -201,35 +235,10 @@ targets:
     coverage_scope: full
     fw_test: "fibonnaci"
 
-  - name: sw_stdlib_fmt
-    group: directed_tb
-    core: sharc:soc_ip:grouper_soc_directed
-    fusesoc_target: trace
-    kind: cocotb
-    fusesoc_args: "--no-export"
-    success_pattern: ""
-    fail_ok: false
-    coverage_scope: full
-    fw_test: "stdlib_fmt"
-
-  # Known bus error at the second memmove in test_mem() - the defect
-  # sw/tests/test_busfault_repro.c was written to narrow down. Tracked here so
-  # the fix is visible in the metrics, but not blocking until it lands.
-  - name: sw_stdlib_str
-    group: directed_tb
-    core: sharc:soc_ip:grouper_soc_directed
-    fusesoc_target: trace
-    kind: cocotb
-    fusesoc_args: "--no-export"
-    success_pattern: ""
-    fail_ok: true
-    coverage_scope: full
-    fw_test: "stdlib_str"
-
   - name: sw_uart_echo
     group: directed_tb
     core: sharc:soc_ip:grouper_soc_directed
-    fusesoc_target: trace
+    fusesoc_target: default
     kind: cocotb
     fusesoc_args: "--no-export"
     success_pattern: ""
@@ -237,13 +246,123 @@ targets:
     coverage_scope: full
     fw_test: "uart_echo"
 
-  - name: sw_gpio
+  # The former sw_gpio, split in two: test_gpio.c stopped fitting the 4 KiB
+  # RAM window the `default` target links against (sw/boot/ram.ld). This half
+  # is the register-visible behaviour and is entirely self-checking against
+  # test_soc.py's pad model, so it needs no stimulus.
+  - name: sw_gpio_regs
     group: directed_tb
     core: sharc:soc_ip:grouper_soc_directed
-    fusesoc_target: trace
+    fusesoc_target: default
     kind: cocotb
     fusesoc_args: "--no-export"
     success_pattern: ""
     fail_ok: false
     coverage_scope: full
-    fw_test: "gpio"
+    fw_test: "gpio_regs"
+
+  # The other half: the pad-electrical registers, which only leave the SoC and
+  # so are checked by the testbench's check_pad_config(), plus the pattern
+  # echo that test_soc.py's drive_gpio_patterns() streams at the CPU.
+  - name: sw_gpio_echo
+    group: directed_tb
+    core: sharc:soc_ip:grouper_soc_directed
+    fusesoc_target: default
+    kind: cocotb
+    fusesoc_args: "--no-export"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: "gpio_echo"
+
+  # test_stdlib_str.c overflowed the 4 KiB RAM window by 2 KiB, so it is now
+  # three legs. This one is the memory block primitives plus the cycle-counter
+  # and register-poll helpers.
+  - name: sw_stdlib_mem
+    group: directed_tb
+    core: sharc:soc_ip:grouper_soc_directed
+    fusesoc_target: default
+    kind: cocotb
+    fusesoc_args: "--no-export"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: "stdlib_mem"
+
+  # The NUL-terminated string functions - length, comparison, copy, search.
+  - name: sw_stdlib_str
+    group: directed_tb
+    core: sharc:soc_ip:grouper_soc_directed
+    fusesoc_target: default
+    kind: cocotb
+    fusesoc_args: "--no-export"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: "stdlib_str"
+
+  # Numeric parsing: strtoul across bases, its end pointer, and atoi.
+  - name: sw_stdlib_strtoul
+    group: directed_tb
+    core: sharc:soc_ip:grouper_soc_directed
+    fusesoc_target: default
+    kind: cocotb
+    fusesoc_args: "--no-export"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: "stdlib_strtoul"
+
+  # test_stdlib_fmt.c overflowed the same window by 560 bytes, so it is now
+  # two legs. This one is the conversion specifiers and snprintf's C99
+  # truncation/return contract.
+  - name: sw_stdlib_fmt_conv
+    group: directed_tb
+    core: sharc:soc_ip:grouper_soc_directed
+    fusesoc_target: default
+    kind: cocotb
+    fusesoc_args: "--no-export"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: "stdlib_fmt_conv"
+
+  # The other half: field width, precision and the flag characters, plus the
+  # output sinks g_fprintf writes through.
+  - name: sw_stdlib_fmt_width
+    group: directed_tb
+    core: sharc:soc_ip:grouper_soc_directed
+    fusesoc_target: default
+    kind: cocotb
+    fusesoc_args: "--no-export"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: "stdlib_fmt_width"
+
+  # The SPI master driving an APS6404L PSRAM model (hw/tb/models/aps6404l.py)
+  # on GPIO pads 4-7. Self-checking on the firmware side, but scored by
+  # drive_spi_m() in test_soc.py, which checks the command sequence, the
+  # payload and the SCK cycle count against what the device actually saw -
+  # the top-level evidence for GRPR-SPIM-004.
+  - name: sw_spi_m
+    group: directed_tb
+    core: sharc:soc_ip:grouper_soc_directed
+    fusesoc_target: default
+    kind: cocotb
+    fusesoc_args: "--no-export"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: "spi_m"
+
+  - name: debug_bring_up
+    group: directed_tb
+    core: sharc:soc_ip:grouper_soc_directed
+    fusesoc_target: debug_unit
+    kind: cocotb
+    fusesoc_args: "--no-export"
+    success_pattern: ""
+    fail_ok: false
+    coverage_scope: full
+    fw_test: "debug_heartbeat"

@@ -1,6 +1,6 @@
 # QSPI Verification Plan
 
-**Design doc:** [QSPI](../../design/blocks/QSPI.md)
+**Design doc:** [QSPI](../../design/blocks/QSPI%20Specification.md)
 **Source:** [Schematic Review](../../Schematic%20Review.md) §5 "Verification Summary" — block-level testbench architecture (QSPI VIP ↔ DUT ↔ AHB VIP ↔ Scoreboard).
 **DV status:** No RTL, no VIP, no tests exist yet, though per the Schematic Review §4 RTL design for this block is starting.
 
@@ -8,7 +8,7 @@
 
 ## Testbench Architecture
 
-Per the Schematic Review's block-level testbench diagram: **QSPI VIP (active) ↔ QSPI (DUT) ↔ AHB VIP (active)**, feeding a **Scoreboard**. The QSPI VIP needs to model *two* target devices — an APS6404L-compatible PSRAM (read/write) and a Micron N25Q032A-compatible NOR flash (read-only) — since the DUT talks to both per [QSPI § Purpose](../../design/blocks/QSPI.md#purpose).
+Per the Schematic Review's block-level testbench diagram: **QSPI VIP (active) ↔ QSPI (DUT) ↔ AHB VIP (active)**, feeding a **Scoreboard**. The QSPI VIP needs to model *two* target devices — an APS6404L-compatible PSRAM (read/write) and a Micron N25Q032A-compatible NOR flash (read-only) — since the DUT talks to both per [QSPI § Purpose](../../design/blocks/QSPI%20Specification.md#purpose).
 
 ```
         ┌──────────────┐        ┌──────────────┐
@@ -65,7 +65,7 @@ Per the Schematic Review's block-level testbench diagram: **QSPI VIP (active) �
 | <a id="v-qspi-chk-007"></a>`V-QSPI-CHK-007` | Check | AHB writes to the NOR flash target are only accepted when this bit is set; otherwise rejected/ignored regardless of `GRPR-QSPI-002`'s read-only enforcement (i.e. this is a distinct, more general gate — verify both interact correctly, not just individually) | `GRPR-QSPI-012` | Scoreboard |
 | <a id="v-qspi-stm-013"></a>`V-QSPI-STM-013` | Stimulus | Sweep the fast-read dummy-cycle count configuration | `GRPR-QSPI-013` | New directed test |
 | <a id="v-qspi-chk-008"></a>`V-QSPI-CHK-008` | Check | APS6404L interface parameters (23-bit addressing, 8 MB capacity boundary, QPI clock) match spec; out-of-range addresses handled defined-ly (wrap, error, or reject — confirm against whatever the RTL implements) | `GRPR-QSPI-014` | Scoreboard, address-boundary directed test |
-| <a id="v-qspi-chk-009"></a>`V-QSPI-CHK-009` | Check | Status register bit definitions, once defined at the design level (see [QSPI § Open Items](../../design/blocks/QSPI.md#open-items)) | `GRPR-QSPI-015` | **Blocked** — no bit definitions to test against yet |
+| <a id="v-qspi-chk-009"></a>`V-QSPI-CHK-009` | Check | Status register bit definitions, once defined at the design level (see [QSPI § Open Items](../../design/blocks/QSPI%20Specification.md#open-items)) | `GRPR-QSPI-015` | **Blocked** — no bit definitions to test against yet |
 | <a id="v-qspi-chk-010"></a>`V-QSPI-CHK-010` | Check | Clock frequency matches the resolved system clock plan | `GRPR-QSPI-016` | **Blocked** — depends on the unresolved clock-plan open item (shared with SPI Master) |
 | <a id="v-qspi-stm-014"></a>`V-QSPI-STM-014` | Stimulus | Exercise startup at the reduced (~500 kHz) SCK rate with synchronisers enabled, then a rate increase with synchronisers disabled | `GRPR-QSPI-017` | New directed test |
 | <a id="v-qspi-chk-011"></a>`V-QSPI-CHK-011` | Check | Reset is active-low async-assert/sync-deassert; startup sequence transitions cleanly from reduced-rate/synchronized to full-rate/unsynchronized operation | `GRPR-QSPI-017` | Scoreboard |
@@ -89,6 +89,6 @@ Per the Schematic Review's block-level testbench diagram: **QSPI VIP (active) �
 
 - `V-QSPI-CHK-009` blocked on the undefined status-register bit list (design-level open item).
 - `V-QSPI-CHK-010`/`CHK-013` blocked on the unresolved system clock plan (shared with SPI Master and the top-level spec).
-- The QSPI agent's internal structure (device-select / multiplexing of the "three four-bit SIO buses") depends on the same open item flagged in [QSPI § IOs and External Interfaces](../../design/blocks/QSPI.md#ios-and-external-interfaces).
+- The QSPI agent's internal structure (device-select / multiplexing of the "three four-bit SIO buses") depends on the same open item flagged in [QSPI § IOs and External Interfaces](../../design/blocks/QSPI%20Specification.md#ios-and-external-interfaces).
 - No scoreboard, no QSPI VIP, no tests exist yet.
 - No committed cocotb runner/Makefile for this flow (see the top-level `CLAUDE.md`).
