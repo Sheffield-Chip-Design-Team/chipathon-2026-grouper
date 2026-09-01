@@ -112,25 +112,46 @@ VERILOG_FILES:
 - dir::../../hw/rtl/common/shift_reg.sv
 - dir::../../hw/rtl/common/small_sync_fifo.sv
 - dir::../../hw/rtl/common/sync.sv
+- dir::../../hw/rtl/common/clk_div_prog.sv
+# picorv32 CPU
 - dir::../../ip/picorv32/picorv32.v
+# Debug Controller
+- dir::../../hw/rtl/debug/dbg_ctrl.sv
+# GPIO Controller
 - dir::../../hw/rtl/gpio/ahb_gpio_ctrl.sv
+# SPI slave
+- dir::../../hw/rtl/spi_s/spi_s_rx.sv
+- dir::../../hw/rtl/spi_s/spi_s_tx.sv
+- dir::../../hw/rtl/spi_s/spi_s_core.sv
 - dir::../../hw/rtl/spi_s/ahb_spi_s.sv
-- dir::../../hw/rtl/uart/uart_clk_div.sv
+# SPI master
+- dir::../../hw/rtl/spi_m/spi_m_rx.sv
+- dir::../../hw/rtl/spi_m/spi_m_tx.sv
+- dir::../../hw/rtl/spi_m/spi_m_core.sv
+- dir::../../hw/rtl/spi_m/ahb_spi_m.sv
+# QSPI
+- dir::../../hw/rtl/qspi/qspi.sv
+- dir::../../hw/rtl/qspi/ahb_qspi.sv
+# UART
 - dir::../../hw/rtl/uart/uart_rx.sv
 - dir::../../hw/rtl/uart/uart_tx.sv
 - dir::../../hw/rtl/uart/uart.sv
 - dir::../../hw/rtl/uart/ahb_uart.sv
+# Interconnect
 - dir::../../hw/rtl/interconnect/ahb_debug.sv
 - dir::../../hw/rtl/interconnect/ahb_conn_buff.sv
 - dir::../../hw/rtl/interconnect/ahb_stub_slave.sv
 - dir::../../hw/rtl/interconnect_ss.sv
+# Memories
 - dir::../../hw/rtl/rom_ss.sv
 - dir::../../hw/rtl/ram_ss.sv
 - dir::../../hw/pd/wrappers/gf180mcu_ocd_sram_1024x8m8wm1_wrapper.sv
+# IO, CPU, Peripheral and Digital Subsystems
 - dir::../../hw/rtl/io_ss.sv
 - dir::../../hw/rtl/cpu_ss.sv
 - dir::../../hw/rtl/periph_ss.sv
 - dir::../../hw/rtl/digital_ss.sv
+# TOP level rtl
 - dir::../../hw/rtl/grouper_soc_top.sv
 
 # CHIP core wrapper: the pin-flattening shell that is this flow's DESIGN_NAME.
@@ -141,20 +162,14 @@ VERILOG_INCLUDE_DIRS:
 - dir::../../sw/boot
 
 VERILOG_DEFINES:
-# Stubs ahb_spi_s out to ahb_stub_slave in periph_ss (periph_ss.sv:436). The
-# RAM is NOT stubbed -- ram_ss builds the real macros unconditionally, see
-# below.
-- DRY_RUN
-# Build the ROM contents from code.vmem (continuous assigns) rather than
+# Build the ROM contents from boot.vmem (continuous assigns) rather than
 # $readmemh, which has no synthesisable equivalent - standard cells have no
 # initial-value mechanism, so this is what actually produces a mask ROM.
 - ROM_INIT_CONST
+# This is a constant that is used to initialize the ROM.
+# It is set to 1, which means that the ROM will be initialized with the
+# contents of the boot.vmem file.
 
-# NOTE: there is no MACRO_RAM define on this branch's RTL. ram_ss.sv gates the
-# macros on a USE_MACRO_RAM *parameter* (ram_ss.sv:4) which defaults to 1, and
-# digital_ss does not override it -- so gen_macro_ram is always taken and the
-# MACROS block below always has something to place. The define this config used
-# to set was inert here and has been removed rather than left to mislead.
 
 #---------------------------------------------------------------------------
 # Elaboration + Synthesis
@@ -164,25 +179,17 @@ VERILOG_DEFINES:
 USE_SLANG: true
 SLANG_ARGUMENTS: ['--keep-hierarchy']
 SYNTH_HIERARCHY_MODE: deferred_flatten
-
 # OFF because ON makes Magic streamout die with "stack smashing" on this RTL's
-# deep hierarchy, in BOTH flatten and deferred_flatten (jobs 4296, 4314 -- 4296
-# ground in Magic for 121 minutes before dying). OFF got the flow to step 74.
-
-# Cost: the netlist no longer carries readable instance names, so the
-#   grep -o '[^ ]*u_sram_macro' <run>/*-yosys-synthesis/*.nl.v | sort -u
-# check recommended in the MACROS block below only works against a run made
-# while this was still true. Confirm the macro instance paths from an older run
-# rather than re-deriving them after this change.
+# deep hierarchy, in BOTH flatten and deferred_flatten
 SYNTH_AUTONAME: false
 
-SYNTH_STRATEGY: "AREA 0"
+SYNTH_STRATEGY: "AREA 3"
 SYNTH_SIZING: true
 SYNTH_ABC_DFF: true
 # SYNTH_ABC_USE_MFS3: true # - this breaks picorv32 synth - leave it disabled
 
 # ---------------------------------------------------------------------------
-# Floorplan: 1650 x 1100 (landscape).
+# Floorplan: 1675 x 1100 (landscape).
 #
 # Ported wholesale from the landscape branch's
 # config_1650x1100_keepdlyc_fanout32.yaml -- job 4340, the only variant measured
@@ -246,7 +253,7 @@ SYNTH_ABC_DFF: true
 #----------------------------------------------------------------------------
 
 FP_SIZING: absolute
-DIE_AREA: [0.0, 0.0, 1650, 1100]
+DIE_AREA: [0.0, 0.0, 1675, 1110]
 
 # RAM Macro Placement
 MACROS:
@@ -519,7 +526,7 @@ FP_MACRO_VERTICAL_HALO: 10
 # outputs respectively.
 # IO_PIN_ORDER_CFG: dir::pin_order_row4.cfg   # the config.yaml assignment; see
 #                                            # pin_order_int_ram.cfg's rationale
-IO_PIN_ORDER_CFG: dir::pin_order_int_ram.cfg
+IO_PIN_ORDER_CFG: dir::pin_order.cfg
 
 #---------------------------------------------------------------------------
 # Constraints
@@ -810,9 +817,6 @@ PL_RESIZER_SETUP_MAX_BUFFER_PCT: 40
 DESIGN_REPAIR_MAX_SLEW_PCT: 10
 DESIGN_REPAIR_MAX_CAP_PCT:  10
 
-# Routing / ESD
-DIODE_ON_PORTS: in
-
 # ---------------------------------------------------------------------------
 # Route
 # ---------------------------------------------------------------------------
@@ -836,11 +840,60 @@ RT_MAX_LAYER: Metal5
 PL_MAX_DISPLACEMENT_X: 800
 PL_MAX_DISPLACEMENT_Y: 500
 
-# Fix antenna violations after DRT
-DRT_ANTENNA_REPAIR_ITERS: 0    # DRT's antenna reroute took a converged 4-violation
-                               # route to 128 (job 4296, drt-run-0 vs drt-run-1).
-                               # Antennas are already repaired at step 40 (94 -> 0,
-                               # 97 diodes) and the post-route count was 0 regardless.
+# ---------------------------------------------------------------------------
+# ANTENNA REPAIR
+# ---------------------------------------------------------------------------
+#
+# Target: 0 violations. The silver_01_09_26_first_pass run finished at 13 net /
+# 13 pin violations, and the shape of them is what dictates the settings below.
+# From 44-openroad-checkantennas-1:
+#
+#   all 13 are "(Side area)" -- the PERIMETER ratio against a 400 limit.
+#   NOT ONE is a gate-area or cumulative-area violation.
+#   By layer: Metal3 9, Metal4 3, Metal2 1.
+#   Partial ratios: 432, 435, 481, 489, 497, 503, 513, 536, 562, 626, 892,
+#                   1452, 2719.
+#
+# Ten of the thirteen are within 1.6x of the limit, i.e. they are ordinary
+# long-run nets a diode clamps outright, not structural problems. The two
+# outliers (1452, 2719) are the ones to watch in the next report -- if
+# anything survives, it will be those.
+#
+# Enable the heuristic diode pass. This is the actual gap: the last run's
+# flow.log line 119 reads
+#
+#   Gating variable for step 'Odb.HeuristicDiodeInsertion' set to 'False'
+#   Skipping step 'Heuristic Diode Insertion'
+#
+# so the design has never had this pass. It inserts a diode on every net whose
+# routed length crosses a threshold, working off global-route wirelength BEFORE
+# detailed routing commits, which is precisely the long-net side-area failure
+# mode above. The step 40 OpenROAD.RepairAntennas pass that did run is
+# reactive -- it only patches what the post-GRT check already flags -- and it
+# is what left these 13 behind.
+RUN_HEURISTIC_DIODE_INSERTION: true
+
+# Insert on shorter nets than the default (default is 30). Ten of the thirteen
+# are near-misses, so a modestly lower threshold sweeps them up without
+# carpeting the design in diodes.
+HEURISTIC_ANTENNA_THRESHOLD: 20
+
+# Keep the port diodes -- these are a separate mechanism (chip-edge ESD/antenna
+# on the I/O boundary) and 4 of the 13 violations are on output*/I buf_1 pins.
+DIODE_ON_PORTS: in
+
+# Ask the GRT repair pass for margin above the limit rather than exactly at it,
+# so a net that lands at 399 does not become a violation once detailed routing
+# perturbs it. Raised 10 -> 20 because 432/435 -- the two smallest failures --
+# are inside a 10% band of 400 and would have been caught by a wider margin.
+GRT_ANTENNA_MARGIN: 20 # %
+
+# DRT's own antenna reroute STAYS OFF. This is measured, not cautious:
+# it took a converged 4-violation route to 128 (job 4296, drt-run-0 vs
+# drt-run-1). It repairs by rip-up-and-reroute, which creates new antennas
+# faster than it clears old ones on this design. The fix above is upstream of
+# it -- diodes placed before detailed routing -- which is why it can stay 0.
+DRT_ANTENNA_REPAIR_ITERS: 0
 DRT_ANTENNA_REPAIR_MARGIN: 10 # %
 
 # ---------------------------------------------------------------------------
@@ -854,7 +907,7 @@ DEFAULT_CORNER: nom_tt_025C_3v30
 STA_CORNERS:
   - nom_tt_025C_3v30
   - min_ff_n40C_3v60
-  # - max_ss_125C_3v00
+  - max_ss_125C_3v00
 
 LIB:
   "*_tt_025C_3v30":

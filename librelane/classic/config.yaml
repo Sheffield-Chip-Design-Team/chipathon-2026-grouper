@@ -183,7 +183,7 @@ SYNTH_ABC_DFF: true
 #----------------------------------------------------------------------------
 
 FP_SIZING: absolute
-DIE_AREA: [0.0, 0.0, 1675, 1100]
+DIE_AREA: [0.0, 0.0, 1675, 1110]
 
 # RAM Macro Placement
 MACROS:
@@ -348,18 +348,42 @@ FP_MACRO_VERTICAL_HALO: 10
 # (run RUN_2026-08-23_05-01-39, stage 24). That is why the explanation lives
 # here in the YAML instead of next to the patterns.
 #
-# Edge assignment in pin_order_row4.cfg:
-#   N  clk, rst_n, *_bidir_in          E  *_bidir_out, *_bidir_oe
-#   S  uart_tx, *_bidir_ie, *_bidir_cs W  uart_rx, *_bidir_sl/_pu/_pd
+# BIT-MAJOR pin order (pin_order_bitmajor.cfg), replacing the function-major
+# pin_order_row4.cfg. The old file grouped by signal function -- every _in on
+# one edge, every _out on another -- which scattered each GPIO bit's eight
+# signals around the die. Measured on the signed-off DEF, one bit's eight pins
+# spanned a mean 4086um, 74% of the 5550um perimeter, so every bit's pad
+# wiring had to cross most of the die to reach its single pad in chip_top.
+#
+# Bit-major keeps a bit's eight signals contiguous: mean span 241um, 4.4% of
+# perimeter, a 16.9x improvement. Each bit now presents as one compact bundle
+# opposite the pad that consumes it.
+#
+# Edge assignment, following the chip_top pad walk (bidir[i] <-> gpio[i],
+# south SW->SE then east; see slot_1x1.yaml and grouper_soc_chip_top.sv):
+#   S  uart_tx, gpio_0..5    (49 pins, 34.18um pitch)
+#   E  gpio_6..9             (32 pins, 34.38um pitch)
+#   N  gpio_10..15           (48 pins, 34.90um pitch)
+#   W  clk, rst_n, uart_rx   (3 pins)
+#
+# Three edges, not the two the pad map would suggest: 128 pins on S+E alone
+# needs 20.7um pitch at best, under the 22.4um this design has actually
+# achieved (the old W edge, Metal3). Spreading over S/E/N lands every edge at
+# ~34um, comfortably clear. W is left for the control signals.
+#
+# The bits are also written out one stanza per bit rather than as a `.*_bidir_`
+# regex. That is deliberate: @bus_major sorts regex matches as STRINGS, so the
+# old file placed bits in the order 0,10,11,12,13,14,15,1,2,...,9 on every
+# edge. Explicit per-bit stanzas place them numerically.
 #
 # The PATTERNS are this repo's, not the landscape branch's. chip_core's
 # pad-facing ports are flat scalars -- one net per pad line, named
-# <function>_<pad kind>_<signal> -- so `.*_bidir_in` matches `gpio_0_bidir_in`.
+# <function>_<pad kind>_<signal> -- so `gpio_0_bidir_in` names one pin exactly.
 # Bussed patterns like `bidir_in\[\d+\]` match nothing here and would silently
 # leave every group unplaced. uart_rx/uart_tx are plain signals rather than pad
-# interfaces (chip_top maps them onto pads), so they sit with the inputs and
-# outputs respectively.
-IO_PIN_ORDER_CFG: dir::pin_order_row4.cfg
+# interfaces (chip_top maps them onto pads), so they sit with the control
+# signals and the south bits respectively.
+IO_PIN_ORDER_CFG: dir::pin_order.cfg
 
 #---------------------------------------------------------------------------
 # Constraints
@@ -650,9 +674,6 @@ PL_RESIZER_SETUP_MAX_BUFFER_PCT: 40
 DESIGN_REPAIR_MAX_SLEW_PCT: 10
 DESIGN_REPAIR_MAX_CAP_PCT:  10
 
-# Routing / ESD
-DIODE_ON_PORTS: in
-
 # ---------------------------------------------------------------------------
 # Route
 # ---------------------------------------------------------------------------
@@ -676,11 +697,36 @@ RT_MAX_LAYER: Metal5
 PL_MAX_DISPLACEMENT_X: 800
 PL_MAX_DISPLACEMENT_Y: 500
 
-# Fix antenna violations after DRT
-DRT_ANTENNA_REPAIR_ITERS: 0    # DRT's antenna reroute took a converged 4-violation
-                               # route to 128 (job 4296, drt-run-0 vs drt-run-1).
-                               # Antennas are already repaired at step 40 (94 -> 0,
-                               # 97 diodes) and the post-route count was 0 regardless.
+# ---------------------------------------------------------------------------
+# ANTENNA REPAIR
+# ---------------------------------------------------------------------------
+#
+# Kept in lockstep with config_centered_rams.yaml -- see the long-form
+# rationale there. Summary: the last measured run left 13 net / 13 pin
+# violations, ALL of them "(Side area)" perimeter-ratio failures against a 400
+# limit (Metal3 9, Metal4 3, Metal2 1), most within 1.6x of the limit.
+#
+# The gap was that Odb.HeuristicDiodeInsertion had never run -- its gating
+# variable defaults to False, and flow.log recorded it being skipped. It
+# inserts diodes on long nets using global-route wirelength, before detailed
+# routing commits, which is the failure mode above. The step 40 repair pass
+# that did run is reactive and is what left the 13 behind.
+RUN_HEURISTIC_DIODE_INSERTION: true
+HEURISTIC_ANTENNA_THRESHOLD: 20
+
+# Chip-edge ESD/antenna on the I/O boundary; separate mechanism from the above.
+DIODE_ON_PORTS: in
+
+# Margin above the limit so a net landing at 399 does not become a violation
+# once detailed routing perturbs it. 10 -> 20 because the two smallest
+# failures (432, 435) sit inside a 10% band of 400.
+GRT_ANTENNA_MARGIN: 20 # %
+
+# DRT's own antenna reroute STAYS OFF -- measured, not cautious: it took a
+# converged 4-violation route to 128 (job 4296, drt-run-0 vs drt-run-1). It
+# repairs by rip-up-and-reroute and creates antennas faster than it clears
+# them here. The fix above is upstream of it, so this can stay 0.
+DRT_ANTENNA_REPAIR_ITERS: 0
 DRT_ANTENNA_REPAIR_MARGIN: 10 # %
 
 # ---------------------------------------------------------------------------
@@ -694,7 +740,7 @@ DEFAULT_CORNER: nom_tt_025C_3v30
 STA_CORNERS:
   - nom_tt_025C_3v30
   - min_ff_n40C_3v60
-  # - max_ss_125C_3v00
+  - max_ss_125C_3v00
 
 LIB:
   "*_tt_025C_3v30":
