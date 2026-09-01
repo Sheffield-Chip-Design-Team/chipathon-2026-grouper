@@ -1,4 +1,60 @@
 # GF180MCU LibreLane config -- classic flow for the grouper_soc_chip_core macro
+#
+# ###########################################################################
+# VARIANT OF config.yaml: INTEGRATION-EQUIVALENT SRAM PLACEMENT
+#
+# Purpose: A/B the RAM macro position against config.yaml. This file is a
+# byte-for-byte copy of config.yaml except for the four `location:` values in
+# the MACROS block (and the comments explaining them). Same RTL, same SDC,
+# same pin order, same PDN -- pdn_cfg.tcl and every PDN_* variable are
+# untouched, per the constraint that the PDN is not to be re-derived for this
+# experiment. Do not let any other knob drift into this file: if it does, the
+# run stops being an A/B on macro placement.
+#
+# The placement CENTRES the macro row in the core, so the placeable sites form
+# a closed ring and every die edge keeps a band of rows for its I/O port
+# buffers. It started as a mirror of where the Grouper<->Trouper integration
+# floorplan (lora-mimo/integration/pd/config_landscape_2235.yaml) puts these
+# same four macros inside Grouper's lobe of the shared 2235x2235 die -- hard
+# against the NE corner -- but that arrangement leaves 7.23um above the row and
+# 9.92um east of it, both under the 10um halo, so cut_rows emits no row on the
+# north or east edge and Repair Design's port buffers there cannot legalize.
+# Full derivation, and the NE mapping it supersedes, are in the MACROS block.
+#
+# Baseline to compare against: job 4851 (run tag `m2_noextend`), which is this
+# tree's RTL and config.yaml with only PRIMARY_GDSII_STREAMOUT_TOOL differing.
+#
+# RUN HISTORY
+#   job 5139  MACROS only, pin order carried over unchanged -> FAILED at stage
+#             30, DPL-0036 on the 5 input buffers of north-edge input ports.
+#             Power grid was clean (0 violations on both nets), so the PDN
+#             question this file was written to answer is settled: the macros
+#             can move without touching the PDN.
+#   job 5140  + IO_PIN_ORDER_CFG re-tuned (pin_order_int_ram.cfg), moving the
+#             inputs off the north edge -> FAILED at stage 30, DPL-0036 again,
+#             now on output65..output128, the port buffers of the pu/pd outputs
+#             that took the north edge instead. Same failure, different port
+#             list: the north edge has no rows at all past x=358, so pin order
+#             only changes WHICH ports are stranded. Power grid clean again.
+#   job 5141  MACROS re-centred (this file), tag int_ram_centre -> PASSED. Exit
+#             0 in 7m35s, empty error.log. cut_rows gave 410 rows / 477,936
+#             sites in a closed ring (at y~600: x [6.7-177.5] and
+#             [1463.3-1643.0], i.e. rows on both sides where the NE placement
+#             had none). Signoff: LVS "Circuits match uniquely" 0 errors, route
+#             DRC 0 (iter 4), Magic DRC 0, KLayout DRC 0, XOR 0, power grid 0 on
+#             both nets, setup +19.57ns nom_tt / +33.48ns min_ff, hold +0.82 /
+#             +0.37ns, 0 violations either way, utilisation 68.6%. Against job
+#             4851: timing and DRC equal or better, antenna 8 violating nets vs
+#             22 (289 diodes vs 108), route wirelength 1,520,097 vs 1,369,917
+#             (+11%, the cost of the macro band bisecting the core).
+#             The x translation was exactly one PDN_VPITCH, so the Metal4
+#             lattice saw an identical macro phase to 5139/5140 and the PDN
+#             question stayed settled -- 0 power-grid violations confirmed it.
+#             IO_PIN_ORDER_CFG left on pin_order_int_ram.cfg so MACROS was the
+#             only change from 5140; with rows on all four edges pin_order_row4
+#             should work too, and is the config.yaml/4851 comparison point.
+#             Full write-up: librelane/classic/runs/int_ram_centre/RUN_INFO.md
+# ###########################################################################
 meta:
   version: 3
   flow: Classic
@@ -110,6 +166,10 @@ VERILOG_DEFINES:
 # $readmemh, which has no synthesisable equivalent - standard cells have no
 # initial-value mechanism, so this is what actually produces a mask ROM.
 - ROM_INIT_CONST
+# This is a constant that is used to initialize the ROM.
+# It is set to 1, which means that the ROM will be initialized with the
+# contents of the boot.vmem file.
+
 
 #---------------------------------------------------------------------------
 # Elaboration + Synthesis
@@ -119,15 +179,13 @@ VERILOG_DEFINES:
 USE_SLANG: true
 SLANG_ARGUMENTS: ['--keep-hierarchy']
 SYNTH_HIERARCHY_MODE: deferred_flatten
-
 # OFF because ON makes Magic streamout die with "stack smashing" on this RTL's
-# deep hierarchy, in BOTH flatten and deferred_flatten 
+# deep hierarchy, in BOTH flatten and deferred_flatten
 SYNTH_AUTONAME: false
 
-SYNTH_STRATEGY: "AREA 3"   # Optimise for Area
+SYNTH_STRATEGY: "AREA 3"
 SYNTH_SIZING: true
 SYNTH_ABC_DFF: true
-
 # SYNTH_ABC_USE_MFS3: true # - this breaks picorv32 synth - leave it disabled
 
 # ---------------------------------------------------------------------------
@@ -167,9 +225,9 @@ SYNTH_ABC_DFF: true
 #
 #   core        x    6.72 .. 1643.04   (2922 sites)
 #   core        y   15.68 .. 1081.92   (272 rows)
-#   macro band  y  190.00 ..  725.81   (macros at y=200, +/- the 10um halo)
 #
-# leaving three placeable regions:
+# config.yaml puts the macro band at y 190.00 .. 725.81 (macros at y=200,
+# +/- the 10um halo), leaving three placeable regions:
 #
 #   below macros  1636.3 x 174.2  = 285,200um^2   (44 rows, full width)
 #   above macros  1636.3 x 356.1  = 582,700um^2   (90 rows, full width)
@@ -177,9 +235,21 @@ SYNTH_ABC_DFF: true
 #                                 ---------------
 #                                  1,053,000um^2 gross
 #
-# The height lost off the top band relative to portrait is returned almost
-# exactly by the east strip, so std-cell utilisation lands where it did before
-# and PL_TARGET_DENSITY_PCT below still holds.
+# THIS FILE centres the same row (y 281.20 .. 817.01 with the halo,
+# x 177.60 .. 1462.80), leaving four regions that form one connected ring:
+#
+#   below macros  1636.3 x 265.5  = 434,400um^2   (67 rows, full width)
+#   above macros  1636.3 x 264.9  = 433,400um^2   (67 rows, full width)
+#   west of them   170.9 x 535.8  =  91,600um^2   (305 sites)
+#   east of them   180.2 x 535.8  =  96,600um^2   (321 sites)
+#                                 ---------------
+#                                  1,056,000um^2 gross
+#
+# The superseded NE-corner variant left two regions totalling 1,059,700um^2
+# (south band 872,500 + west strip 187,200) but no row on the north or east
+# edge at all. Gross placeable area is within 0.3% across all three, so
+# PL_TARGET_DENSITY_PCT below still holds and the comparison isolates topology,
+# not capacity -- which is the point: capacity was never what failed.
 #----------------------------------------------------------------------------
 
 FP_SIZING: absolute
@@ -197,89 +267,143 @@ MACROS:
     instances:
       # SIZE 301.300 BY 515.810 ; native (unrotated) footprint: 301.3(X) x 515.81(Y).
       #
-      # A single row of 4 across the bottom of the 1650x1100 die, at the exact
-      # coordinates job 4340 signed off with. DO NOT NUDGE THEM to "use" the
-      # extra width -- see the note on gaps below, and note that job 4341,
-      # identical but for these four numbers, was measurably worse.
+      # ===== CENTRED PLACEMENT (this file's ONLY delta vs config.yaml) =====
       #
-      #     x     22.4    343.7     665.0    986.3         1287.6   1643.0
-      #           +-------++-------++-------++-------+                | core
-      #    715.81 | sram0 || sram1 || sram2 || sram3 |   east strip   |
-      #    200.00 +-------++-------++-------++-------+     345.4um    |
-      #              20um gaps, fully eaten by the 10um halos
+      # Same row of 4, same 321.3um stride, same orientation S as config.yaml.
+      # The whole row is translated to the CENTRE of the core, so that the
+      # placeable sites form a closed RING around the macro band and every die
+      # edge keeps a band of rows for its I/O port buffers.
       #
-      # x: 22.4 = 40 sites, and the 321.3um stride (301.3 + 20) keeps every
-      #    macro on the 0.56um site grid, which is the one hard requirement on
-      #    them. The 20um gaps are deliberately too narrow to survive the
-      #    halos: 20 - 2*10 = 0, so no rows are cut between macros at all.
-      #    That is the point. A wider gap would leave a walled channel a few
-      #    sites long, and stranded slivers are what produced DPL-0036 on jobs
-      #    4283/4284 -- "area is a global number, legalisation is a local one"
-      #    (TRIAL_NOTES.md). The 431um of slack landscape hands us is worth far
-      #    more as one contiguous east strip than as three channels nobody can
-      #    legalise into. This is also why there is no FP_OBSTRUCTIONS below:
-      #    there is no channel left to fence off.
+      # WHY THIS SUPERSEDES THE NE-CORNER PLACEMENT
+      #   The NE placement (x 367.92/689.22/1010.52/1331.82, y 558.88) mirrored
+      #   the Grouper<->Trouper integration floorplan -- macros hard against the
+      #   NE corner of Grouper's lobe of the 2235x2235 die. Derivation retained
+      #   at the bottom of this comment. It left 7.23um above the row and 9.92um
+      #   east of it, both smaller than the 10um halo, so cut_rows generated NO
+      #   row in either sliver:
       #
-      #    STRAP PHASE IS NOT A CONSTRAINT ON THESE NUMBERS. The macro exposes
-      #    239 VDD and 195 VSS Metal3 tabs over its entire perimeter rather
-      #    than two edge bands, so any on-grid Metal4 lattice crossing it taps
-      #    both nets -- see constraint 3 in the PDN section. All four macros
-      #    pass check_power_grid at four DIFFERENT phases here (22.4, 163.4,
-      #    124.0 and 84.7 mod the 180.32 pitch). Keep them on the site grid;
-      #    the phase itself is free.
+      #     y <= 544.88   rows x   6.72 .. 1643.04   (full width)
+      #     y >= 548.80   rows x   6.72 ..  357.84   (west column only)
+      #     max row y = 1078.00, still capped at x <= 357.84
       #
-      # y: 200 leaves 174.24um (44 rows) below after the halo -- a real
-      #    placeable band, which is what gave the bottom edge somewhere to put
-      #    S-side pins and broke the DPL-0036 stranding. The macro top is
-      #    715.81, halo 725.81, and the top band runs to 1081.92 (90 rows).
+      #   Every north-edge pin outside x < 358 therefore had no legal site for
+      #   the port buffer Repair Design inserts at it, and detailed placement
+      #   could not reach one within PL_MAX_DISPLACEMENT_X. Both NE runs died at
+      #   stage 30/78 on DPL-0036, and the failing instances tracked the north
+      #   edge exactly -- change the pin order, change which ports fail:
       #
-      # Orientation S (rather than N) so the pin row -- all 32 signal pins sit
-      # on the native y=0 edge of the cell, Metal2, y 0..3 -- faces UP into the
-      # 356um top band rather than down into the narrower one.
+      #     job 5139  N = clk, rst_n, .*_bidir_in   -> input12 .. input16
+      #     job 5140  N = .*_bidir_pu, .*_bidir_pd  -> output65 .. output128
       #
-      # SETTLED, do not re-litigate without a run (landscape branch Session 7):
-      # both alternatives were measured and both lost. Centring the row costs
-      # +5.6% wirelength and 20 route DRCs; corner placement strands the S edge
-      # and half the W edge.
+      #   Note the blocked edges were NORTH and EAST. The west column is the one
+      #   region the NE placement left intact at every y; it was never the
+      #   constraint. Pin order cannot fix a missing row, which is why 5140
+      #   reproduced 5139's failure with a different port list.
       #
-      # Instance names are the full flattened path from grouper_soc_chip_core.
-      # Verified against the RTL in this tree, 2026-08-23:
-      #   u_grouper_soc_top      grouper_soc_chip_core.sv:202  (grouper_soc_top)
-      #   u_grouper_soc_dig_ss   grouper_soc_top.sv:78         (digital_ss)
-      #   u_ram_ss               digital_ss.sv:148             (ram_ss)
-      #   gen_macro_ram.gen_sram[j].u_wrapper
-      #                          ram_ss.sv:19-21               (sram1024x8_wrapper)
-      #   u_sram_macro           gf180mcu_ocd_sram_1024x8m8wm1_wrapper.sv:23
+      # DERIVATION OF THE CENTRED COORDINATES
+      #   core        x    6.72 .. 1643.04   (2922 sites, 1636.32um)
+      #   core        y   15.68 .. 1081.92   (272 rows,   1066.24um)
+      #   row bbox                1265.2 x 515.81   (4*301.3 + 3*20)
+      #   with the 10um halo      1285.2 x 535.81
       #
-      # ram_ss hangs directly off digital_ss -- it is a SIBLING of u_cpu_ss and
-      # u_periph_ss, not a child of either. cpu_ss.sv instantiates only picorv32
-      # (u_cpu); it carries the RAM select/routing logic (ram_sel_r) but not the
-      # storage. The keys used to read
-      #   u_periph_ss.u_ram.u_ram_ss...
-      # which was the pre-ram_ss hierarchy, when the array lived inside ahb_ram
-      # inside periph_ss. That path matches nothing here.
+      #   Centred:  x0 = 6.72 + (1636.32 - 1285.2)/2 + 10 = 192.28
+      #             y0 = 15.68 + (1066.24 - 535.81)/2 + 10 = 290.90
       #
-      # Confirm against the netlist after a synthesis run:
-      #   grep -o '[^ ]*u_sram_macro' <run>/*-yosys-synthesis/*.nl.v | sort -u
-      # This does NOT need SYNTH_AUTONAME -- verified on job 4850, which ran
-      # the full flow with it false and still emitted all four paths below
-      # verbatim (Yosys escapes them with a leading backslash in the .nl.v;
-      # strip it before matching against these keys). They are RTL instance
-      # and generate-block names, so autoname, which only renames Yosys'
-      # invented $auto$ nets, has no bearing on them. Do not turn autoname on
-      # to make this grep work -- ON crashes Magic streamout, see the note on
-      # it above.
+      #   Both are then snapped, NOT to the nearest site, but to the phases that
+      #   cost the PDN nothing (see PDN note below):
+      #
+      #     x  187.60  508.90  830.20  1151.50    (= NE placement - 180.32)
+      #     y  291.20                             (= NE placement - 267.68)
+      #
+      #     180.32 = 322 x 0.56 = exactly one PDN_VPITCH.
+      #     267.68 = 478 x 0.56.
+      #   Both are 0.56um multiples, so every macro keeps config.yaml's site-grid
+      #   phase, same as the NE placement did.
+      #
+      #     row bbox  x 187.60..1452.80   y 291.20..807.01
+      #     margins   west  170.88  (305 sites)     east  180.24  (321 sites)
+      #               south 265.52  ( 67 rows)      north 264.91  ( 67 rows)
+      #
+      #   All four are comfortably larger than the 10um halo, so cut_rows emits
+      #   real rows on all four edges and no pin is stranded whatever the pin
+      #   order does.
+      #
+      #     x      6.7        187.6   508.9   830.2   1151.5  1452.8   1643.0
+      #  1081.9   +----------------------------------------------------+ core
+      #           |            north band 1636.3 x 264.9               |
+      #   807.0   |         +-------++-------++-------++-------+       |
+      #           |  west   | sram0 || sram1 || sram2 || sram3 | east  |
+      #           | 170.9 x +-------++-------++-------++-------+ 180.2 |
+      #   291.2   |  535.8    (halo'd band 1285.2 x 535.81)     x 535.8|
+      #           |            south band 1636.3 x 265.5               |
+      #    15.7   +----------------------------------------------------+
+      #
+      #   Placeable area 434.4k + 433.4k + 91.6k + 96.6k = ~1,056,000um^2,
+      #   against ~1,053,000um^2 for config.yaml's three-region split and
+      #   ~1,060,000um^2 for the NE two-region split. Within 0.3% of both, so
+      #   PL_TARGET_DENSITY_PCT below still holds and this stays a topology
+      #   experiment, not a capacity one. What changes is that the placeable
+      #   area is now ONE connected ring rather than an L or a band-plus-strip.
+      #
+      # PDN IS UNTOUCHED -- pdn_cfg.tcl and every PDN_* value are identical to
+      # config.yaml, and the x translation was chosen to make that free rather
+      # than merely legal. Shifting by exactly one PDN_VPITCH (180.32 = two half
+      # periods of the 22.96 + n*90.16 Metal4 lattice, and 2 is even) leaves
+      # every macro seeing a bit-identical stripe phase AND net assignment to
+      # the NE placement:
+      #
+      #     stripes crossing each macro   4 / 3 / 4 / 3   (NE: 4 / 3 / 4 / 3)
+      #
+      #   Jobs 5139 and 5140 both cleared *-checker-powergridviolations at that
+      #   phase with 0 violations on both nets before dying later in the flow,
+      #   so the lattice is measured, not argued. Per constraint 3 in the Straps
+      #   section, macro x is free apart from the site grid anyway; this just
+      #   removes the question.
+      #
+      #   The y translation moves the Metal3 rungs the macros trim. Rung centres
+      #   are core_lly + 14.98 + n*149.52 = 30.66, 180.18, 329.70, 479.22,
+      #   628.74, 778.26, 927.78, 1077.30. Against the macro M3 obstruction
+      #   (y 294.20..804.01 here) four rungs are trimmed and four survive full
+      #   width -- two below the band, two above it -- versus five surviving but
+      #   four of them bunched below the band on the NE placement. The trimmed
+      #   rungs still run 6.72..190.60 and 1449.80..1643.04, i.e. across the
+      #   whole of the west and east strips, so the Metal2-Metal4 bridge reaches
+      #   the cells in them. Still gate the run on
+      #   design__power_grid_violation__count__net:VSS at
+      #   *-checker-powergridviolations -- it fails fast and it is the check
+      #   that catches a walked-off lattice.
+      #
+      # SUPERSEDED: NE-CORNER DERIVATION (kept for the integration mapping)
+      #   SOURCE
+      #     ../../../lora-mimo/lora-mimo/integration/pd/config_landscape_2235.yaml
+      #       DIE_AREA          [0, 0, 2235, 2235]
+      #       FP_OBSTRUCTIONS   A [0, 0, 1117.5, 1117.5]   (Trouper-side keepout)
+      #                         B [1665, 1117.5, 2235, 2235]
+      #       macros            y = 1695.67, x = 388.65 / 709.95 / 1031.25 / 1352.55
+      #                         orientation S, stride 321.3  (identical geometry)
+      #   Grouper's lobe there is x 0..1665, y 1117.5..2235 = 1665 x 1117.5,
+      #   within 1% of this die's 1650 x 1100; anchoring the same NE corner gave
+      #   x 367.92/689.22/1010.52/1331.82, y 558.88, with margins east 9.92 and
+      #   north 7.23. Those two slivers are the DPL-0036 cause above. If the
+      #   integration floorplan really does require the NE corner, the fix is on
+      #   the integration side -- pull obstruction B's edge and the lobe's north
+      #   boundary in far enough to leave a halo-plus-rows band (>= ~40um) north
+      #   and east of the row -- not a pin-order change on this side.
+      #
+      # Instance names are the full flattened path from grouper_soc_chip_core;
+      # see config.yaml for the hierarchy walk and the netlist grep that
+      # confirms them.
       "u_grouper_soc_top.u_grouper_soc_dig_ss.u_ram_ss.gen_macro_ram.gen_sram[0].u_wrapper.u_sram_macro":
-        location: [22.4, 200]
+        location: [187.60, 291.20]
         orientation: S
       "u_grouper_soc_top.u_grouper_soc_dig_ss.u_ram_ss.gen_macro_ram.gen_sram[1].u_wrapper.u_sram_macro":
-        location: [343.7, 200]
+        location: [508.90, 291.20]
         orientation: S
       "u_grouper_soc_top.u_grouper_soc_dig_ss.u_ram_ss.gen_macro_ram.gen_sram[2].u_wrapper.u_sram_macro":
-        location: [665, 200]
+        location: [830.20, 291.20]
         orientation: S
       "u_grouper_soc_top.u_grouper_soc_dig_ss.u_ram_ss.gen_macro_ram.gen_sram[3].u_wrapper.u_sram_macro":
-        location: [986.3, 200]
+        location: [1151.50, 291.20]
         orientation: S
 
     # One Liberty per corner, matching the STA_CORNERS names 
@@ -316,9 +440,50 @@ FP_MACRO_VERTICAL_HALO: 10
 # Do not add one back "for safety": any blockage sharing the macro band trips
 # DPL-0010/0011 on the macros themselves (jobs 4283, 4289).
 
-# I/O pins: all four edges. The macro row sits along the bottom, so the east
-# edge is free here -- on the portrait floorplan it was the SRAM column and had
-# to be left clear.
+# I/O pins: RE-TUNED for this floorplan (pin_order_int_ram.cfg), because
+# carrying pin_order_row4.cfg over unchanged does not run -- job 5139 proved
+# it. That is a second variable, and it is a deliberate one; the reasoning:
+#
+#   Job 5139 was this file with IO_PIN_ORDER_CFG still dir::pin_order_row4.cfg,
+#   i.e. a true single-variable A/B against config.yaml. It died at stage 30
+#   (OpenROAD.RepairDesignPostGPL) in 150s:
+#
+#     [INFO  DPL-0034] Detailed placement failed on the following 5 instances:
+#     [INFO  DPL-0035]  input12 .. input16
+#     [ERROR DPL-0036] Detailed placement failed.
+#
+#   input0..input17 are the 18 buf_1 cells RSZ-0027 inserts on the 18 input
+#   ports (rst_n, uart_rx, and gpio_*_bidir_in x16 -- clk is not buffered).
+#   An input buffer is placed AT its pin, so it needs a legal site next to
+#   that pin. pin_order_row4.cfg puts every one of those 18 ports on the NORTH
+#   edge, and on this floorplan the north edge has no sites behind it: the
+#   macro row's top is 1074.69 and its 10um halo reaches 1084.69, past
+#   core_ury 1081.92, so CutRows generates ZERO rows above the macros. Only
+#   x < 357.84 (the west strip) is served, i.e. 22% of the edge. Confirmed in
+#   job 5139's own 16-openroad-cutrows DEF: 272 rows, and every row in
+#   y 548.88..1084.69 is 627 sites starting at x=6.72 -- the west strip and
+#   nothing else.
+#
+#   This is NOT a capacity problem, which is why padding/density knobs are not
+#   the answer. Job 5139 had 482,664 placeable sites (1,059,543um^2) against
+#   the baseline's 477,936 (1,049,165um^2) -- 1% MORE room -- and it has no
+#   stranded slivers at all, where the baseline carries a 10-site sliver on
+#   138 of its rows. It is purely a locality problem at the north edge.
+#
+#   The fix is to stop putting inputs on the walled edge. Which edges have
+#   rows behind them here:
+#     W  full height        (west strip above y=548.88, full-width band below)
+#     S  full width         (the 137-row bottom band)
+#     E  y < 548.88 only    (the macro's east halo reaches core_urx above that)
+#     N  x < 357.84 only    (the west strip)
+#   So all 18 inputs go to W, and the 113 output ports spread over N/E/S.
+#   Output buffers are placed near their internal DRIVER rather than at the
+#   pin, which is why job 5139's 32 E-edge output pins survived an east edge
+#   that is walled above y=548.88 while the N-edge inputs did not.
+#
+# The honest reading of the pair: config.yaml's placement works with the
+# shipping pinout and this one does not, so any comparison of the two must
+# say which pinout it assumed.
 #
 # N AND S PINS LAND ON METAL2, AND METAL2 CARRIES PDN STRAPS. This has now bitten
 # twice, on both horizontal edges, and the fix is in pdn_cfg.tcl rather than here.
@@ -348,41 +513,19 @@ FP_MACRO_VERTICAL_HALO: 10
 # (run RUN_2026-08-23_05-01-39, stage 24). That is why the explanation lives
 # here in the YAML instead of next to the patterns.
 #
-# BIT-MAJOR pin order (pin_order_bitmajor.cfg), replacing the function-major
-# pin_order_row4.cfg. The old file grouped by signal function -- every _in on
-# one edge, every _out on another -- which scattered each GPIO bit's eight
-# signals around the die. Measured on the signed-off DEF, one bit's eight pins
-# spanned a mean 4086um, 74% of the 5550um perimeter, so every bit's pad
-# wiring had to cross most of the die to reach its single pad in chip_top.
-#
-# Bit-major keeps a bit's eight signals contiguous: mean span 241um, 4.4% of
-# perimeter, a 16.9x improvement. Each bit now presents as one compact bundle
-# opposite the pad that consumes it.
-#
-# Edge assignment, following the chip_top pad walk (bidir[i] <-> gpio[i],
-# south SW->SE then east; see slot_1x1.yaml and grouper_soc_chip_top.sv):
-#   S  uart_tx, gpio_0..5    (49 pins, 34.18um pitch)
-#   E  gpio_6..9             (32 pins, 34.38um pitch)
-#   N  gpio_10..15           (48 pins, 34.90um pitch)
-#   W  clk, rst_n, uart_rx   (3 pins)
-#
-# Three edges, not the two the pad map would suggest: 128 pins on S+E alone
-# needs 20.7um pitch at best, under the 22.4um this design has actually
-# achieved (the old W edge, Metal3). Spreading over S/E/N lands every edge at
-# ~34um, comfortably clear. W is left for the control signals.
-#
-# The bits are also written out one stanza per bit rather than as a `.*_bidir_`
-# regex. That is deliberate: @bus_major sorts regex matches as STRINGS, so the
-# old file placed bits in the order 0,10,11,12,13,14,15,1,2,...,9 on every
-# edge. Explicit per-bit stanzas place them numerically.
+# Edge assignment in pin_order_row4.cfg:
+#   N  clk, rst_n, *_bidir_in          E  *_bidir_out, *_bidir_oe
+#   S  uart_tx, *_bidir_ie, *_bidir_cs W  uart_rx, *_bidir_sl/_pu/_pd
 #
 # The PATTERNS are this repo's, not the landscape branch's. chip_core's
 # pad-facing ports are flat scalars -- one net per pad line, named
-# <function>_<pad kind>_<signal> -- so `gpio_0_bidir_in` names one pin exactly.
+# <function>_<pad kind>_<signal> -- so `.*_bidir_in` matches `gpio_0_bidir_in`.
 # Bussed patterns like `bidir_in\[\d+\]` match nothing here and would silently
 # leave every group unplaced. uart_rx/uart_tx are plain signals rather than pad
-# interfaces (chip_top maps them onto pads), so they sit with the control
-# signals and the south bits respectively.
+# interfaces (chip_top maps them onto pads), so they sit with the inputs and
+# outputs respectively.
+# IO_PIN_ORDER_CFG: dir::pin_order_row4.cfg   # the config.yaml assignment; see
+#                                            # pin_order_int_ram.cfg's rationale
 IO_PIN_ORDER_CFG: dir::pin_order.cfg
 
 #---------------------------------------------------------------------------
