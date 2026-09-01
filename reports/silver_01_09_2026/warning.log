@@ -1,0 +1,48 @@
+397 Lint warnings found.
+Cell 'gf180mcu_ocd_ip_sram__sram1024x8m8wm1' has (11) input pin(s) without antenna gate information. They might not be connected to a gate.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.gen_gpio_sync[0].u_gpio_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.gen_gpio_sync[0].u_gpio_sync'.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.gen_gpio_sync[10].u_gpio_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.gen_gpio_sync[10].u_gpio_sync'.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.gen_gpio_sync[11].u_gpio_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.gen_gpio_sync[11].u_gpio_sync'.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.gen_gpio_sync[12].u_gpio_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.gen_gpio_sync[12].u_gpio_sync'.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.gen_gpio_sync[13].u_gpio_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.gen_gpio_sync[13].u_gpio_sync'.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.gen_gpio_sync[14].u_gpio_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.gen_gpio_sync[14].u_gpio_sync'.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.gen_gpio_sync[15].u_gpio_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.gen_gpio_sync[15].u_gpio_sync'.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.gen_gpio_sync[1].u_gpio_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.gen_gpio_sync[1].u_gpio_sync'.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.gen_gpio_sync[2].u_gpio_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.gen_gpio_sync[2].u_gpio_sync'.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.gen_gpio_sync[3].u_gpio_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.gen_gpio_sync[3].u_gpio_sync'.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.gen_gpio_sync[4].u_gpio_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.gen_gpio_sync[4].u_gpio_sync'.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.gen_gpio_sync[5].u_gpio_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.gen_gpio_sync[5].u_gpio_sync'.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.gen_gpio_sync[6].u_gpio_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.gen_gpio_sync[6].u_gpio_sync'.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.gen_gpio_sync[7].u_gpio_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.gen_gpio_sync[7].u_gpio_sync'.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.gen_gpio_sync[8].u_gpio_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.gen_gpio_sync[8].u_gpio_sync'.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.gen_gpio_sync[9].u_gpio_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.gen_gpio_sync[9].u_gpio_sync'.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.u_grouper_soc_dig_ss.u_periph_ss.u_uart.u_uart.u_uart_rx.u_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.u_grouper_soc_dig_ss.u_periph_ss.u_uart.u_uart.u_uart_rx.u_sync'.
+Macros inside hierarchical netlists are not currently supported in LibreLane: skipping submodule 'u_grouper_soc_top.u_rst_resync_sync' of type 'sync$grouper_soc_chip_core.u_grouper_soc_top.u_rst_resync_sync'.
+[PDN-0110] No via inserted between Metal3 and Metal4 at (200.7600, 202.8000) - (205.8000, 203.0000) on VDD
+[PDN-0110] No via inserted between Metal3 and Metal4 at (561.4000, 202.8000) - (566.4400, 203.0000) on VDD
+[PDN-0110] No via inserted between Metal3 and Metal4 at (922.0400, 202.8000) - (927.0800, 203.0000) on VDD
+[GPL-0302] Target density 0.6800 is too low for the available free area.
+[GRT-0281] Net clk has a large fanout of 3529 terminals.
+[GRT-0281] Net u_grouper_soc_top.rst_n_sync has a large fanout of 1595 terminals.
+[RSZ-0020] found 2 floating nets.
+[CTS-0132] -balance_levels is obsolete.
+[CTS-0128] -obstruction_aware is obsolete.
+[DRT-0349] LEF58_ENCLOSURE with no CUTCLASS is not supported. Skipping for layer Via1
+[DRT-0349] LEF58_ENCLOSURE with no CUTCLASS is not supported. Skipping for layer Via1
+[DRT-0349] LEF58_ENCLOSURE with no CUTCLASS is not supported. Skipping for layer Via2
+[DRT-0349] LEF58_ENCLOSURE with no CUTCLASS is not supported. Skipping for layer Via2
+[DRT-0349] LEF58_ENCLOSURE with no CUTCLASS is not supported. Skipping for layer Via3
+[DRT-0349] LEF58_ENCLOSURE with no CUTCLASS is not supported. Skipping for layer Via3
+[DRT-0349] LEF58_ENCLOSURE with no CUTCLASS is not supported. Skipping for layer Via4
+[DRT-0349] LEF58_ENCLOSURE with no CUTCLASS is not supported. Skipping for layer Via4
+Threshold for Threshold-surpassing long wires is not set. The checker will be skipped.
+'VSRC_LOC_FILES' was not given a value, which may make the results of IR drop analysis inaccurate. If you are not integrating a top-level chip for manufacture, you may ignore this warning, otherwise, see the documentation for 'VSRC_LOC_FILES'.
+KLAYOUT_DRC_RUNSET is unset. KLayout.DRC may not be supported for the gf180mcuD PDK. This step will be skipped.
+The KLayout DRC errors metric was not found. Are you sure the relevant step was run?
+Max Slew violations found in the following corners:
+* min_ff_n40C_3v60
+* nom_tt_025C_3v30
+Max Cap violations found in the following corners:
+* min_ff_n40C_3v60
+* nom_tt_025C_3v30
+klayout__drc_error__count not reported. KLayout.DRC may have been skipped.
