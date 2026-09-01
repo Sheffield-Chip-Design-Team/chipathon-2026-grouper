@@ -158,6 +158,11 @@ set_output_delay 12.5000 -clock [get_clocks {clk}] -add_delay [get_ports {gpio_9
 set_output_delay 12.5000 -clock [get_clocks {clk}] -add_delay [get_ports {gpio_9_bidir_pu}]
 set_output_delay 12.5000 -clock [get_clocks {clk}] -add_delay [get_ports {gpio_9_bidir_sl}]
 set_output_delay 12.5000 -clock [get_clocks {clk}] -add_delay [get_ports {uart_tx}]
+set_false_path\
+    -from [list [get_ports {gpio_15_bidir_in}]\
+           [get_ports {gpio_1_bidir_in}]]
+set_false_path\
+    -through [get_nets {u_grouper_soc_top.u_grouper_soc_dig_ss.u_cpu_ss.dbg_own}]
 ###############################################################################
 # Environment
 ###############################################################################
