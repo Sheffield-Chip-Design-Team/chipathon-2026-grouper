@@ -50,18 +50,18 @@ cold-silicon recovery mechanism, unlike the debug strap this replaced. See
 
 ## Memory Map
 
-Target memory map, per the Schematic Review §3b:
+Target memory map:
 
 | Start Address | End Address | Size | Description |
 |---|---|---|---|
 | `0x0000_1000` | `0x0000_1FFF` | 4 KiB | ROM (reset vector; swapped with RAM by the Bank Switch Reset instruction) |
-| `0x0000_2000` | `0x0000_2FFF` | 4 KiB | RAM |
-| `0x0000_3000` | `0x0000_3FFF` | 4 KiB | UART |
-| `0x0000_4000` | `0x0000_4FFF` | 4 KiB | GPIO CTRL |
-| `0x0000_5000` | `0x0000_5FFF` | 4 KiB | QSPI |
-| `0x0000_6000` | `0x0000_6FFF` | 4 KiB | SPI M |
-| `0x0000_7000` | `0x0000_7FFF` | 4 KiB | SPI S |
-| `0x0001_0000` | `0x0001_FFFF` | 64 KiB | External peripheral |
+| `0x4000_0000` | `0x0000_2FFF` | 4 KiB | RAM |
+| `0x8000_3000` | `0x0000_3FFF` | 4 KiB | UART |
+| `0x8000_4000` | `0x0000_4FFF` | 4 KiB | GPIO CTRL |
+| `0x8000_5000` | `0x0000_5FFF` | 4 KiB | QSPI |
+| `0x8000_6000` | `0x0000_6FFF` | 4 KiB | SPI M |
+| `0x8000_7000` | `0x0000_7FFF` | 4 KiB | SPI S |
+| `0x8001_0000` | `0x0001_FFFF` | 64 KiB | External peripheral |
 
 `GRPR-SOC-006`: The SoC shall implement the memory map above.
 
