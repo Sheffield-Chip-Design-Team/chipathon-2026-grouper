@@ -6,49 +6,49 @@ MACRO grouper_soc_chip_core
   CLASS BLOCK ;
   FOREIGN grouper_soc_chip_core ;
   ORIGIN 0.000 0.000 ;
-  SIZE 1675.000 BY 1100.000 ;
+  SIZE 1675.000 BY 1110.000 ;
   PIN VDD
     DIRECTION INOUT ;
     USE POWER ;
     PORT
       LAYER Metal4 ;
-        RECT 20.440 0.000 25.480 1100.000 ;
+        RECT 20.440 0.000 25.480 1110.000 ;
     END
     PORT
       LAYER Metal4 ;
-        RECT 200.760 0.000 205.800 1100.000 ;
+        RECT 200.760 0.000 205.800 1110.000 ;
     END
     PORT
       LAYER Metal4 ;
-        RECT 381.080 0.000 386.120 1100.000 ;
+        RECT 381.080 0.000 386.120 1110.000 ;
     END
     PORT
       LAYER Metal4 ;
-        RECT 561.400 0.000 566.440 1100.000 ;
+        RECT 561.400 0.000 566.440 1110.000 ;
     END
     PORT
       LAYER Metal4 ;
-        RECT 741.720 0.000 746.760 1100.000 ;
+        RECT 741.720 0.000 746.760 1110.000 ;
     END
     PORT
       LAYER Metal4 ;
-        RECT 922.040 0.000 927.080 1100.000 ;
+        RECT 922.040 0.000 927.080 1110.000 ;
     END
     PORT
       LAYER Metal4 ;
-        RECT 1102.360 0.000 1107.400 1100.000 ;
+        RECT 1102.360 0.000 1107.400 1110.000 ;
     END
     PORT
       LAYER Metal4 ;
-        RECT 1282.680 0.000 1287.720 1100.000 ;
+        RECT 1282.680 0.000 1287.720 1110.000 ;
     END
     PORT
       LAYER Metal4 ;
-        RECT 1463.000 0.000 1468.040 1100.000 ;
+        RECT 1463.000 0.000 1468.040 1110.000 ;
     END
     PORT
       LAYER Metal4 ;
-        RECT 1643.320 0.000 1648.360 1100.000 ;
+        RECT 1643.320 0.000 1648.360 1110.000 ;
     END
     PORT
       LAYER Metal5 ;
@@ -84,39 +84,39 @@ MACRO grouper_soc_chip_core
     USE GROUND ;
     PORT
       LAYER Metal4 ;
-        RECT 110.600 0.000 115.640 1100.000 ;
+        RECT 110.600 0.000 115.640 1110.000 ;
     END
     PORT
       LAYER Metal4 ;
-        RECT 290.920 0.000 295.960 1100.000 ;
+        RECT 290.920 0.000 295.960 1110.000 ;
     END
     PORT
       LAYER Metal4 ;
-        RECT 471.240 0.000 476.280 1100.000 ;
+        RECT 471.240 0.000 476.280 1110.000 ;
     END
     PORT
       LAYER Metal4 ;
-        RECT 651.560 0.000 656.600 1100.000 ;
+        RECT 651.560 0.000 656.600 1110.000 ;
     END
     PORT
       LAYER Metal4 ;
-        RECT 831.880 0.000 836.920 1100.000 ;
+        RECT 831.880 0.000 836.920 1110.000 ;
     END
     PORT
       LAYER Metal4 ;
-        RECT 1012.200 0.000 1017.240 1100.000 ;
+        RECT 1012.200 0.000 1017.240 1110.000 ;
     END
     PORT
       LAYER Metal4 ;
-        RECT 1192.520 0.000 1197.560 1100.000 ;
+        RECT 1192.520 0.000 1197.560 1110.000 ;
     END
     PORT
       LAYER Metal4 ;
-        RECT 1372.840 0.000 1377.880 1100.000 ;
+        RECT 1372.840 0.000 1377.880 1110.000 ;
     END
     PORT
       LAYER Metal4 ;
-        RECT 1553.160 0.000 1558.200 1100.000 ;
+        RECT 1553.160 0.000 1558.200 1110.000 ;
     END
     PORT
       LAYER Metal5 ;
@@ -153,26 +153,26 @@ MACRO grouper_soc_chip_core
     ANTENNAGATEAREA 9.476000 ;
     ANTENNADIFFAREA 0.820800 ;
     PORT
-      LAYER Metal2 ;
-        RECT 47.040 1099.440 47.600 1100.000 ;
+      LAYER Metal3 ;
+        RECT 0.000 184.800 0.560 185.360 ;
     END
   END clk
   PIN gpio_0_bidir_cs
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 887.040 0.000 887.600 0.560 ;
+        RECT 198.240 0.000 198.800 0.560 ;
     END
   END gpio_0_bidir_cs
   PIN gpio_0_bidir_ie
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 80.640 0.000 81.200 0.560 ;
+        RECT 164.640 0.000 165.200 0.560 ;
     END
   END gpio_0_bidir_ie
   PIN gpio_0_bidir_in
@@ -182,70 +182,70 @@ MACRO grouper_soc_chip_core
     ANTENNADIFFAREA 0.410400 ;
     PORT
       LAYER Metal2 ;
-        RECT 232.960 1099.440 233.520 1100.000 ;
+        RECT 63.840 0.000 64.400 0.560 ;
     END
   END gpio_0_bidir_in
   PIN gpio_0_bidir_oe
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 565.600 1675.000 566.160 ;
+      LAYER Metal2 ;
+        RECT 131.040 0.000 131.600 0.560 ;
     END
   END gpio_0_bidir_oe
   PIN gpio_0_bidir_out
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 28.000 1675.000 28.560 ;
+      LAYER Metal2 ;
+        RECT 97.440 0.000 98.000 0.560 ;
     END
   END gpio_0_bidir_out
   PIN gpio_0_bidir_pd
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 750.400 0.560 750.960 ;
+      LAYER Metal2 ;
+        RECT 265.440 0.000 266.000 0.560 ;
     END
   END gpio_0_bidir_pd
   PIN gpio_0_bidir_pu
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 392.000 0.560 392.560 ;
+      LAYER Metal2 ;
+        RECT 231.840 0.000 232.400 0.560 ;
     END
   END gpio_0_bidir_pu
   PIN gpio_0_bidir_sl
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 33.600 0.560 34.160 ;
+      LAYER Metal2 ;
+        RECT 299.040 0.000 299.600 0.560 ;
     END
   END gpio_0_bidir_sl
   PIN gpio_10_bidir_cs
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 937.440 0.000 938.000 0.560 ;
+        RECT 160.160 1109.440 160.720 1110.000 ;
     END
   END gpio_10_bidir_cs
   PIN gpio_10_bidir_ie
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 131.040 0.000 131.600 0.560 ;
+        RECT 125.440 1109.440 126.000 1110.000 ;
     END
   END gpio_10_bidir_ie
   PIN gpio_10_bidir_in
@@ -255,70 +255,70 @@ MACRO grouper_soc_chip_core
     ANTENNADIFFAREA 0.410400 ;
     PORT
       LAYER Metal2 ;
-        RECT 325.920 1099.440 326.480 1100.000 ;
+        RECT 21.280 1109.440 21.840 1110.000 ;
     END
   END gpio_10_bidir_in
   PIN gpio_10_bidir_oe
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 599.200 1675.000 599.760 ;
+      LAYER Metal2 ;
+        RECT 90.720 1109.440 91.280 1110.000 ;
     END
   END gpio_10_bidir_oe
   PIN gpio_10_bidir_out
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 61.600 1675.000 62.160 ;
+      LAYER Metal2 ;
+        RECT 56.000 1109.440 56.560 1110.000 ;
     END
   END gpio_10_bidir_out
   PIN gpio_10_bidir_pd
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 772.800 0.560 773.360 ;
+      LAYER Metal2 ;
+        RECT 229.600 1109.440 230.160 1110.000 ;
     END
   END gpio_10_bidir_pd
   PIN gpio_10_bidir_pu
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 414.400 0.560 414.960 ;
+      LAYER Metal2 ;
+        RECT 194.880 1109.440 195.440 1110.000 ;
     END
   END gpio_10_bidir_pu
   PIN gpio_10_bidir_sl
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 56.000 0.560 56.560 ;
+      LAYER Metal2 ;
+        RECT 264.320 1109.440 264.880 1110.000 ;
     END
   END gpio_10_bidir_sl
   PIN gpio_11_bidir_cs
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 987.840 0.000 988.400 0.560 ;
+        RECT 437.920 1109.440 438.480 1110.000 ;
     END
   END gpio_11_bidir_cs
   PIN gpio_11_bidir_ie
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 181.440 0.000 182.000 0.560 ;
+        RECT 403.200 1109.440 403.760 1110.000 ;
     END
   END gpio_11_bidir_ie
   PIN gpio_11_bidir_in
@@ -328,70 +328,70 @@ MACRO grouper_soc_chip_core
     ANTENNADIFFAREA 0.410400 ;
     PORT
       LAYER Metal2 ;
-        RECT 418.880 1099.440 419.440 1100.000 ;
+        RECT 299.040 1109.440 299.600 1110.000 ;
     END
   END gpio_11_bidir_in
   PIN gpio_11_bidir_oe
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 632.800 1675.000 633.360 ;
+      LAYER Metal2 ;
+        RECT 368.480 1109.440 369.040 1110.000 ;
     END
   END gpio_11_bidir_oe
   PIN gpio_11_bidir_out
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 95.200 1675.000 95.760 ;
+      LAYER Metal2 ;
+        RECT 333.760 1109.440 334.320 1110.000 ;
     END
   END gpio_11_bidir_out
   PIN gpio_11_bidir_pd
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 795.200 0.560 795.760 ;
+      LAYER Metal2 ;
+        RECT 507.360 1109.440 507.920 1110.000 ;
     END
   END gpio_11_bidir_pd
   PIN gpio_11_bidir_pu
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 436.800 0.560 437.360 ;
+      LAYER Metal2 ;
+        RECT 472.640 1109.440 473.200 1110.000 ;
     END
   END gpio_11_bidir_pu
   PIN gpio_11_bidir_sl
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 78.400 0.560 78.960 ;
+      LAYER Metal2 ;
+        RECT 542.080 1109.440 542.640 1110.000 ;
     END
   END gpio_11_bidir_sl
   PIN gpio_12_bidir_cs
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 1038.240 0.000 1038.800 0.560 ;
+        RECT 715.680 1109.440 716.240 1110.000 ;
     END
   END gpio_12_bidir_cs
   PIN gpio_12_bidir_ie
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 231.840 0.000 232.400 0.560 ;
+        RECT 680.960 1109.440 681.520 1110.000 ;
     END
   END gpio_12_bidir_ie
   PIN gpio_12_bidir_in
@@ -401,70 +401,70 @@ MACRO grouper_soc_chip_core
     ANTENNADIFFAREA 0.410400 ;
     PORT
       LAYER Metal2 ;
-        RECT 511.840 1099.440 512.400 1100.000 ;
+        RECT 576.800 1109.440 577.360 1110.000 ;
     END
   END gpio_12_bidir_in
   PIN gpio_12_bidir_oe
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 666.400 1675.000 666.960 ;
+      LAYER Metal2 ;
+        RECT 646.240 1109.440 646.800 1110.000 ;
     END
   END gpio_12_bidir_oe
   PIN gpio_12_bidir_out
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 128.800 1675.000 129.360 ;
+      LAYER Metal2 ;
+        RECT 611.520 1109.440 612.080 1110.000 ;
     END
   END gpio_12_bidir_out
   PIN gpio_12_bidir_pd
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 817.600 0.560 818.160 ;
+      LAYER Metal2 ;
+        RECT 785.120 1109.440 785.680 1110.000 ;
     END
   END gpio_12_bidir_pd
   PIN gpio_12_bidir_pu
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 459.200 0.560 459.760 ;
+      LAYER Metal2 ;
+        RECT 750.400 1109.440 750.960 1110.000 ;
     END
   END gpio_12_bidir_pu
   PIN gpio_12_bidir_sl
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 100.800 0.560 101.360 ;
+      LAYER Metal2 ;
+        RECT 819.840 1109.440 820.400 1110.000 ;
     END
   END gpio_12_bidir_sl
   PIN gpio_13_bidir_cs
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 1088.640 0.000 1089.200 0.560 ;
+        RECT 993.440 1109.440 994.000 1110.000 ;
     END
   END gpio_13_bidir_cs
   PIN gpio_13_bidir_ie
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 282.240 0.000 282.800 0.560 ;
+        RECT 958.720 1109.440 959.280 1110.000 ;
     END
   END gpio_13_bidir_ie
   PIN gpio_13_bidir_in
@@ -474,70 +474,70 @@ MACRO grouper_soc_chip_core
     ANTENNADIFFAREA 0.410400 ;
     PORT
       LAYER Metal2 ;
-        RECT 604.800 1099.440 605.360 1100.000 ;
+        RECT 854.560 1109.440 855.120 1110.000 ;
     END
   END gpio_13_bidir_in
   PIN gpio_13_bidir_oe
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 700.000 1675.000 700.560 ;
+      LAYER Metal2 ;
+        RECT 924.000 1109.440 924.560 1110.000 ;
     END
   END gpio_13_bidir_oe
   PIN gpio_13_bidir_out
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 162.400 1675.000 162.960 ;
+      LAYER Metal2 ;
+        RECT 889.280 1109.440 889.840 1110.000 ;
     END
   END gpio_13_bidir_out
   PIN gpio_13_bidir_pd
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 840.000 0.560 840.560 ;
+      LAYER Metal2 ;
+        RECT 1062.880 1109.440 1063.440 1110.000 ;
     END
   END gpio_13_bidir_pd
   PIN gpio_13_bidir_pu
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 481.600 0.560 482.160 ;
+      LAYER Metal2 ;
+        RECT 1028.160 1109.440 1028.720 1110.000 ;
     END
   END gpio_13_bidir_pu
   PIN gpio_13_bidir_sl
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 123.200 0.560 123.760 ;
+      LAYER Metal2 ;
+        RECT 1097.600 1109.440 1098.160 1110.000 ;
     END
   END gpio_13_bidir_sl
   PIN gpio_14_bidir_cs
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 1139.040 0.000 1139.600 0.560 ;
+        RECT 1271.200 1109.440 1271.760 1110.000 ;
     END
   END gpio_14_bidir_cs
   PIN gpio_14_bidir_ie
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 332.640 0.000 333.200 0.560 ;
+        RECT 1236.480 1109.440 1237.040 1110.000 ;
     END
   END gpio_14_bidir_ie
   PIN gpio_14_bidir_in
@@ -547,140 +547,140 @@ MACRO grouper_soc_chip_core
     ANTENNADIFFAREA 0.410400 ;
     PORT
       LAYER Metal2 ;
-        RECT 697.760 1099.440 698.320 1100.000 ;
+        RECT 1132.320 1109.440 1132.880 1110.000 ;
     END
   END gpio_14_bidir_in
   PIN gpio_14_bidir_oe
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 733.600 1675.000 734.160 ;
+      LAYER Metal2 ;
+        RECT 1201.760 1109.440 1202.320 1110.000 ;
     END
   END gpio_14_bidir_oe
   PIN gpio_14_bidir_out
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 196.000 1675.000 196.560 ;
+      LAYER Metal2 ;
+        RECT 1167.040 1109.440 1167.600 1110.000 ;
     END
   END gpio_14_bidir_out
   PIN gpio_14_bidir_pd
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 862.400 0.560 862.960 ;
+      LAYER Metal2 ;
+        RECT 1340.640 1109.440 1341.200 1110.000 ;
     END
   END gpio_14_bidir_pd
   PIN gpio_14_bidir_pu
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 504.000 0.560 504.560 ;
+      LAYER Metal2 ;
+        RECT 1305.920 1109.440 1306.480 1110.000 ;
     END
   END gpio_14_bidir_pu
   PIN gpio_14_bidir_sl
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 145.600 0.560 146.160 ;
+      LAYER Metal2 ;
+        RECT 1375.360 1109.440 1375.920 1110.000 ;
     END
   END gpio_14_bidir_sl
   PIN gpio_15_bidir_cs
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 1189.440 0.000 1190.000 0.560 ;
+        RECT 1548.960 1109.440 1549.520 1110.000 ;
     END
   END gpio_15_bidir_cs
   PIN gpio_15_bidir_ie
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 383.040 0.000 383.600 0.560 ;
+        RECT 1514.240 1109.440 1514.800 1110.000 ;
     END
   END gpio_15_bidir_ie
   PIN gpio_15_bidir_in
     DIRECTION INPUT ;
     USE SIGNAL ;
-    ANTENNAGATEAREA 0.396000 ;
+    ANTENNAGATEAREA 1.102000 ;
     ANTENNADIFFAREA 0.410400 ;
     PORT
       LAYER Metal2 ;
-        RECT 790.720 1099.440 791.280 1100.000 ;
+        RECT 1410.080 1109.440 1410.640 1110.000 ;
     END
   END gpio_15_bidir_in
   PIN gpio_15_bidir_oe
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 767.200 1675.000 767.760 ;
+      LAYER Metal2 ;
+        RECT 1479.520 1109.440 1480.080 1110.000 ;
     END
   END gpio_15_bidir_oe
   PIN gpio_15_bidir_out
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 229.600 1675.000 230.160 ;
+      LAYER Metal2 ;
+        RECT 1444.800 1109.440 1445.360 1110.000 ;
     END
   END gpio_15_bidir_out
   PIN gpio_15_bidir_pd
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 884.800 0.560 885.360 ;
+      LAYER Metal2 ;
+        RECT 1618.400 1109.440 1618.960 1110.000 ;
     END
   END gpio_15_bidir_pd
   PIN gpio_15_bidir_pu
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 526.400 0.560 526.960 ;
+      LAYER Metal2 ;
+        RECT 1583.680 1109.440 1584.240 1110.000 ;
     END
   END gpio_15_bidir_pu
   PIN gpio_15_bidir_sl
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 168.000 0.560 168.560 ;
+      LAYER Metal2 ;
+        RECT 1653.120 1109.440 1653.680 1110.000 ;
     END
   END gpio_15_bidir_sl
   PIN gpio_1_bidir_cs
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 1239.840 0.000 1240.400 0.560 ;
+        RECT 467.040 0.000 467.600 0.560 ;
     END
   END gpio_1_bidir_cs
   PIN gpio_1_bidir_ie
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
         RECT 433.440 0.000 434.000 0.560 ;
@@ -689,74 +689,74 @@ MACRO grouper_soc_chip_core
   PIN gpio_1_bidir_in
     DIRECTION INPUT ;
     USE SIGNAL ;
-    ANTENNAGATEAREA 0.396000 ;
+    ANTENNAGATEAREA 1.102000 ;
     ANTENNADIFFAREA 0.410400 ;
     PORT
       LAYER Metal2 ;
-        RECT 883.680 1099.440 884.240 1100.000 ;
+        RECT 332.640 0.000 333.200 0.560 ;
     END
   END gpio_1_bidir_in
   PIN gpio_1_bidir_oe
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 800.800 1675.000 801.360 ;
+      LAYER Metal2 ;
+        RECT 399.840 0.000 400.400 0.560 ;
     END
   END gpio_1_bidir_oe
   PIN gpio_1_bidir_out
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 263.200 1675.000 263.760 ;
+      LAYER Metal2 ;
+        RECT 366.240 0.000 366.800 0.560 ;
     END
   END gpio_1_bidir_out
   PIN gpio_1_bidir_pd
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 907.200 0.560 907.760 ;
+      LAYER Metal2 ;
+        RECT 534.240 0.000 534.800 0.560 ;
     END
   END gpio_1_bidir_pd
   PIN gpio_1_bidir_pu
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 548.800 0.560 549.360 ;
+      LAYER Metal2 ;
+        RECT 500.640 0.000 501.200 0.560 ;
     END
   END gpio_1_bidir_pu
   PIN gpio_1_bidir_sl
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 190.400 0.560 190.960 ;
+      LAYER Metal2 ;
+        RECT 567.840 0.000 568.400 0.560 ;
     END
   END gpio_1_bidir_sl
   PIN gpio_2_bidir_cs
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 1290.240 0.000 1290.800 0.560 ;
+        RECT 735.840 0.000 736.400 0.560 ;
     END
   END gpio_2_bidir_cs
   PIN gpio_2_bidir_ie
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 483.840 0.000 484.400 0.560 ;
+        RECT 702.240 0.000 702.800 0.560 ;
     END
   END gpio_2_bidir_ie
   PIN gpio_2_bidir_in
@@ -766,70 +766,70 @@ MACRO grouper_soc_chip_core
     ANTENNADIFFAREA 0.410400 ;
     PORT
       LAYER Metal2 ;
-        RECT 976.640 1099.440 977.200 1100.000 ;
+        RECT 601.440 0.000 602.000 0.560 ;
     END
   END gpio_2_bidir_in
   PIN gpio_2_bidir_oe
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 834.400 1675.000 834.960 ;
+      LAYER Metal2 ;
+        RECT 668.640 0.000 669.200 0.560 ;
     END
   END gpio_2_bidir_oe
   PIN gpio_2_bidir_out
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 296.800 1675.000 297.360 ;
+      LAYER Metal2 ;
+        RECT 635.040 0.000 635.600 0.560 ;
     END
   END gpio_2_bidir_out
   PIN gpio_2_bidir_pd
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 929.600 0.560 930.160 ;
+      LAYER Metal2 ;
+        RECT 803.040 0.000 803.600 0.560 ;
     END
   END gpio_2_bidir_pd
   PIN gpio_2_bidir_pu
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 571.200 0.560 571.760 ;
+      LAYER Metal2 ;
+        RECT 769.440 0.000 770.000 0.560 ;
     END
   END gpio_2_bidir_pu
   PIN gpio_2_bidir_sl
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 212.800 0.560 213.360 ;
+      LAYER Metal2 ;
+        RECT 836.640 0.000 837.200 0.560 ;
     END
   END gpio_2_bidir_sl
   PIN gpio_3_bidir_cs
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 1340.640 0.000 1341.200 0.560 ;
+        RECT 1004.640 0.000 1005.200 0.560 ;
     END
   END gpio_3_bidir_cs
   PIN gpio_3_bidir_ie
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 534.240 0.000 534.800 0.560 ;
+        RECT 971.040 0.000 971.600 0.560 ;
     END
   END gpio_3_bidir_ie
   PIN gpio_3_bidir_in
@@ -839,70 +839,70 @@ MACRO grouper_soc_chip_core
     ANTENNADIFFAREA 0.410400 ;
     PORT
       LAYER Metal2 ;
-        RECT 1069.600 1099.440 1070.160 1100.000 ;
+        RECT 870.240 0.000 870.800 0.560 ;
     END
   END gpio_3_bidir_in
   PIN gpio_3_bidir_oe
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 868.000 1675.000 868.560 ;
+      LAYER Metal2 ;
+        RECT 937.440 0.000 938.000 0.560 ;
     END
   END gpio_3_bidir_oe
   PIN gpio_3_bidir_out
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 330.400 1675.000 330.960 ;
+      LAYER Metal2 ;
+        RECT 903.840 0.000 904.400 0.560 ;
     END
   END gpio_3_bidir_out
   PIN gpio_3_bidir_pd
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 952.000 0.560 952.560 ;
+      LAYER Metal2 ;
+        RECT 1071.840 0.000 1072.400 0.560 ;
     END
   END gpio_3_bidir_pd
   PIN gpio_3_bidir_pu
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 593.600 0.560 594.160 ;
+      LAYER Metal2 ;
+        RECT 1038.240 0.000 1038.800 0.560 ;
     END
   END gpio_3_bidir_pu
   PIN gpio_3_bidir_sl
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 235.200 0.560 235.760 ;
+      LAYER Metal2 ;
+        RECT 1105.440 0.000 1106.000 0.560 ;
     END
   END gpio_3_bidir_sl
   PIN gpio_4_bidir_cs
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 1391.040 0.000 1391.600 0.560 ;
+        RECT 1273.440 0.000 1274.000 0.560 ;
     END
   END gpio_4_bidir_cs
   PIN gpio_4_bidir_ie
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 584.640 0.000 585.200 0.560 ;
+        RECT 1239.840 0.000 1240.400 0.560 ;
     END
   END gpio_4_bidir_ie
   PIN gpio_4_bidir_in
@@ -912,70 +912,70 @@ MACRO grouper_soc_chip_core
     ANTENNADIFFAREA 0.410400 ;
     PORT
       LAYER Metal2 ;
-        RECT 1162.560 1099.440 1163.120 1100.000 ;
+        RECT 1139.040 0.000 1139.600 0.560 ;
     END
   END gpio_4_bidir_in
   PIN gpio_4_bidir_oe
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 901.600 1675.000 902.160 ;
+      LAYER Metal2 ;
+        RECT 1206.240 0.000 1206.800 0.560 ;
     END
   END gpio_4_bidir_oe
   PIN gpio_4_bidir_out
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 364.000 1675.000 364.560 ;
+      LAYER Metal2 ;
+        RECT 1172.640 0.000 1173.200 0.560 ;
     END
   END gpio_4_bidir_out
   PIN gpio_4_bidir_pd
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 974.400 0.560 974.960 ;
+      LAYER Metal2 ;
+        RECT 1340.640 0.000 1341.200 0.560 ;
     END
   END gpio_4_bidir_pd
   PIN gpio_4_bidir_pu
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 616.000 0.560 616.560 ;
+      LAYER Metal2 ;
+        RECT 1307.040 0.000 1307.600 0.560 ;
     END
   END gpio_4_bidir_pu
   PIN gpio_4_bidir_sl
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 257.600 0.560 258.160 ;
+      LAYER Metal2 ;
+        RECT 1374.240 0.000 1374.800 0.560 ;
     END
   END gpio_4_bidir_sl
   PIN gpio_5_bidir_cs
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 1441.440 0.000 1442.000 0.560 ;
+        RECT 1542.240 0.000 1542.800 0.560 ;
     END
   END gpio_5_bidir_cs
   PIN gpio_5_bidir_ie
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
-        RECT 635.040 0.000 635.600 0.560 ;
+        RECT 1508.640 0.000 1509.200 0.560 ;
     END
   END gpio_5_bidir_ie
   PIN gpio_5_bidir_in
@@ -985,70 +985,70 @@ MACRO grouper_soc_chip_core
     ANTENNADIFFAREA 0.410400 ;
     PORT
       LAYER Metal2 ;
-        RECT 1255.520 1099.440 1256.080 1100.000 ;
+        RECT 1407.840 0.000 1408.400 0.560 ;
     END
   END gpio_5_bidir_in
   PIN gpio_5_bidir_oe
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 935.200 1675.000 935.760 ;
+      LAYER Metal2 ;
+        RECT 1475.040 0.000 1475.600 0.560 ;
     END
   END gpio_5_bidir_oe
   PIN gpio_5_bidir_out
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 1674.440 397.600 1675.000 398.160 ;
+      LAYER Metal2 ;
+        RECT 1441.440 0.000 1442.000 0.560 ;
     END
   END gpio_5_bidir_out
   PIN gpio_5_bidir_pd
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 996.800 0.560 997.360 ;
+      LAYER Metal2 ;
+        RECT 1609.440 0.000 1610.000 0.560 ;
     END
   END gpio_5_bidir_pd
   PIN gpio_5_bidir_pu
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 638.400 0.560 638.960 ;
+      LAYER Metal2 ;
+        RECT 1575.840 0.000 1576.400 0.560 ;
     END
   END gpio_5_bidir_pu
   PIN gpio_5_bidir_sl
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal3 ;
-        RECT 0.000 280.000 0.560 280.560 ;
+      LAYER Metal2 ;
+        RECT 1643.040 0.000 1643.600 0.560 ;
     END
   END gpio_5_bidir_sl
   PIN gpio_6_bidir_cs
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal2 ;
-        RECT 1491.840 0.000 1492.400 0.560 ;
+      LAYER Metal3 ;
+        RECT 1674.440 168.000 1675.000 168.560 ;
     END
   END gpio_6_bidir_cs
   PIN gpio_6_bidir_ie
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal2 ;
-        RECT 685.440 0.000 686.000 0.560 ;
+      LAYER Metal3 ;
+        RECT 1674.440 134.400 1675.000 134.960 ;
     END
   END gpio_6_bidir_ie
   PIN gpio_6_bidir_in
@@ -1057,71 +1057,71 @@ MACRO grouper_soc_chip_core
     ANTENNAGATEAREA 0.396000 ;
     ANTENNADIFFAREA 0.410400 ;
     PORT
-      LAYER Metal2 ;
-        RECT 1348.480 1099.440 1349.040 1100.000 ;
+      LAYER Metal3 ;
+        RECT 1674.440 33.600 1675.000 34.160 ;
     END
   END gpio_6_bidir_in
   PIN gpio_6_bidir_oe
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 1674.440 968.800 1675.000 969.360 ;
+        RECT 1674.440 100.800 1675.000 101.360 ;
     END
   END gpio_6_bidir_oe
   PIN gpio_6_bidir_out
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 1674.440 431.200 1675.000 431.760 ;
+        RECT 1674.440 67.200 1675.000 67.760 ;
     END
   END gpio_6_bidir_out
   PIN gpio_6_bidir_pd
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 0.000 1019.200 0.560 1019.760 ;
+        RECT 1674.440 235.200 1675.000 235.760 ;
     END
   END gpio_6_bidir_pd
   PIN gpio_6_bidir_pu
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 0.000 660.800 0.560 661.360 ;
+        RECT 1674.440 201.600 1675.000 202.160 ;
     END
   END gpio_6_bidir_pu
   PIN gpio_6_bidir_sl
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 0.000 302.400 0.560 302.960 ;
+        RECT 1674.440 268.800 1675.000 269.360 ;
     END
   END gpio_6_bidir_sl
   PIN gpio_7_bidir_cs
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal2 ;
-        RECT 1542.240 0.000 1542.800 0.560 ;
+      LAYER Metal3 ;
+        RECT 1674.440 436.800 1675.000 437.360 ;
     END
   END gpio_7_bidir_cs
   PIN gpio_7_bidir_ie
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal2 ;
-        RECT 735.840 0.000 736.400 0.560 ;
+      LAYER Metal3 ;
+        RECT 1674.440 403.200 1675.000 403.760 ;
     END
   END gpio_7_bidir_ie
   PIN gpio_7_bidir_in
@@ -1130,71 +1130,71 @@ MACRO grouper_soc_chip_core
     ANTENNAGATEAREA 0.396000 ;
     ANTENNADIFFAREA 0.410400 ;
     PORT
-      LAYER Metal2 ;
-        RECT 1441.440 1099.440 1442.000 1100.000 ;
+      LAYER Metal3 ;
+        RECT 1674.440 302.400 1675.000 302.960 ;
     END
   END gpio_7_bidir_in
   PIN gpio_7_bidir_oe
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 1674.440 1002.400 1675.000 1002.960 ;
+        RECT 1674.440 369.600 1675.000 370.160 ;
     END
   END gpio_7_bidir_oe
   PIN gpio_7_bidir_out
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 1674.440 464.800 1675.000 465.360 ;
+        RECT 1674.440 336.000 1675.000 336.560 ;
     END
   END gpio_7_bidir_out
   PIN gpio_7_bidir_pd
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 0.000 1041.600 0.560 1042.160 ;
+        RECT 1674.440 504.000 1675.000 504.560 ;
     END
   END gpio_7_bidir_pd
   PIN gpio_7_bidir_pu
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 0.000 683.200 0.560 683.760 ;
+        RECT 1674.440 470.400 1675.000 470.960 ;
     END
   END gpio_7_bidir_pu
   PIN gpio_7_bidir_sl
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 0.000 324.800 0.560 325.360 ;
+        RECT 1674.440 537.600 1675.000 538.160 ;
     END
   END gpio_7_bidir_sl
   PIN gpio_8_bidir_cs
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal2 ;
-        RECT 1592.640 0.000 1593.200 0.560 ;
+      LAYER Metal3 ;
+        RECT 1674.440 705.600 1675.000 706.160 ;
     END
   END gpio_8_bidir_cs
   PIN gpio_8_bidir_ie
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal2 ;
-        RECT 786.240 0.000 786.800 0.560 ;
+      LAYER Metal3 ;
+        RECT 1674.440 672.000 1675.000 672.560 ;
     END
   END gpio_8_bidir_ie
   PIN gpio_8_bidir_in
@@ -1203,71 +1203,71 @@ MACRO grouper_soc_chip_core
     ANTENNAGATEAREA 0.396000 ;
     ANTENNADIFFAREA 0.410400 ;
     PORT
-      LAYER Metal2 ;
-        RECT 1534.400 1099.440 1534.960 1100.000 ;
+      LAYER Metal3 ;
+        RECT 1674.440 571.200 1675.000 571.760 ;
     END
   END gpio_8_bidir_in
   PIN gpio_8_bidir_oe
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 1674.440 1036.000 1675.000 1036.560 ;
+        RECT 1674.440 638.400 1675.000 638.960 ;
     END
   END gpio_8_bidir_oe
   PIN gpio_8_bidir_out
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 1674.440 498.400 1675.000 498.960 ;
+        RECT 1674.440 604.800 1675.000 605.360 ;
     END
   END gpio_8_bidir_out
   PIN gpio_8_bidir_pd
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 0.000 1064.000 0.560 1064.560 ;
+        RECT 1674.440 772.800 1675.000 773.360 ;
     END
   END gpio_8_bidir_pd
   PIN gpio_8_bidir_pu
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 0.000 705.600 0.560 706.160 ;
+        RECT 1674.440 739.200 1675.000 739.760 ;
     END
   END gpio_8_bidir_pu
   PIN gpio_8_bidir_sl
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 0.000 347.200 0.560 347.760 ;
+        RECT 1674.440 806.400 1675.000 806.960 ;
     END
   END gpio_8_bidir_sl
   PIN gpio_9_bidir_cs
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal2 ;
-        RECT 1643.040 0.000 1643.600 0.560 ;
+      LAYER Metal3 ;
+        RECT 1674.440 974.400 1675.000 974.960 ;
     END
   END gpio_9_bidir_cs
   PIN gpio_9_bidir_ie
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
-      LAYER Metal2 ;
-        RECT 836.640 0.000 837.200 0.560 ;
+      LAYER Metal3 ;
+        RECT 1674.440 940.800 1675.000 941.360 ;
     END
   END gpio_9_bidir_ie
   PIN gpio_9_bidir_in
@@ -1276,53 +1276,53 @@ MACRO grouper_soc_chip_core
     ANTENNAGATEAREA 0.396000 ;
     ANTENNADIFFAREA 0.410400 ;
     PORT
-      LAYER Metal2 ;
-        RECT 1627.360 1099.440 1627.920 1100.000 ;
+      LAYER Metal3 ;
+        RECT 1674.440 840.000 1675.000 840.560 ;
     END
   END gpio_9_bidir_in
   PIN gpio_9_bidir_oe
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 1674.440 1069.600 1675.000 1070.160 ;
+        RECT 1674.440 907.200 1675.000 907.760 ;
     END
   END gpio_9_bidir_oe
   PIN gpio_9_bidir_out
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 1674.440 532.000 1675.000 532.560 ;
+        RECT 1674.440 873.600 1675.000 874.160 ;
     END
   END gpio_9_bidir_out
   PIN gpio_9_bidir_pd
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 0.000 1086.400 0.560 1086.960 ;
+        RECT 1674.440 1041.600 1675.000 1042.160 ;
     END
   END gpio_9_bidir_pd
   PIN gpio_9_bidir_pu
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 0.000 728.000 0.560 728.560 ;
+        RECT 1674.440 1008.000 1675.000 1008.560 ;
     END
   END gpio_9_bidir_pu
   PIN gpio_9_bidir_sl
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal3 ;
-        RECT 0.000 369.600 0.560 370.160 ;
+        RECT 1674.440 1075.200 1675.000 1075.760 ;
     END
   END gpio_9_bidir_sl
   PIN rst_n
@@ -1331,8 +1331,8 @@ MACRO grouper_soc_chip_core
     ANTENNAGATEAREA 0.396000 ;
     ANTENNADIFFAREA 0.410400 ;
     PORT
-      LAYER Metal2 ;
-        RECT 140.000 1099.440 140.560 1100.000 ;
+      LAYER Metal3 ;
+        RECT 0.000 554.400 0.560 554.960 ;
     END
   END rst_n
   PIN uart_rx
@@ -1342,13 +1342,13 @@ MACRO grouper_soc_chip_core
     ANTENNADIFFAREA 0.410400 ;
     PORT
       LAYER Metal3 ;
-        RECT 0.000 11.200 0.560 11.760 ;
+        RECT 0.000 924.000 0.560 924.560 ;
     END
   END uart_rx
   PIN uart_tx
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.897600 ;
+    ANTENNADIFFAREA 1.182800 ;
     PORT
       LAYER Metal2 ;
         RECT 30.240 0.000 30.800 0.560 ;
@@ -1356,266 +1356,220 @@ MACRO grouper_soc_chip_core
   END uart_tx
   OBS
       LAYER Nwell ;
-        RECT 6.290 15.250 1668.670 1082.350 ;
+        RECT 6.290 15.250 1668.670 1094.110 ;
       LAYER Metal1 ;
-        RECT 6.720 15.380 1668.240 1082.220 ;
+        RECT 6.720 15.380 1668.240 1093.980 ;
       LAYER Metal2 ;
-        RECT 0.140 1099.140 46.740 1099.440 ;
-        RECT 47.900 1099.140 139.700 1099.440 ;
-        RECT 140.860 1099.140 232.660 1099.440 ;
-        RECT 233.820 1099.140 325.620 1099.440 ;
-        RECT 326.780 1099.140 418.580 1099.440 ;
-        RECT 419.740 1099.140 511.540 1099.440 ;
-        RECT 512.700 1099.140 604.500 1099.440 ;
-        RECT 605.660 1099.140 697.460 1099.440 ;
-        RECT 698.620 1099.140 790.420 1099.440 ;
-        RECT 791.580 1099.140 883.380 1099.440 ;
-        RECT 884.540 1099.140 976.340 1099.440 ;
-        RECT 977.500 1099.140 1069.300 1099.440 ;
-        RECT 1070.460 1099.140 1162.260 1099.440 ;
-        RECT 1163.420 1099.140 1255.220 1099.440 ;
-        RECT 1256.380 1099.140 1348.180 1099.440 ;
-        RECT 1349.340 1099.140 1441.140 1099.440 ;
-        RECT 1442.300 1099.140 1534.100 1099.440 ;
-        RECT 1535.260 1099.140 1627.060 1099.440 ;
-        RECT 1628.220 1099.140 1673.700 1099.440 ;
-        RECT 0.140 0.860 1673.700 1099.140 ;
+        RECT 0.140 1109.140 20.980 1109.780 ;
+        RECT 22.140 1109.140 55.700 1109.780 ;
+        RECT 56.860 1109.140 90.420 1109.780 ;
+        RECT 91.580 1109.140 125.140 1109.780 ;
+        RECT 126.300 1109.140 159.860 1109.780 ;
+        RECT 161.020 1109.140 194.580 1109.780 ;
+        RECT 195.740 1109.140 229.300 1109.780 ;
+        RECT 230.460 1109.140 264.020 1109.780 ;
+        RECT 265.180 1109.140 298.740 1109.780 ;
+        RECT 299.900 1109.140 333.460 1109.780 ;
+        RECT 334.620 1109.140 368.180 1109.780 ;
+        RECT 369.340 1109.140 402.900 1109.780 ;
+        RECT 404.060 1109.140 437.620 1109.780 ;
+        RECT 438.780 1109.140 472.340 1109.780 ;
+        RECT 473.500 1109.140 507.060 1109.780 ;
+        RECT 508.220 1109.140 541.780 1109.780 ;
+        RECT 542.940 1109.140 576.500 1109.780 ;
+        RECT 577.660 1109.140 611.220 1109.780 ;
+        RECT 612.380 1109.140 645.940 1109.780 ;
+        RECT 647.100 1109.140 680.660 1109.780 ;
+        RECT 681.820 1109.140 715.380 1109.780 ;
+        RECT 716.540 1109.140 750.100 1109.780 ;
+        RECT 751.260 1109.140 784.820 1109.780 ;
+        RECT 785.980 1109.140 819.540 1109.780 ;
+        RECT 820.700 1109.140 854.260 1109.780 ;
+        RECT 855.420 1109.140 888.980 1109.780 ;
+        RECT 890.140 1109.140 923.700 1109.780 ;
+        RECT 924.860 1109.140 958.420 1109.780 ;
+        RECT 959.580 1109.140 993.140 1109.780 ;
+        RECT 994.300 1109.140 1027.860 1109.780 ;
+        RECT 1029.020 1109.140 1062.580 1109.780 ;
+        RECT 1063.740 1109.140 1097.300 1109.780 ;
+        RECT 1098.460 1109.140 1132.020 1109.780 ;
+        RECT 1133.180 1109.140 1166.740 1109.780 ;
+        RECT 1167.900 1109.140 1201.460 1109.780 ;
+        RECT 1202.620 1109.140 1236.180 1109.780 ;
+        RECT 1237.340 1109.140 1270.900 1109.780 ;
+        RECT 1272.060 1109.140 1305.620 1109.780 ;
+        RECT 1306.780 1109.140 1340.340 1109.780 ;
+        RECT 1341.500 1109.140 1375.060 1109.780 ;
+        RECT 1376.220 1109.140 1409.780 1109.780 ;
+        RECT 1410.940 1109.140 1444.500 1109.780 ;
+        RECT 1445.660 1109.140 1479.220 1109.780 ;
+        RECT 1480.380 1109.140 1513.940 1109.780 ;
+        RECT 1515.100 1109.140 1548.660 1109.780 ;
+        RECT 1549.820 1109.140 1583.380 1109.780 ;
+        RECT 1584.540 1109.140 1618.100 1109.780 ;
+        RECT 1619.260 1109.140 1652.820 1109.780 ;
+        RECT 1653.980 1109.140 1674.820 1109.780 ;
+        RECT 0.140 0.860 1674.820 1109.140 ;
         RECT 0.140 0.090 29.940 0.860 ;
-        RECT 31.100 0.090 80.340 0.860 ;
-        RECT 81.500 0.090 130.740 0.860 ;
-        RECT 131.900 0.090 181.140 0.860 ;
-        RECT 182.300 0.090 231.540 0.860 ;
-        RECT 232.700 0.090 281.940 0.860 ;
-        RECT 283.100 0.090 332.340 0.860 ;
-        RECT 333.500 0.090 382.740 0.860 ;
-        RECT 383.900 0.090 433.140 0.860 ;
-        RECT 434.300 0.090 483.540 0.860 ;
-        RECT 484.700 0.090 533.940 0.860 ;
-        RECT 535.100 0.090 584.340 0.860 ;
-        RECT 585.500 0.090 634.740 0.860 ;
-        RECT 635.900 0.090 685.140 0.860 ;
-        RECT 686.300 0.090 735.540 0.860 ;
-        RECT 736.700 0.090 785.940 0.860 ;
-        RECT 787.100 0.090 836.340 0.860 ;
-        RECT 837.500 0.090 886.740 0.860 ;
-        RECT 887.900 0.090 937.140 0.860 ;
-        RECT 938.300 0.090 987.540 0.860 ;
-        RECT 988.700 0.090 1037.940 0.860 ;
-        RECT 1039.100 0.090 1088.340 0.860 ;
-        RECT 1089.500 0.090 1138.740 0.860 ;
-        RECT 1139.900 0.090 1189.140 0.860 ;
-        RECT 1190.300 0.090 1239.540 0.860 ;
-        RECT 1240.700 0.090 1289.940 0.860 ;
-        RECT 1291.100 0.090 1340.340 0.860 ;
-        RECT 1341.500 0.090 1390.740 0.860 ;
-        RECT 1391.900 0.090 1441.140 0.860 ;
-        RECT 1442.300 0.090 1491.540 0.860 ;
-        RECT 1492.700 0.090 1541.940 0.860 ;
-        RECT 1543.100 0.090 1592.340 0.860 ;
-        RECT 1593.500 0.090 1642.740 0.860 ;
-        RECT 1643.900 0.090 1673.700 0.860 ;
+        RECT 31.100 0.090 63.540 0.860 ;
+        RECT 64.700 0.090 97.140 0.860 ;
+        RECT 98.300 0.090 130.740 0.860 ;
+        RECT 131.900 0.090 164.340 0.860 ;
+        RECT 165.500 0.090 197.940 0.860 ;
+        RECT 199.100 0.090 231.540 0.860 ;
+        RECT 232.700 0.090 265.140 0.860 ;
+        RECT 266.300 0.090 298.740 0.860 ;
+        RECT 299.900 0.090 332.340 0.860 ;
+        RECT 333.500 0.090 365.940 0.860 ;
+        RECT 367.100 0.090 399.540 0.860 ;
+        RECT 400.700 0.090 433.140 0.860 ;
+        RECT 434.300 0.090 466.740 0.860 ;
+        RECT 467.900 0.090 500.340 0.860 ;
+        RECT 501.500 0.090 533.940 0.860 ;
+        RECT 535.100 0.090 567.540 0.860 ;
+        RECT 568.700 0.090 601.140 0.860 ;
+        RECT 602.300 0.090 634.740 0.860 ;
+        RECT 635.900 0.090 668.340 0.860 ;
+        RECT 669.500 0.090 701.940 0.860 ;
+        RECT 703.100 0.090 735.540 0.860 ;
+        RECT 736.700 0.090 769.140 0.860 ;
+        RECT 770.300 0.090 802.740 0.860 ;
+        RECT 803.900 0.090 836.340 0.860 ;
+        RECT 837.500 0.090 869.940 0.860 ;
+        RECT 871.100 0.090 903.540 0.860 ;
+        RECT 904.700 0.090 937.140 0.860 ;
+        RECT 938.300 0.090 970.740 0.860 ;
+        RECT 971.900 0.090 1004.340 0.860 ;
+        RECT 1005.500 0.090 1037.940 0.860 ;
+        RECT 1039.100 0.090 1071.540 0.860 ;
+        RECT 1072.700 0.090 1105.140 0.860 ;
+        RECT 1106.300 0.090 1138.740 0.860 ;
+        RECT 1139.900 0.090 1172.340 0.860 ;
+        RECT 1173.500 0.090 1205.940 0.860 ;
+        RECT 1207.100 0.090 1239.540 0.860 ;
+        RECT 1240.700 0.090 1273.140 0.860 ;
+        RECT 1274.300 0.090 1306.740 0.860 ;
+        RECT 1307.900 0.090 1340.340 0.860 ;
+        RECT 1341.500 0.090 1373.940 0.860 ;
+        RECT 1375.100 0.090 1407.540 0.860 ;
+        RECT 1408.700 0.090 1441.140 0.860 ;
+        RECT 1442.300 0.090 1474.740 0.860 ;
+        RECT 1475.900 0.090 1508.340 0.860 ;
+        RECT 1509.500 0.090 1541.940 0.860 ;
+        RECT 1543.100 0.090 1575.540 0.860 ;
+        RECT 1576.700 0.090 1609.140 0.860 ;
+        RECT 1610.300 0.090 1642.740 0.860 ;
+        RECT 1643.900 0.090 1674.820 0.860 ;
       LAYER Metal3 ;
-        RECT 0.090 1087.260 1674.440 1088.500 ;
-        RECT 0.860 1086.100 1674.440 1087.260 ;
-        RECT 0.090 1070.460 1674.440 1086.100 ;
-        RECT 0.090 1069.300 1674.140 1070.460 ;
-        RECT 0.090 1064.860 1674.440 1069.300 ;
-        RECT 0.860 1063.700 1674.440 1064.860 ;
-        RECT 0.090 1042.460 1674.440 1063.700 ;
-        RECT 0.860 1041.300 1674.440 1042.460 ;
-        RECT 0.090 1036.860 1674.440 1041.300 ;
-        RECT 0.090 1035.700 1674.140 1036.860 ;
-        RECT 0.090 1020.060 1674.440 1035.700 ;
-        RECT 0.860 1018.900 1674.440 1020.060 ;
-        RECT 0.090 1003.260 1674.440 1018.900 ;
-        RECT 0.090 1002.100 1674.140 1003.260 ;
-        RECT 0.090 997.660 1674.440 1002.100 ;
-        RECT 0.860 996.500 1674.440 997.660 ;
-        RECT 0.090 975.260 1674.440 996.500 ;
-        RECT 0.860 974.100 1674.440 975.260 ;
-        RECT 0.090 969.660 1674.440 974.100 ;
-        RECT 0.090 968.500 1674.140 969.660 ;
-        RECT 0.090 952.860 1674.440 968.500 ;
-        RECT 0.860 951.700 1674.440 952.860 ;
-        RECT 0.090 936.060 1674.440 951.700 ;
-        RECT 0.090 934.900 1674.140 936.060 ;
-        RECT 0.090 930.460 1674.440 934.900 ;
-        RECT 0.860 929.300 1674.440 930.460 ;
-        RECT 0.090 908.060 1674.440 929.300 ;
-        RECT 0.860 906.900 1674.440 908.060 ;
-        RECT 0.090 902.460 1674.440 906.900 ;
-        RECT 0.090 901.300 1674.140 902.460 ;
-        RECT 0.090 885.660 1674.440 901.300 ;
-        RECT 0.860 884.500 1674.440 885.660 ;
-        RECT 0.090 868.860 1674.440 884.500 ;
-        RECT 0.090 867.700 1674.140 868.860 ;
-        RECT 0.090 863.260 1674.440 867.700 ;
-        RECT 0.860 862.100 1674.440 863.260 ;
-        RECT 0.090 840.860 1674.440 862.100 ;
-        RECT 0.860 839.700 1674.440 840.860 ;
-        RECT 0.090 835.260 1674.440 839.700 ;
-        RECT 0.090 834.100 1674.140 835.260 ;
-        RECT 0.090 818.460 1674.440 834.100 ;
-        RECT 0.860 817.300 1674.440 818.460 ;
-        RECT 0.090 801.660 1674.440 817.300 ;
-        RECT 0.090 800.500 1674.140 801.660 ;
-        RECT 0.090 796.060 1674.440 800.500 ;
-        RECT 0.860 794.900 1674.440 796.060 ;
-        RECT 0.090 773.660 1674.440 794.900 ;
-        RECT 0.860 772.500 1674.440 773.660 ;
-        RECT 0.090 768.060 1674.440 772.500 ;
-        RECT 0.090 766.900 1674.140 768.060 ;
-        RECT 0.090 751.260 1674.440 766.900 ;
-        RECT 0.860 750.100 1674.440 751.260 ;
-        RECT 0.090 734.460 1674.440 750.100 ;
-        RECT 0.090 733.300 1674.140 734.460 ;
-        RECT 0.090 728.860 1674.440 733.300 ;
-        RECT 0.860 727.700 1674.440 728.860 ;
-        RECT 0.090 706.460 1674.440 727.700 ;
-        RECT 0.860 705.300 1674.440 706.460 ;
-        RECT 0.090 700.860 1674.440 705.300 ;
-        RECT 0.090 699.700 1674.140 700.860 ;
-        RECT 0.090 684.060 1674.440 699.700 ;
-        RECT 0.860 682.900 1674.440 684.060 ;
-        RECT 0.090 667.260 1674.440 682.900 ;
-        RECT 0.090 666.100 1674.140 667.260 ;
-        RECT 0.090 661.660 1674.440 666.100 ;
-        RECT 0.860 660.500 1674.440 661.660 ;
-        RECT 0.090 639.260 1674.440 660.500 ;
-        RECT 0.860 638.100 1674.440 639.260 ;
-        RECT 0.090 633.660 1674.440 638.100 ;
-        RECT 0.090 632.500 1674.140 633.660 ;
-        RECT 0.090 616.860 1674.440 632.500 ;
-        RECT 0.860 615.700 1674.440 616.860 ;
-        RECT 0.090 600.060 1674.440 615.700 ;
-        RECT 0.090 598.900 1674.140 600.060 ;
-        RECT 0.090 594.460 1674.440 598.900 ;
-        RECT 0.860 593.300 1674.440 594.460 ;
-        RECT 0.090 572.060 1674.440 593.300 ;
-        RECT 0.860 570.900 1674.440 572.060 ;
-        RECT 0.090 566.460 1674.440 570.900 ;
-        RECT 0.090 565.300 1674.140 566.460 ;
-        RECT 0.090 549.660 1674.440 565.300 ;
-        RECT 0.860 548.500 1674.440 549.660 ;
-        RECT 0.090 532.860 1674.440 548.500 ;
-        RECT 0.090 531.700 1674.140 532.860 ;
-        RECT 0.090 527.260 1674.440 531.700 ;
-        RECT 0.860 526.100 1674.440 527.260 ;
-        RECT 0.090 504.860 1674.440 526.100 ;
-        RECT 0.860 503.700 1674.440 504.860 ;
-        RECT 0.090 499.260 1674.440 503.700 ;
-        RECT 0.090 498.100 1674.140 499.260 ;
-        RECT 0.090 482.460 1674.440 498.100 ;
-        RECT 0.860 481.300 1674.440 482.460 ;
-        RECT 0.090 465.660 1674.440 481.300 ;
-        RECT 0.090 464.500 1674.140 465.660 ;
-        RECT 0.090 460.060 1674.440 464.500 ;
-        RECT 0.860 458.900 1674.440 460.060 ;
-        RECT 0.090 437.660 1674.440 458.900 ;
-        RECT 0.860 436.500 1674.440 437.660 ;
-        RECT 0.090 432.060 1674.440 436.500 ;
-        RECT 0.090 430.900 1674.140 432.060 ;
-        RECT 0.090 415.260 1674.440 430.900 ;
-        RECT 0.860 414.100 1674.440 415.260 ;
-        RECT 0.090 398.460 1674.440 414.100 ;
-        RECT 0.090 397.300 1674.140 398.460 ;
-        RECT 0.090 392.860 1674.440 397.300 ;
-        RECT 0.860 391.700 1674.440 392.860 ;
-        RECT 0.090 370.460 1674.440 391.700 ;
-        RECT 0.860 369.300 1674.440 370.460 ;
-        RECT 0.090 364.860 1674.440 369.300 ;
-        RECT 0.090 363.700 1674.140 364.860 ;
-        RECT 0.090 348.060 1674.440 363.700 ;
-        RECT 0.860 346.900 1674.440 348.060 ;
-        RECT 0.090 331.260 1674.440 346.900 ;
-        RECT 0.090 330.100 1674.140 331.260 ;
-        RECT 0.090 325.660 1674.440 330.100 ;
-        RECT 0.860 324.500 1674.440 325.660 ;
-        RECT 0.090 303.260 1674.440 324.500 ;
-        RECT 0.860 302.100 1674.440 303.260 ;
-        RECT 0.090 297.660 1674.440 302.100 ;
-        RECT 0.090 296.500 1674.140 297.660 ;
-        RECT 0.090 280.860 1674.440 296.500 ;
-        RECT 0.860 279.700 1674.440 280.860 ;
-        RECT 0.090 264.060 1674.440 279.700 ;
-        RECT 0.090 262.900 1674.140 264.060 ;
-        RECT 0.090 258.460 1674.440 262.900 ;
-        RECT 0.860 257.300 1674.440 258.460 ;
-        RECT 0.090 236.060 1674.440 257.300 ;
-        RECT 0.860 234.900 1674.440 236.060 ;
-        RECT 0.090 230.460 1674.440 234.900 ;
-        RECT 0.090 229.300 1674.140 230.460 ;
-        RECT 0.090 213.660 1674.440 229.300 ;
-        RECT 0.860 212.500 1674.440 213.660 ;
-        RECT 0.090 196.860 1674.440 212.500 ;
-        RECT 0.090 195.700 1674.140 196.860 ;
-        RECT 0.090 191.260 1674.440 195.700 ;
-        RECT 0.860 190.100 1674.440 191.260 ;
-        RECT 0.090 168.860 1674.440 190.100 ;
-        RECT 0.860 167.700 1674.440 168.860 ;
-        RECT 0.090 163.260 1674.440 167.700 ;
-        RECT 0.090 162.100 1674.140 163.260 ;
-        RECT 0.090 146.460 1674.440 162.100 ;
-        RECT 0.860 145.300 1674.440 146.460 ;
-        RECT 0.090 129.660 1674.440 145.300 ;
-        RECT 0.090 128.500 1674.140 129.660 ;
-        RECT 0.090 124.060 1674.440 128.500 ;
-        RECT 0.860 122.900 1674.440 124.060 ;
-        RECT 0.090 101.660 1674.440 122.900 ;
-        RECT 0.860 100.500 1674.440 101.660 ;
-        RECT 0.090 96.060 1674.440 100.500 ;
-        RECT 0.090 94.900 1674.140 96.060 ;
-        RECT 0.090 79.260 1674.440 94.900 ;
-        RECT 0.860 78.100 1674.440 79.260 ;
-        RECT 0.090 62.460 1674.440 78.100 ;
-        RECT 0.090 61.300 1674.140 62.460 ;
-        RECT 0.090 56.860 1674.440 61.300 ;
-        RECT 0.860 55.700 1674.440 56.860 ;
-        RECT 0.090 34.460 1674.440 55.700 ;
-        RECT 0.860 33.300 1674.440 34.460 ;
-        RECT 0.090 28.860 1674.440 33.300 ;
-        RECT 0.090 27.700 1674.140 28.860 ;
-        RECT 0.090 12.060 1674.440 27.700 ;
-        RECT 0.860 10.900 1674.440 12.060 ;
-        RECT 0.090 0.140 1674.440 10.900 ;
+        RECT 0.090 1076.060 1674.870 1109.220 ;
+        RECT 0.090 1074.900 1674.140 1076.060 ;
+        RECT 0.090 1042.460 1674.870 1074.900 ;
+        RECT 0.090 1041.300 1674.140 1042.460 ;
+        RECT 0.090 1008.860 1674.870 1041.300 ;
+        RECT 0.090 1007.700 1674.140 1008.860 ;
+        RECT 0.090 975.260 1674.870 1007.700 ;
+        RECT 0.090 974.100 1674.140 975.260 ;
+        RECT 0.090 941.660 1674.870 974.100 ;
+        RECT 0.090 940.500 1674.140 941.660 ;
+        RECT 0.090 924.860 1674.870 940.500 ;
+        RECT 0.860 923.700 1674.870 924.860 ;
+        RECT 0.090 908.060 1674.870 923.700 ;
+        RECT 0.090 906.900 1674.140 908.060 ;
+        RECT 0.090 874.460 1674.870 906.900 ;
+        RECT 0.090 873.300 1674.140 874.460 ;
+        RECT 0.090 840.860 1674.870 873.300 ;
+        RECT 0.090 839.700 1674.140 840.860 ;
+        RECT 0.090 807.260 1674.870 839.700 ;
+        RECT 0.090 806.100 1674.140 807.260 ;
+        RECT 0.090 773.660 1674.870 806.100 ;
+        RECT 0.090 772.500 1674.140 773.660 ;
+        RECT 0.090 740.060 1674.870 772.500 ;
+        RECT 0.090 738.900 1674.140 740.060 ;
+        RECT 0.090 706.460 1674.870 738.900 ;
+        RECT 0.090 705.300 1674.140 706.460 ;
+        RECT 0.090 672.860 1674.870 705.300 ;
+        RECT 0.090 671.700 1674.140 672.860 ;
+        RECT 0.090 639.260 1674.870 671.700 ;
+        RECT 0.090 638.100 1674.140 639.260 ;
+        RECT 0.090 605.660 1674.870 638.100 ;
+        RECT 0.090 604.500 1674.140 605.660 ;
+        RECT 0.090 572.060 1674.870 604.500 ;
+        RECT 0.090 570.900 1674.140 572.060 ;
+        RECT 0.090 555.260 1674.870 570.900 ;
+        RECT 0.860 554.100 1674.870 555.260 ;
+        RECT 0.090 538.460 1674.870 554.100 ;
+        RECT 0.090 537.300 1674.140 538.460 ;
+        RECT 0.090 504.860 1674.870 537.300 ;
+        RECT 0.090 503.700 1674.140 504.860 ;
+        RECT 0.090 471.260 1674.870 503.700 ;
+        RECT 0.090 470.100 1674.140 471.260 ;
+        RECT 0.090 437.660 1674.870 470.100 ;
+        RECT 0.090 436.500 1674.140 437.660 ;
+        RECT 0.090 404.060 1674.870 436.500 ;
+        RECT 0.090 402.900 1674.140 404.060 ;
+        RECT 0.090 370.460 1674.870 402.900 ;
+        RECT 0.090 369.300 1674.140 370.460 ;
+        RECT 0.090 336.860 1674.870 369.300 ;
+        RECT 0.090 335.700 1674.140 336.860 ;
+        RECT 0.090 303.260 1674.870 335.700 ;
+        RECT 0.090 302.100 1674.140 303.260 ;
+        RECT 0.090 269.660 1674.870 302.100 ;
+        RECT 0.090 268.500 1674.140 269.660 ;
+        RECT 0.090 236.060 1674.870 268.500 ;
+        RECT 0.090 234.900 1674.140 236.060 ;
+        RECT 0.090 202.460 1674.870 234.900 ;
+        RECT 0.090 201.300 1674.140 202.460 ;
+        RECT 0.090 185.660 1674.870 201.300 ;
+        RECT 0.860 184.500 1674.870 185.660 ;
+        RECT 0.090 168.860 1674.870 184.500 ;
+        RECT 0.090 167.700 1674.140 168.860 ;
+        RECT 0.090 135.260 1674.870 167.700 ;
+        RECT 0.090 134.100 1674.140 135.260 ;
+        RECT 0.090 101.660 1674.870 134.100 ;
+        RECT 0.090 100.500 1674.140 101.660 ;
+        RECT 0.090 68.060 1674.870 100.500 ;
+        RECT 0.090 66.900 1674.140 68.060 ;
+        RECT 0.090 34.460 1674.870 66.900 ;
+        RECT 0.090 33.300 1674.140 34.460 ;
+        RECT 0.090 0.140 1674.870 33.300 ;
       LAYER Metal4 ;
-        RECT 3.500 930.600 20.140 1087.430 ;
-        RECT 3.500 27.840 7.750 930.600 ;
+        RECT 5.740 930.600 20.140 1109.270 ;
+        RECT 5.740 27.840 7.750 930.600 ;
         RECT 11.290 27.840 20.140 930.600 ;
-        RECT 3.500 4.570 20.140 27.840 ;
-        RECT 25.780 4.570 110.300 1087.430 ;
-        RECT 115.940 4.570 200.460 1087.430 ;
-        RECT 206.100 4.570 290.620 1087.430 ;
-        RECT 296.260 4.570 380.780 1087.430 ;
-        RECT 386.420 4.570 470.940 1087.430 ;
-        RECT 476.580 4.570 561.100 1087.430 ;
-        RECT 566.740 4.570 651.260 1087.430 ;
-        RECT 656.900 4.570 741.420 1087.430 ;
-        RECT 747.060 4.570 831.580 1087.430 ;
-        RECT 837.220 4.570 921.740 1087.430 ;
-        RECT 927.380 4.570 1011.900 1087.430 ;
-        RECT 1017.540 4.570 1102.060 1087.430 ;
-        RECT 1107.700 4.570 1192.220 1087.430 ;
-        RECT 1197.860 4.570 1282.380 1087.430 ;
-        RECT 1288.020 4.570 1372.540 1087.430 ;
-        RECT 1378.180 4.570 1462.700 1087.430 ;
-        RECT 1468.340 4.570 1552.860 1087.430 ;
-        RECT 1558.500 4.570 1643.020 1087.430 ;
-        RECT 1648.660 4.570 1665.860 1087.430 ;
+        RECT 5.740 4.570 20.140 27.840 ;
+        RECT 25.780 4.570 110.300 1109.270 ;
+        RECT 115.940 4.570 200.460 1109.270 ;
+        RECT 206.100 4.570 290.620 1109.270 ;
+        RECT 296.260 4.570 380.780 1109.270 ;
+        RECT 386.420 4.570 470.940 1109.270 ;
+        RECT 476.580 4.570 561.100 1109.270 ;
+        RECT 566.740 4.570 651.260 1109.270 ;
+        RECT 656.900 4.570 741.420 1109.270 ;
+        RECT 747.060 4.570 831.580 1109.270 ;
+        RECT 837.220 4.570 921.740 1109.270 ;
+        RECT 927.380 4.570 1011.900 1109.270 ;
+        RECT 1017.540 4.570 1102.060 1109.270 ;
+        RECT 1107.700 4.570 1192.220 1109.270 ;
+        RECT 1197.860 4.570 1282.380 1109.270 ;
+        RECT 1288.020 4.570 1372.540 1109.270 ;
+        RECT 1378.180 4.570 1462.700 1109.270 ;
+        RECT 1468.340 4.570 1552.860 1109.270 ;
+        RECT 1558.500 4.570 1643.020 1109.270 ;
+        RECT 1648.660 4.570 1673.140 1109.270 ;
       LAYER Metal5 ;
-        RECT 5.660 1025.180 1665.380 1083.370 ;
-        RECT 5.660 935.180 1665.380 1018.580 ;
-        RECT 5.660 845.180 1665.380 928.580 ;
-        RECT 5.660 755.180 1665.380 838.580 ;
-        RECT 5.660 665.180 1665.380 748.580 ;
-        RECT 5.660 575.180 1665.380 658.580 ;
-        RECT 5.660 485.180 1665.380 568.580 ;
-        RECT 5.660 395.180 1665.380 478.580 ;
-        RECT 5.660 305.180 1665.380 388.580 ;
-        RECT 5.660 215.180 1665.380 298.580 ;
-        RECT 5.660 125.180 1665.380 208.580 ;
-        RECT 5.660 35.180 1665.380 118.580 ;
-        RECT 5.660 15.530 1665.380 28.580 ;
+        RECT 5.660 1025.180 1667.060 1101.370 ;
+        RECT 5.660 935.180 1667.060 1018.580 ;
+        RECT 5.660 845.180 1667.060 928.580 ;
+        RECT 5.660 755.180 1667.060 838.580 ;
+        RECT 5.660 665.180 1667.060 748.580 ;
+        RECT 5.660 575.180 1667.060 658.580 ;
+        RECT 5.660 485.180 1667.060 568.580 ;
+        RECT 5.660 395.180 1667.060 478.580 ;
+        RECT 5.660 305.180 1667.060 388.580 ;
+        RECT 5.660 215.180 1667.060 298.580 ;
+        RECT 5.660 125.180 1667.060 208.580 ;
+        RECT 5.660 35.180 1667.060 118.580 ;
+        RECT 5.660 6.530 1667.060 28.580 ;
   END
 END grouper_soc_chip_core
 END LIBRARY

@@ -410,8 +410,8 @@ MACROS:
     lib:
       "*_tt_025C_3v30":
         - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__tt_025C_3v30.lib
-      # "*_ss_125C_3v00":
-      #   - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__ss_125C_3v00.lib
+      "*_ss_125C_3v00":
+        - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__ss_125C_3v00.lib
       "*_ff_n40C_3v60":
         - dir::../../ip/gf180mcu_ocd_ip_sram/cells/gf180mcu_ocd_ip_sram__sram1024x8m8wm1/gf180mcu_ocd_ip_sram__sram1024x8m8wm1__ff_n40C_3v60.lib
 
@@ -711,6 +711,16 @@ PDN_CFG: dir::/pdn_cfg.tcl
 # narrow channels. 560 unlegalisable instances out of 19,873 is what that
 # looks like. One site of padding puts it at 62.5%.
 
+#   68->80: TRIED AND REVERTED (job 5333, run against config.yaml). Antenna
+#   violations did drop as hypothesized (72 found -> 55 after jumpers, vs 117
+#   at density 68), but legalization headroom lost more than antenna pressure
+#   gained: DPL-0036 hit at u_gpio_ctrl._1301_ in the SE die corner, the same
+#   corner region that also broke on pin_order.cfg changes, this time with
+#   pin_order.cfg held byte-identical to the verified baseline. That corner
+#   has essentially no legalization slack in this floorplan; any perturbation
+#   to global placement -- density or pin order -- tips it. Back to 68, the
+#   only value with a verified clean signoff (job 4851). Kept in lockstep
+#   with config.yaml.
 PL_TARGET_DENSITY_PCT: 68
 MAX_FANOUT_CONSTRAINT: 32   # was 16. 232 nets exceed fanout 16, and the worst
                             # setup path in job 4315 WAS a fanout tree:
@@ -817,6 +827,9 @@ PL_RESIZER_SETUP_MAX_BUFFER_PCT: 40
 DESIGN_REPAIR_MAX_SLEW_PCT: 10
 DESIGN_REPAIR_MAX_CAP_PCT:  10
 
+# Routing / ESD
+DIODE_ON_PORTS: in
+
 # ---------------------------------------------------------------------------
 # Route
 # ---------------------------------------------------------------------------
@@ -837,64 +850,67 @@ DRC_OPT_ITERS: 12
 # Moved to Metal5 to relieve Metal3 congestion at 1310x1150 (see TRIAL_NOTES.md).
 RT_MAX_LAYER: Metal5
 
+# 64 -> 32 and the Metal2 ROUTING_OBSTRUCTIONS below: kept in lockstep with
+# config.yaml -- see the long-form rationale there (job 5336). Same
+# PDN_VOFFSET/PDN_VPITCH/DIE_AREA as config.yaml (this file only moves the
+# MACROS location: values), so the PDN Metal2 intermediate-stripe lattice is
+# identical and these are the same real obstruction columns, not a guess
+# carried over from a different geometry.
+DRT_OPT_ITERS: 32
+
+# List of lists, not flat strings -- see config.yaml (job 5337).
+ROUTING_OBSTRUCTIONS:
+  - ["Metal2", 290.92, 0, 295.96, 1110]
+  - ["Metal2", 1463.00, 0, 1468.04, 1110]
+
 PL_MAX_DISPLACEMENT_X: 800
 PL_MAX_DISPLACEMENT_Y: 500
 
+# Fix antenna violations after DRT
+DRT_ANTENNA_REPAIR_ITERS: 0    # DRT's antenna reroute took a converged 4-violation
+                               # route to 128 (job 4296, drt-run-0 vs drt-run-1).
+                               # Antennas are already repaired at step 40 (94 -> 0,
+                               # 97 diodes) and the post-route count was 0 regardless.
+
+# 10 -> 0 (job 5335, run against config.yaml). Kept in lockstep -- see the
+# long-form rationale there: this is OpenROAD's own repair_antennas
+# -ratio_margin at step 40, default 0, and HIGHER values are MORE
+# conservative (more nets flagged, more diodes, more legalization pressure).
+# Job 5335 hit DPL-0036 at the SE die corner after the margin drove repair
+# down to just 6 remaining violations -- dropping to OpenROAD's own default
+# trades a few more non-fatal residual violations for legalization headroom.
+DRT_ANTENNA_REPAIR_MARGIN: 0 # %
+
 # ---------------------------------------------------------------------------
-# ANTENNA REPAIR
+# ANTENNA REPAIR -- Odb.HeuristicDiodeInsertion, TRIED AND BACKED OUT
 # ---------------------------------------------------------------------------
 #
-# Target: 0 violations. The silver_01_09_26_first_pass run finished at 13 net /
-# 13 pin violations, and the shape of them is what dictates the settings below.
-# From 44-openroad-checkantennas-1:
+# Kept in lockstep with config.yaml -- see the long-form rationale there.
+# Summary: a23ca8f enabled RUN_HEURISTIC_DIODE_INSERTION to close 13 known
+# net/pin antenna violations (all "(Side area)" perimeter-ratio failures
+# against a 400 limit). On this 1650x1100um die (1.5M+ um of routed
+# wirelength), HEURISTIC_ANTENNA_THRESHOLD did not behave like a "sweep up the
+# near-misses" knob at any value tried:
 #
-#   all 13 are "(Side area)" -- the PERIMETER ratio against a 400 limit.
-#   NOT ONE is a gate-area or cumulative-area violation.
-#   By layer: Metal3 9, Metal4 3, Metal2 1.
-#   Partial ratios: 432, 435, 481, 489, 497, 503, 513, 536, 562, 626, 892,
-#                   1452, 2719.
+#   HEURISTIC_ANTENNA_THRESHOLD: 20    -> 45,292 diodes (job 5317)
+#   HEURISTIC_ANTENNA_THRESHOLD: 30    -> 41,617 diodes (job 5318, barely fewer)
+#   unset (adaptive default, ~130um)   -> 25,191 diodes (job 5320)
 #
-# Ten of the thirteen are within 1.6x of the limit, i.e. they are ordinary
-# long-run nets a diode clamps outright, not structural problems. The two
-# outliers (1452, 2719) are the ones to watch in the next report -- if
-# anything survives, it will be those.
+# All three are three-plus orders of magnitude past the low-dozens the 13
+# violations implied. Job 5320 (the adaptive default) got furthest: it reached
+# OpenROAD.DetailedPlacement legalizing the flood and failed outright with
+# DPL-0036 after ~21 minutes, unable to place a long tail of ANTENNA_* diode
+# instances. The step 40 OpenROAD.RepairAntennas pass (still active above,
+# DRT_ANTENNA_REPAIR_ITERS/MARGIN) is reactive rather than this pre-route
+# heuristic, but it is what the design actually ships with while this is
+# unresolved -- see the antenna violation count in the latest signoff report
+# before assuming the 13 are still outstanding.
 #
-# Enable the heuristic diode pass. This is the actual gap: the last run's
-# flow.log line 119 reads
-#
-#   Gating variable for step 'Odb.HeuristicDiodeInsertion' set to 'False'
-#   Skipping step 'Heuristic Diode Insertion'
-#
-# so the design has never had this pass. It inserts a diode on every net whose
-# routed length crosses a threshold, working off global-route wirelength BEFORE
-# detailed routing commits, which is precisely the long-net side-area failure
-# mode above. The step 40 OpenROAD.RepairAntennas pass that did run is
-# reactive -- it only patches what the post-GRT check already flags -- and it
-# is what left these 13 behind.
-RUN_HEURISTIC_DIODE_INSERTION: true
-
-# Insert on shorter nets than the default (default is 30). Ten of the thirteen
-# are near-misses, so a modestly lower threshold sweeps them up without
-# carpeting the design in diodes.
-HEURISTIC_ANTENNA_THRESHOLD: 20
-
-# Keep the port diodes -- these are a separate mechanism (chip-edge ESD/antenna
-# on the I/O boundary) and 4 of the 13 violations are on output*/I buf_1 pins.
-DIODE_ON_PORTS: in
-
-# Ask the GRT repair pass for margin above the limit rather than exactly at it,
-# so a net that lands at 399 does not become a violation once detailed routing
-# perturbs it. Raised 10 -> 20 because 432/435 -- the two smallest failures --
-# are inside a 10% band of 400 and would have been caught by a wider margin.
-GRT_ANTENNA_MARGIN: 20 # %
-
-# DRT's own antenna reroute STAYS OFF. This is measured, not cautious:
-# it took a converged 4-violation route to 128 (job 4296, drt-run-0 vs
-# drt-run-1). It repairs by rip-up-and-reroute, which creates new antennas
-# faster than it clears old ones on this design. The fix above is upstream of
-# it -- diodes placed before detailed routing -- which is why it can stay 0.
-DRT_ANTENNA_REPAIR_ITERS: 0
-DRT_ANTENNA_REPAIR_MARGIN: 10 # %
+# Revisit only with a plan for why HeuristicDiodeInsertion floods this design
+# specifically (net topology? wrong units for GRT-based length here?) -- not by
+# guessing another threshold value. RUN_HEURISTIC_DIODE_INSERTION intentionally
+# left out entirely rather than set to false, so its absence is visible next to
+# this note instead of one flag among many.
 
 # ---------------------------------------------------------------------------
 # STA Lib Setup

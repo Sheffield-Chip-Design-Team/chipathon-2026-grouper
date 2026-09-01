@@ -84,3 +84,53 @@ if { [info exists ::env(OPENLANE_SDC_IDEAL_CLOCKS)] && $::env(OPENLANE_SDC_IDEAL
 } else {
     set_propagated_clock [all_clocks]
 }
+
+# ---------------------------------------------------------------------------
+# False paths: intentionally async control signals
+# ---------------------------------------------------------------------------
+#
+# dbg_own (hw/rtl/debug/dbg_ctrl.sv, driven by the status_lock_active reg,
+# GRPR-DBG-043) is a debug bus-ownership mode-select, not a per-cycle data
+# path - it only moves on a LOCK/UNLOCK/RESUME debug-port event, and
+# dbg_ctrl's own FSM already holds LOCK_PENDING for a cycle before dbg_own
+# moves (GRPR-DBG-009, dbg_ctrl.sv:343-346) specifically so any in-flight CPU
+# access gets one more cycle to complete under mem_ready before ownership
+# changes. Job 5342 (first run with the SRAM macro's ss_125C_3v00 lib
+# enabled) found 333 of 394 max_ss setup violations fanning out from this one
+# net through cpu_ss into spi_m/spi_s/uart_rx/the RAM macro wrappers - worst
+# slack -26.86 ns. That's timing pressure on a mode-select signal that was
+# never meant to close same-cycle.
+#
+# `-hierarchical` doesn't help here: Yosys.Synthesis flattens the design (see
+# grouper_soc_chip_core.nl.v), so by the time OpenROAD reads this SDC there is
+# no hierarchy left for -hierarchical to descend - just one flat net whose
+# name happens to contain literal dots from the flattening scheme:
+# `u_grouper_soc_top.u_grouper_soc_dig_ss.u_cpu_ss.dbg_own`. get_nets with a
+# bare, non-wildcarded `dbg_own` pattern does an exact match against that
+# whole flat name and finds nothing - confirmed as
+# "Warning: grouper_chip_core.sdc line 103, net 'dbg_own' not found." in
+# every corner's 10-openroad-staprepnr/*/sta.log (job 5347, the run this
+# exception was meant to fix, and still present at 53-openroad-stapostpnr -
+# the exception never took, which is why job 5347's max_ss violations went
+# up (409) instead of down from job 5342's 394). A leading glob picks up the
+# flat name by suffix instead of requiring an exact match.
+set_false_path -through [get_nets {*dbg_own}]
+
+# gpio_*_bidir_in, when gpio_sync_en_n[i] is set, bypasses the 2-FF
+# synchroniser entirely (grouper_soc_top.sv:68, gpio_in_dig[i] =
+# gpio_sync_en_n[i] ? gpio_in[i] : gpio_in_sync[i]) and reaches downstream
+# logic combinationally - "a deliberate CDC opt-out... no metastability
+# guarantee is made for a bypassed pad" (grouper_soc_top.sv:54-56).
+# gpio_sync_en_n is a software-writable register (ahb_gpio_ctrl.sv), not
+# tied off, so this is a real path in the netlist: 61 of job 5342's 394
+# max_ss violations were gpio_1/gpio_15 taking this route straight into
+# cpu_ss. False-pathing the whole port also excepts its port-to-first-
+# sync-flop leg, but every GPIO pad input is documented above as an async
+# board-level signal ahead of the synchroniser in the first place, so that
+# leg was never a real same-cycle check either.
+#
+# Only gpio_1/gpio_15 violated in job 5342 - the bypass mux is identical on
+# all NUM_GPIO pins, so this is a per-run placement artifact, not something
+# special about these two. Revisit whether all *_bidir_in ports should carry
+# this exception instead of just the two that happened to fail this run.
+set_false_path -from [get_ports {gpio_1_bidir_in gpio_15_bidir_in}]
