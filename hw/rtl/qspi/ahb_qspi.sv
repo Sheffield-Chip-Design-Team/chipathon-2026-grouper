@@ -57,6 +57,10 @@ module ahb_qspi #(
   localparam logic [2:0] REG_ADDR   = 3'd3; // 0x0C
   localparam logic [2:0] REG_DATA   = 3'd4; // 0x10
 
+  localparam logic [7:0] MEM_READ_OPCODE = 8'h03;
+  localparam logic [7:0] MEM_QUAD_READ_OPCODE = 8'hEB;
+  localparam logic [7:0] MEM_WRITE_OPCODE = 8'h02;
+
   // CTRL
   logic       ctrl_cpha;
   logic       ctrl_cpol;
@@ -104,6 +108,20 @@ module ahb_qspi #(
   init_state_t init_state;
   logic        init_cmd_in_flight;
 
+  typedef enum logic [1:0] {
+    MEM_IDLE,
+    MEM_START,
+    MEM_WAIT
+  } mem_state_t;
+
+  mem_state_t mem_state;
+  logic [22:0] mem_address;
+  logic        mem_write;
+  logic [31:0] mem_write_data;
+  logic [31:0] mem_read_data;
+  logic        mem_complete;
+  logic        mem_error_pending;
+
   // AHB pipeline
   logic       access;
   logic       transfer_valid;
@@ -116,10 +134,20 @@ module ahb_qspi #(
 
   // QSPI core interface
   logic        core_start;
+  logic        manual_core_start;
+  logic        mapped_core_start;
   logic        core_busy;
   logic        core_done;
   logic        core_rx_valid;
   logic [31:0] core_read_data;
+
+  logic        core_dir;
+  logic        core_addr_en;
+  logic        core_data_en;
+  logic [7:0]  core_dummy;
+  logic [7:0]  core_opcode;
+  logic [23:0] core_address;
+  logic [31:0] core_write_data;
 
   // START checks
   logic start_requested;
@@ -136,12 +164,33 @@ module ahb_qspi #(
   logic cfg_error_event;
   logic write_blocked_event;
   logic addr_error_event;
+  logic mem_request;
+  logic mem_active;
+  logic mem_bad_access;
+  logic mem_nor_write;
+  logic mem_nor_addr_error;
 
   // Two-cycle AHB error response
   logic error_first_cycle;
   logic error_second_cycle;
 
   assign access = HSEL && HREADYIN && HTRANS[1];
+
+  assign mem_request        = HMEMSEL && HREADYIN && HTRANS[1];
+  assign mem_active         = mem_state != MEM_IDLE;
+  assign mem_bad_access     = mem_request && ((HSIZE != 3'b010) || (HMEMADDR[1:0] != 2'b00));
+  assign mem_nor_write      = mem_request && HWRITE && cmd_target;
+  assign mem_nor_addr_error = mem_request && cmd_target && HMEMADDR[22];
+
+  assign core_start = manual_core_start || mapped_core_start;
+
+  assign core_dir        = mem_active ? !mem_write : cmd_dir;
+  assign core_addr_en    = mem_active ? 1'b1 : cmd_addr_en;
+  assign core_data_en    = mem_active ? 1'b1 : cmd_data_en;
+  assign core_dummy      = mem_active ? ((mem_write || !ctrl_quad_mode) ? 8'h00 : cmd_dummy) : cmd_dummy;
+  assign core_opcode     = mem_active ? (mem_write ? MEM_WRITE_OPCODE : (ctrl_quad_mode ? MEM_QUAD_READ_OPCODE : MEM_READ_OPCODE)) : cmd_opcode;
+  assign core_address    = mem_active ? {1'b0, mem_address} : address_reg;
+  assign core_write_data = mem_active ? mem_write_data : data_reg;
 
   // AHB access size / byte lanes
   always_comb begin
@@ -220,9 +269,9 @@ module ahb_qspi #(
   assign start_blocked_flash = start_requested && !core_busy && start_target && start_data_en && !start_dir && !ctrl_flash_write_en;
 
   assign ctrl_write_while_busy = write_pending && !access_error_r && (register_r == REG_CTRL) && core_busy;
-  assign cfg_error_event       = ctrl_write_while_busy || start_busy_error || start_bad_mode;
-  assign write_blocked_event   = start_blocked_flash;
-  assign addr_error_event      = start_bad_address;
+  assign cfg_error_event       = ctrl_write_while_busy || start_busy_error || start_bad_mode || mem_bad_access;
+  assign write_blocked_event   = start_blocked_flash || mem_nor_write;
+  assign addr_error_event      = start_bad_address || mem_nor_addr_error;
   assign start_accepted        = start_requested && !core_busy && !start_bad_mode && !start_bad_address && !start_blocked_flash;
 
   // --- AHB Write Logic -------------------------------------------------------
@@ -256,9 +305,9 @@ module ahb_qspi #(
 
       init_state         <= INIT_WAIT_QPI_CMD;
       init_cmd_in_flight <= 1'b0;
-      core_start         <= 1'b0;
+      manual_core_start         <= 1'b0;
     end else begin
-      core_start <= 1'b0;
+      manual_core_start <= 1'b0;
 
       // STATUS W1C fields. Hardware events later in this block have priority
       // over software clears if both happen in the same cycle.
@@ -305,7 +354,7 @@ module ahb_qspi #(
             end
 
             if (start_accepted) begin
-              core_start <= 1'b1;
+              manual_core_start <= 1'b1;
 
               // CPU-driven APS6404L single-bit SPI -> QPI initialisation.
               if ((init_state == INIT_WAIT_QPI_CMD) && !ctrl_quad_mode && !start_target && !start_addr_en && !start_data_en && (byte_select_r[2] ? (HWDATA[23:16] == 8'h35) : (cmd_opcode == 8'h35))) begin
@@ -333,7 +382,7 @@ module ahb_qspi #(
         endcase
       end
 
-      if (core_done) begin
+      if (core_done && !mem_active) begin
         status_done <= 1'b1;
 
         if (init_cmd_in_flight) begin
@@ -343,7 +392,7 @@ module ahb_qspi #(
         end
       end
 
-      if (core_rx_valid) begin
+      if (core_rx_valid && !mem_active) begin
         status_rx_valid <= 1'b1;
 
         // Retain the shared DATA-register behaviour: completed RX replaces
@@ -357,12 +406,65 @@ module ahb_qspi #(
     end
   end
 
+  // --- Memory-mapped transaction control -----------------------------------
+
+  always_ff @(posedge HCLK or negedge HRESETn) begin
+    if (!HRESETn) begin
+      mem_state          <= MEM_IDLE;
+      mem_address        <= 23'h000000;
+      mem_write          <= 1'b0;
+      mem_write_data     <= 32'h0000_0000;
+      mem_read_data      <= 32'h0000_0000;
+      mem_complete       <= 1'b0;
+      mem_error_pending  <= 1'b0;
+      mapped_core_start  <= 1'b0;
+    end else begin
+      mem_complete      <= 1'b0;
+      mem_error_pending <= 1'b0;
+      mapped_core_start <= 1'b0;
+
+      unique case (mem_state)
+        MEM_IDLE: begin
+          if (mem_request) begin
+            if (mem_bad_access || mem_nor_write || mem_nor_addr_error) begin
+              mem_error_pending <= 1'b1;
+            end else begin
+              mem_address <= HMEMADDR;
+              mem_write   <= HWRITE;
+              mem_state   <= MEM_START;
+            end
+          end
+        end
+
+        MEM_START: begin
+          if (!core_busy) begin
+            if (mem_write) mem_write_data <= HWDATA;
+            mapped_core_start <= 1'b1;
+            mem_state <= MEM_WAIT;
+          end
+        end
+
+        MEM_WAIT: begin
+          if (core_done) begin
+            if (!mem_write) mem_read_data <= core_read_data;
+            mem_complete <= 1'b1;
+            mem_state <= MEM_IDLE;
+          end
+        end
+
+        default: mem_state <= MEM_IDLE;
+      endcase
+    end
+  end
+
   // --- AHB Read Logic --------------------------------------------------------
 
   always_comb begin
     HRDATA = '0;
 
-    if (read_pending && !access_error_r) begin
+    if (mem_complete && !mem_write) begin
+      HRDATA = mem_read_data;
+    end else if (read_pending && !access_error_r) begin
       unique case (register_r)
         REG_CTRL: begin
           HRDATA[0]    = ctrl_cpha;
@@ -408,9 +510,9 @@ module ahb_qspi #(
     .rst_n        (HRESETn),
 
     .start        (core_start),
-    .dir          (cmd_dir),
-    .addr_en      (cmd_addr_en),
-    .data_en      (cmd_data_en),
+    .dir          (core_dir),
+    .addr_en      (core_addr_en),
+    .data_en      (core_data_en),
     .target       (cmd_target),
 
     .quad_mode    (ctrl_quad_mode),
@@ -418,10 +520,10 @@ module ahb_qspi #(
     .cpha         (ctrl_cpha),
     .clkdiv       (ctrl_clkdiv),
 
-    .dummy        (cmd_dummy),
-    .opcode       (cmd_opcode),
-    .address           (address_reg),
-    .write_data        (data_reg),
+    .dummy        (core_dummy),
+    .opcode       (core_opcode),
+    .address      (core_address),
+    .write_data   (core_write_data),
 
     // Stage 2 only adds the serial-engine continuation primitive. The manual
     // AHB register path deliberately keeps it disabled until the mapped path
@@ -448,7 +550,7 @@ module ahb_qspi #(
   // Cycle 1: HRESP = 1, HREADYOUT = 0
   // Cycle 2: HRESP = 1, HREADYOUT = 1
 
-  assign error_first_cycle = !error_second_cycle && (((write_pending || read_pending) && access_error_r) || start_blocked_flash);
+  assign error_first_cycle = !error_second_cycle && (((write_pending || read_pending) && access_error_r) || start_blocked_flash || mem_error_pending);
 
   always_ff @(posedge HCLK or negedge HRESETn) begin
     if (!HRESETn) error_second_cycle <= 1'b0;
@@ -457,7 +559,7 @@ module ahb_qspi #(
   end
 
   assign HRESP     = error_first_cycle || error_second_cycle;
-  assign HREADYOUT = !error_first_cycle;
+  assign HREADYOUT = (mem_state == MEM_IDLE) && !error_first_cycle;
 
   // --- Combined interrupt ---------------------------------------------------
   assign irq = (status_done && ctrl_ie_done) || ((status_cfg_err || status_write_blocked || status_addr_err) && ctrl_ie_err);

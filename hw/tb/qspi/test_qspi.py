@@ -111,6 +111,73 @@ async def read_reg(dut, address, size=HSIZE_WORD, expected_hresp=0):
     await Timer(1, unit="ps")
     return value
 
+async def mapped_write(dut, address, value, size=HSIZE_WORD):
+    await RisingEdge(dut.HCLK)
+
+    dut.HADDR.value = address & 0xFFF
+    dut.HMEMADDR.value = address
+    dut.HSIZE.value = size
+    dut.HTRANS.value = HTRANS_NONSEQ
+    dut.HWRITE.value = 1
+    dut.HWDATA.value = value
+    dut.HSEL.value = 0
+    dut.HMEMSEL.value = 1
+    dut.HREADYIN.value = 1
+
+    await RisingEdge(dut.HCLK)
+
+    dut.HTRANS.value = HTRANS_IDLE
+    dut.HWRITE.value = 0
+    dut.HMEMSEL.value = 0
+
+    await Timer(1, unit="ps")
+
+    saw_wait = int(dut.HREADYOUT.value) == 0
+
+    while not int(dut.HREADYOUT.value):
+        await RisingEdge(dut.HCLK)
+        await Timer(1, unit="ps")
+
+    hresp = int(dut.HRESP.value)
+
+    await RisingEdge(dut.HCLK)
+    await Timer(1, unit="ps")
+
+    return hresp, saw_wait
+
+
+async def mapped_read(dut, address, size=HSIZE_WORD):
+    await RisingEdge(dut.HCLK)
+
+    dut.HADDR.value = address & 0xFFF
+    dut.HMEMADDR.value = address
+    dut.HSIZE.value = size
+    dut.HTRANS.value = HTRANS_NONSEQ
+    dut.HWRITE.value = 0
+    dut.HSEL.value = 0
+    dut.HMEMSEL.value = 1
+    dut.HREADYIN.value = 1
+
+    await RisingEdge(dut.HCLK)
+
+    dut.HTRANS.value = HTRANS_IDLE
+    dut.HMEMSEL.value = 0
+
+    await Timer(1, unit="ps")
+
+    saw_wait = int(dut.HREADYOUT.value) == 0
+
+    while not int(dut.HREADYOUT.value):
+        await RisingEdge(dut.HCLK)
+        await Timer(1, unit="ps")
+
+    value = int(dut.HRDATA.value)
+    hresp = int(dut.HRESP.value)
+
+    await RisingEdge(dut.HCLK)
+    await Timer(1, unit="ps")
+
+    return value, hresp, saw_wait
 
 async def wait_status(dut, mask, expected, max_reads=300):
     last = 0
@@ -537,3 +604,127 @@ async def test_minimum_cs_high_interval(dut):
     minimum_expected = 2 * (clkdiv + 1) * HCLK_PERIOD_NS
 
     assert (done_time - ce_high_time) >= minimum_expected
+
+@cocotb.test()
+async def test_memory_mapped_psram_read_write(dut):
+    cocotb.start_soon(Clock(dut.HCLK, HCLK_PERIOD_NS, unit="ns").start())
+    await reset_dut(dut)
+
+    await write_reg(dut, REG_CTRL, CTRL_QUAD_MODE | (1 << CTRL_CLKDIV_SHIFT))
+
+    # TARGET=0 selects PSRAM. DUMMY=2 is used here only to make the
+    # read dummy phase directly observable in the directed test.
+    await write_reg(dut, REG_CMD, make_cmd(0x00, dummy=2))
+
+    address = 0x001234
+    write_data = 0x11223344
+
+    monitor = cocotb.start_soon(capture_tx_groups(dut, 16, quad=True, ce_value=0b10))
+
+    hresp, saw_wait = await mapped_write(dut, address, write_data)
+
+    groups = await monitor
+
+    assert saw_wait
+    assert hresp == 0
+    assert groups_to_int(groups[:2], 4) == 0x02
+    assert groups_to_int(groups[2:8], 4) == address
+    assert groups_to_int(groups[8:], 4) == ahb_word_to_wire(write_data)
+
+    read_address = 0x001238
+    response = 0xA1B2C3D4
+
+    await write_reg(dut, REG_DATA, 0x12345678)
+
+    responder = cocotb.start_soon(
+        respond_read(
+            dut,
+            opcode_groups=2,
+            address_groups=6,
+            dummy_cycles=2,
+            response=response,
+            quad=True,
+            ce_value=0b10,
+        )
+    )
+
+    value, hresp, saw_wait = await mapped_read(dut, read_address)
+
+    sent = await responder
+
+    assert saw_wait
+    assert hresp == 0
+    assert groups_to_int(sent[:2], 4) == 0xEB
+    assert groups_to_int(sent[2:], 4) == read_address
+    assert value == response
+    assert await read_reg(dut, REG_DATA) == 0x12345678
+
+@cocotb.test()
+async def test_memory_mapped_nor_read_and_write_rejection(dut):
+    cocotb.start_soon(Clock(dut.HCLK, HCLK_PERIOD_NS, unit="ns").start())
+    await reset_dut(dut)
+
+    await write_reg(dut, REG_CTRL, CTRL_QUAD_MODE | CTRL_IE_ERR | (1 << CTRL_CLKDIV_SHIFT))
+
+    # TARGET=1 selects NOR.
+    await write_reg(dut, REG_CMD, make_cmd(0x00, target=1, dummy=3))
+
+    address = 0x002000
+    response = 0x55667788
+
+    responder = cocotb.start_soon(
+        respond_read(
+            dut,
+            opcode_groups=2,
+            address_groups=6,
+            dummy_cycles=3,
+            response=response,
+            quad=True,
+            ce_value=0b01,
+        )
+    )
+
+    value, hresp, saw_wait = await mapped_read(dut, address)
+
+    sent = await responder
+
+    assert saw_wait
+    assert hresp == 0
+    assert groups_to_int(sent[:2], 4) == 0xEB
+    assert groups_to_int(sent[2:], 4) == address
+    assert value == response
+
+    # NOR writes are not supported through the mapped path.
+    hresp, saw_wait = await mapped_write(dut, address, 0xDEADBEEF)
+
+    assert saw_wait
+    assert hresp == 1
+    assert int(dut.qspi_ce_n_o.value) == 0b11
+
+    status = await read_reg(dut, REG_STATUS)
+
+    assert status & STATUS_WRITE_BLOCKED
+    assert int(dut.irq.value) == 1
+
+    await write_reg(dut, REG_STATUS, STATUS_WRITE_BLOCKED)
+
+    assert int(dut.irq.value) == 0
+
+@cocotb.test()
+async def test_memory_mapped_nor_address_limit(dut):
+    cocotb.start_soon(Clock(dut.HCLK, HCLK_PERIOD_NS, unit="ns").start())
+    await reset_dut(dut)
+
+    await write_reg(dut, REG_CTRL, CTRL_QUAD_MODE | CTRL_IE_ERR)
+    await write_reg(dut, REG_CMD, make_cmd(0x00, target=1))
+
+    value, hresp, saw_wait = await mapped_read(dut, 0x400000)
+
+    assert saw_wait
+    assert hresp == 1
+    assert value == 0
+    assert int(dut.qspi_ce_n_o.value) == 0b11
+
+    status = await read_reg(dut, REG_STATUS)
+
+    assert status & STATUS_ADDR_ERR
