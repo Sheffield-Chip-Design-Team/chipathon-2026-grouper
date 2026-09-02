@@ -71,6 +71,20 @@ def ahb_word_to_wire(value):
     """Return the serial byte order for one little-endian 32-bit AHB word."""
     return int.from_bytes((value & 0xFFFFFFFF).to_bytes(4, "little"), "big")
 
+def align_ahb_write(value, address, size):
+    if size == HSIZE_BYTE:
+        return (value & 0xFF) << (8 * (address & 0x3))
+
+    if size == HSIZE_HALF:
+        return (value & 0xFFFF) << (16 if (address & 0x2) else 0)
+
+    return value & 0xFFFFFFFF
+
+
+def subword_to_wire(value, size_bytes):
+    mask = (1 << (size_bytes * 8)) - 1
+    return int.from_bytes((value & mask).to_bytes(size_bytes, "little"), "big")
+
 
 async def reset_dut(dut):
     dut.HRESETn.value = 0
@@ -119,7 +133,7 @@ async def mapped_write(dut, address, value, size=HSIZE_WORD):
     dut.HSIZE.value = size
     dut.HTRANS.value = HTRANS_NONSEQ
     dut.HWRITE.value = 1
-    dut.HWDATA.value = value
+    dut.HWDATA.value = align_ahb_write(value, address, size)
     dut.HSEL.value = 0
     dut.HMEMSEL.value = 1
     dut.HREADYIN.value = 1
@@ -179,12 +193,12 @@ async def mapped_read(dut, address, size=HSIZE_WORD):
 
     return value, hresp, saw_wait
 
-async def mapped_read_pair(dut, first_address, second_address):
+async def mapped_read_pair(dut, first_address, second_address, size=HSIZE_WORD):
     await RisingEdge(dut.HCLK)
 
     dut.HADDR.value = first_address & 0xFFF
     dut.HMEMADDR.value = first_address
-    dut.HSIZE.value = HSIZE_WORD
+    dut.HSIZE.value = size
     dut.HTRANS.value = HTRANS_NONSEQ
     dut.HWRITE.value = 0
     dut.HSEL.value = 0
@@ -223,15 +237,15 @@ async def mapped_read_pair(dut, first_address, second_address):
 
     return first_value, second_value
 
-async def mapped_write_pair(dut, first_address, first_value, second_address, second_value):
+async def mapped_write_pair(dut, first_address, first_value, second_address, second_value, size=HSIZE_WORD):
     await RisingEdge(dut.HCLK)
 
     dut.HADDR.value = first_address & 0xFFF
     dut.HMEMADDR.value = first_address
-    dut.HSIZE.value = HSIZE_WORD
+    dut.HSIZE.value = size
     dut.HTRANS.value = HTRANS_NONSEQ
     dut.HWRITE.value = 1
-    dut.HWDATA.value = first_value
+    dut.HWDATA.value = align_ahb_write(first_value, first_address, size)
     dut.HSEL.value = 0
     dut.HMEMSEL.value = 1
     dut.HREADYIN.value = 1
@@ -250,7 +264,7 @@ async def mapped_write_pair(dut, first_address, first_value, second_address, sec
 
     await RisingEdge(dut.HCLK)
 
-    dut.HWDATA.value = second_value
+    dut.HWDATA.value = align_ahb_write(second_value, second_address, size)
     dut.HTRANS.value = HTRANS_IDLE
     dut.HMEMSEL.value = 0
 
@@ -316,7 +330,7 @@ async def capture_tx_groups(dut, count, *, quad, ce_value, mode3=False):
     return groups
 
 
-async def respond_read(dut, *, opcode_groups, address_groups, dummy_cycles, response, quad, ce_value):
+async def respond_read(dut, *, opcode_groups, address_groups, dummy_cycles, response, quad, ce_value, size_bytes=4):
     """Capture a mode-0 command/address and drive one 32-bit read response."""
     await wait_ce(dut, ce_value)
     sent = []
@@ -340,7 +354,7 @@ async def respond_read(dut, *, opcode_groups, address_groups, dummy_cycles, resp
         await RisingEdge(dut.qspi_sck_o)
         await FallingEdge(dut.qspi_sck_o)
 
-    response_bytes = (response & 0xFFFFFFFF).to_bytes(4, "little")
+    response_bytes = (response & 0xFFFFFFFF).to_bytes(4, "little")[:size_bytes]
     if quad:
         response_groups = [group for byte in response_bytes for group in ((byte >> 4) & 0xF, byte & 0xF)]
     else:
@@ -358,7 +372,7 @@ async def respond_read(dut, *, opcode_groups, address_groups, dummy_cycles, resp
     await wait_ce(dut, 0b11)
     return sent
 
-async def respond_stream_read(dut, *, opcode_groups, address_groups, dummy_cycles, responses, quad, ce_value):
+async def respond_stream_read(dut, *, opcode_groups, address_groups, dummy_cycles, responses, quad, ce_value, size_bytes=4):
     await wait_ce(dut, ce_value)
     sent = []
 
@@ -381,7 +395,7 @@ async def respond_stream_read(dut, *, opcode_groups, address_groups, dummy_cycle
         await FallingEdge(dut.qspi_sck_o)
 
     for response in responses:
-        response_bytes = (response & 0xFFFFFFFF).to_bytes(4, "little")
+        response_bytes = (response & 0xFFFFFFFF).to_bytes(4, "little")[:size_bytes]
 
         if quad:
             response_groups = [group for byte in response_bytes for group in ((byte >> 4) & 0xF, byte & 0xF)]
@@ -992,3 +1006,190 @@ async def test_memory_mapped_nonsequential_read_restarts(dut):
     assert groups_to_int(second_sent[2:], 4) == second_address
     assert first_value == 0x11112222
     assert second_value == 0x33334444
+
+@cocotb.test()
+async def test_memory_mapped_psram_subword_accesses(dut):
+    cocotb.start_soon(Clock(dut.HCLK, HCLK_PERIOD_NS, unit="ns").start())
+    await reset_dut(dut)
+
+    await write_reg(dut, REG_CTRL, CTRL_QUAD_MODE | (1 << CTRL_CLKDIV_SHIFT))
+    await write_reg(dut, REG_CMD, make_cmd(0x00, dummy=2))
+
+    byte_address = 0x001201
+    byte_value = 0xA5
+
+    monitor = cocotb.start_soon(capture_tx_groups(dut, 10, quad=True, ce_value=0b10))
+    hresp, _ = await mapped_write(dut, byte_address, byte_value, size=HSIZE_BYTE)
+    groups = await monitor
+
+    assert hresp == 0
+    assert groups_to_int(groups[:2], 4) == 0x02
+    assert groups_to_int(groups[2:8], 4) == byte_address
+    assert groups_to_int(groups[8:], 4) == byte_value
+
+    half_address = 0x001202
+    half_value = 0xBEEF
+
+    monitor = cocotb.start_soon(capture_tx_groups(dut, 12, quad=True, ce_value=0b10))
+    hresp, _ = await mapped_write(dut, half_address, half_value, size=HSIZE_HALF)
+    groups = await monitor
+
+    assert hresp == 0
+    assert groups_to_int(groups[:2], 4) == 0x02
+    assert groups_to_int(groups[2:8], 4) == half_address
+    assert groups_to_int(groups[8:], 4) == subword_to_wire(half_value, 2)
+
+    responder = cocotb.start_soon(
+        respond_read(
+            dut,
+            opcode_groups=2,
+            address_groups=6,
+            dummy_cycles=2,
+            response=0x5A,
+            quad=True,
+            ce_value=0b10,
+            size_bytes=1,
+        )
+    )
+
+    value, hresp, _ = await mapped_read(dut, 0x001203, size=HSIZE_BYTE)
+    await responder
+
+    assert hresp == 0
+    assert ((value >> 24) & 0xFF) == 0x5A
+
+    responder = cocotb.start_soon(
+        respond_read(
+            dut,
+            opcode_groups=2,
+            address_groups=6,
+            dummy_cycles=2,
+            response=0xCAFE,
+            quad=True,
+            ce_value=0b10,
+            size_bytes=2,
+        )
+    )
+
+    value, hresp, _ = await mapped_read(dut, half_address, size=HSIZE_HALF)
+    await responder
+
+    assert hresp == 0
+    assert ((value >> 16) & 0xFFFF) == 0xCAFE
+
+@cocotb.test()
+async def test_memory_mapped_nor_subword_reads(dut):
+    cocotb.start_soon(Clock(dut.HCLK, HCLK_PERIOD_NS, unit="ns").start())
+    await reset_dut(dut)
+
+    await write_reg(dut, REG_CTRL, CTRL_QUAD_MODE | (1 << CTRL_CLKDIV_SHIFT))
+    await write_reg(dut, REG_CMD, make_cmd(0x00, target=1, dummy=3))
+
+    responder = cocotb.start_soon(
+        respond_read(
+            dut,
+            opcode_groups=2,
+            address_groups=6,
+            dummy_cycles=3,
+            response=0x7C,
+            quad=True,
+            ce_value=0b01,
+            size_bytes=1,
+        )
+    )
+
+    value, hresp, _ = await mapped_read(dut, 0x003001, size=HSIZE_BYTE)
+    await responder
+
+    assert hresp == 0
+    assert ((value >> 8) & 0xFF) == 0x7C
+
+    responder = cocotb.start_soon(
+        respond_read(
+            dut,
+            opcode_groups=2,
+            address_groups=6,
+            dummy_cycles=3,
+            response=0x1357,
+            quad=True,
+            ce_value=0b01,
+            size_bytes=2,
+        )
+    )
+
+    value, hresp, _ = await mapped_read(dut, 0x003002, size=HSIZE_HALF)
+    await responder
+
+    assert hresp == 0
+    assert ((value >> 16) & 0xFFFF) == 0x1357
+
+@cocotb.test()
+async def test_memory_mapped_sequential_byte_reads_stream(dut):
+    cocotb.start_soon(Clock(dut.HCLK, HCLK_PERIOD_NS, unit="ns").start())
+    await reset_dut(dut)
+
+    await write_reg(dut, REG_CTRL, CTRL_QUAD_MODE | (1 << CTRL_CLKDIV_SHIFT))
+    await write_reg(dut, REG_CMD, make_cmd(0x00, dummy=2))
+
+    first_address = 0x001300
+    second_address = first_address + 1
+
+    responder = cocotb.start_soon(
+        respond_stream_read(
+            dut,
+            opcode_groups=2,
+            address_groups=6,
+            dummy_cycles=2,
+            responses=[0x11, 0x22],
+            quad=True,
+            ce_value=0b10,
+            size_bytes=1,
+        )
+    )
+
+    first_value, second_value = await mapped_read_pair(
+        dut,
+        first_address,
+        second_address,
+        size=HSIZE_BYTE,
+    )
+
+    sent = await responder
+
+    assert groups_to_int(sent[:2], 4) == 0xEB
+    assert groups_to_int(sent[2:], 4) == first_address
+    assert (first_value & 0xFF) == 0x11
+    assert ((second_value >> 8) & 0xFF) == 0x22
+
+@cocotb.test()
+async def test_memory_mapped_sequential_halfword_writes_stream(dut):
+    cocotb.start_soon(Clock(dut.HCLK, HCLK_PERIOD_NS, unit="ns").start())
+    await reset_dut(dut)
+
+    await write_reg(dut, REG_CTRL, CTRL_QUAD_MODE | (1 << CTRL_CLKDIV_SHIFT))
+    await write_reg(dut, REG_CMD, make_cmd(0x00))
+
+    first_address = 0x001400
+    second_address = first_address + 2
+    first_value = 0x1234
+    second_value = 0xABCD
+
+    monitor = cocotb.start_soon(capture_tx_groups(dut, 16, quad=True, ce_value=0b10))
+
+    await mapped_write_pair(
+        dut,
+        first_address,
+        first_value,
+        second_address,
+        second_value,
+        size=HSIZE_HALF,
+    )
+
+    groups = await monitor
+
+    assert groups_to_int(groups[:2], 4) == 0x02
+    assert groups_to_int(groups[2:8], 4) == first_address
+    assert groups_to_int(groups[8:12], 4) == subword_to_wire(first_value, 2)
+    assert groups_to_int(groups[12:16], 4) == subword_to_wire(second_value, 2)
+
+    await wait_ce(dut, 0b11)

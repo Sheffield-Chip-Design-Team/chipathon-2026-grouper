@@ -42,6 +42,8 @@ async def reset_dut(dut):
     dut.write_data.value = 0
     dut.stream_enable.value = 0
     dut.stream_next.value = 0
+    dut.data_bytes.value = 4
+    dut.stream_data_bytes.value = 4
     dut.stream_stop.value = 0
     dut.stream_write_data.value = 0
     dut.qspi_sio_i.value = 0

@@ -30,6 +30,7 @@ module qspi (
   input  logic [7:0]  opcode,
   input  logic [23:0] address,
   input  logic [31:0] write_data,
+  input  logic [2:0]  data_bytes,
 
   // Streaming DATA continuation. These controls are intentionally internal
   // to the serial engine at this stage; the existing AHB manual interface
@@ -38,6 +39,7 @@ module qspi (
   input  logic        stream_next,
   input  logic        stream_stop,
   input  logic [31:0] stream_write_data,
+  input  logic [2:0]  stream_data_bytes,
 
   output logic        busy,
   output logic        done,
@@ -76,6 +78,7 @@ module qspi (
   logic [7:0]  clkdiv_latched;
   logic [7:0]  dummy_latched;
   logic [31:0] write_data_latched;
+  logic [2:0]  data_bytes_latched;
   logic [23:0] address_latched;
 
   logic [31:0] shift_reg;
@@ -96,6 +99,22 @@ module qspi (
     byte_swap32 = {value[7:0], value[15:8], value[23:16], value[31:24]};
   endfunction
 
+  function automatic logic [31:0] serialise_data(input logic [31:0] value, input logic [2:0] bytes);
+    unique case (bytes)
+      3'd1:    serialise_data = {value[7:0], 24'h000000};
+      3'd2:    serialise_data = {value[7:0], value[15:8], 16'h0000};
+      default: serialise_data = byte_swap32(value);
+    endcase
+  endfunction
+
+  function automatic logic [31:0] deserialise_data(input logic [31:0] value, input logic [2:0] bytes);
+    unique case (bytes)
+      3'd1:    deserialise_data = {24'h000000, value[7:0]};
+      3'd2:    deserialise_data = {16'h0000, value[7:0], value[15:8]};
+      default: deserialise_data = byte_swap32(value);
+    endcase
+  endfunction
+
   assign busy = (state != ST_IDLE);
 
   // While idle, SCK follows the configured polarity. During a transaction,
@@ -107,7 +126,13 @@ module qspi (
     unique case (state)
       ST_COMMAND: phase_last = quad_mode_latched ? 6'd1 : 6'd7;
       ST_ADDRESS: phase_last = quad_mode_latched ? 6'd5 : 6'd23;
-      ST_DATA:    phase_last = quad_mode_latched ? 6'd7 : 6'd31;
+      ST_DATA: begin
+        unique case (data_bytes_latched)
+          3'd1:    phase_last = quad_mode_latched ? 6'd1 : 6'd7;
+          3'd2:    phase_last = quad_mode_latched ? 6'd3 : 6'd15;
+          default: phase_last = quad_mode_latched ? 6'd7 : 6'd31;
+        endcase
+      end
       default:    phase_last = 6'd0;
     endcase
   end
@@ -147,6 +172,7 @@ module qspi (
       clkdiv_latched     <= 8'h00;
       dummy_latched      <= 8'h00;
       write_data_latched <= 32'h0000_0000;
+      data_bytes_latched <= 3'd4;
       address_latched    <= 24'h000000;
 
       shift_reg          <= 32'h0000_0000;
@@ -187,6 +213,7 @@ module qspi (
             clkdiv_latched     <= clkdiv;
             dummy_latched      <= dummy;
             write_data_latched <= write_data;
+            data_bytes_latched <= data_bytes;
             address_latched    <= address;
 
             shift_reg <= {opcode, 24'h000000};
@@ -210,10 +237,10 @@ module qspi (
               if ((state == ST_DATA) && dir_latched && !cpha_latched) begin
                 if (quad_mode_latched) begin
                   rx_shift <= {rx_shift[27:0], qspi_sio_i};
-                  if (phase_count == phase_last) read_data <= byte_swap32({rx_shift[27:0], qspi_sio_i});
+                  if (phase_count == phase_last) read_data <= deserialise_data({rx_shift[27:0], qspi_sio_i}, data_bytes_latched);
                 end else begin
                   rx_shift <= {rx_shift[30:0], qspi_sio_i[1]};
-                  if (phase_count == phase_last) read_data <= byte_swap32({rx_shift[30:0], qspi_sio_i[1]});
+                  if (phase_count == phase_last) read_data <= deserialise_data({rx_shift[30:0], qspi_sio_i[1]}, data_bytes_latched);
                 end
               end
             end else begin
@@ -224,10 +251,10 @@ module qspi (
               if ((state == ST_DATA) && dir_latched && cpha_latched) begin
                 if (quad_mode_latched) begin
                   rx_shift <= {rx_shift[27:0], qspi_sio_i};
-                  if (phase_count == phase_last) read_data <= byte_swap32({rx_shift[27:0], qspi_sio_i});
+                  if (phase_count == phase_last) read_data <= deserialise_data({rx_shift[27:0], qspi_sio_i}, data_bytes_latched);
                 end else begin
                   rx_shift <= {rx_shift[30:0], qspi_sio_i[1]};
-                  if (phase_count == phase_last) read_data <= byte_swap32({rx_shift[30:0], qspi_sio_i[1]});
+                  if (phase_count == phase_last) read_data <= deserialise_data({rx_shift[30:0], qspi_sio_i[1]}, data_bytes_latched);
                 end
               end
 
@@ -243,7 +270,7 @@ module qspi (
                       dummy_count <= 8'h00;
                       state       <= ST_DUMMY;
                     end else if (data_en_latched) begin
-                      if (!dir_latched) shift_reg <= byte_swap32(write_data_latched);
+                      if (!dir_latched) shift_reg <= serialise_data(write_data_latched, data_bytes_latched);
                       else rx_shift <= 32'h0000_0000;
                       state <= ST_DATA;
                     end else begin
@@ -256,7 +283,7 @@ module qspi (
                       dummy_count <= 8'h00;
                       state       <= ST_DUMMY;
                     end else if (data_en_latched) begin
-                      if (!dir_latched) shift_reg <= byte_swap32(write_data_latched);
+                      if (!dir_latched) shift_reg <= serialise_data(write_data_latched, data_bytes_latched);
                       else rx_shift <= 32'h0000_0000;
                       state <= ST_DATA;
                     end else begin
@@ -300,7 +327,7 @@ module qspi (
                 phase_count <= 6'd0;
 
                 if (data_en_latched) begin
-                  if (!dir_latched) shift_reg <= byte_swap32(write_data_latched);
+                  if (!dir_latched) shift_reg <= serialise_data(write_data_latched, data_bytes_latched);
                   else rx_shift <= 32'h0000_0000;
                   state <= ST_DATA;
                 end else begin
@@ -325,8 +352,9 @@ module qspi (
           if (stream_stop) begin
             state <= ST_FINISH;
           end else if (stream_next) begin
-            if (!dir_latched) shift_reg <= byte_swap32(stream_write_data);
+            if (!dir_latched) shift_reg <= serialise_data(stream_write_data, stream_data_bytes);
             else rx_shift <= 32'h0000_0000;
+            data_bytes_latched <= stream_data_bytes;
             state <= ST_DATA;
           end
         end

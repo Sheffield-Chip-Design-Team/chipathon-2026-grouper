@@ -61,6 +61,38 @@ module ahb_qspi #(
   localparam logic [7:0] MEM_QUAD_READ_OPCODE = 8'hEB;
   localparam logic [7:0] MEM_WRITE_OPCODE = 8'h02;
 
+  function automatic logic [31:0] mapped_write_payload(input logic [31:0] value, input logic [1:0] address, input logic [2:0] size);
+    unique case (size)
+      3'b000: begin
+        unique case (address)
+          2'b00: mapped_write_payload = {24'h000000, value[7:0]};
+          2'b01: mapped_write_payload = {24'h000000, value[15:8]};
+          2'b10: mapped_write_payload = {24'h000000, value[23:16]};
+          default: mapped_write_payload = {24'h000000, value[31:24]};
+        endcase
+      end
+
+      3'b001: mapped_write_payload = address[1] ? {16'h0000, value[31:16]} : {16'h0000, value[15:0]};
+      default: mapped_write_payload = value;
+    endcase
+  endfunction
+
+  function automatic logic [31:0] mapped_read_result(input logic [31:0] value, input logic [1:0] address, input logic [2:0] size);
+    unique case (size)
+      3'b000: begin
+        unique case (address)
+          2'b00: mapped_read_result = {24'h000000, value[7:0]};
+          2'b01: mapped_read_result = {16'h0000, value[7:0], 8'h00};
+          2'b10: mapped_read_result = {8'h00, value[7:0], 16'h0000};
+          default: mapped_read_result = {value[7:0], 24'h000000};
+        endcase
+      end
+
+      3'b001: mapped_read_result = address[1] ? {value[15:0], 16'h0000} : {16'h0000, value[15:0]};
+      default: mapped_read_result = value;
+    endcase
+  endfunction
+
   // CTRL
   logic       ctrl_cpha;
   logic       ctrl_cpol;
@@ -122,6 +154,7 @@ module ahb_qspi #(
   logic [22:0] mem_address;
   logic        mem_write;
   logic        mem_target;
+  logic [2:0]  mem_size;
   logic [31:0] mem_write_data;
   logic [31:0] mem_read_data;
   logic        mem_complete;
@@ -160,6 +193,8 @@ module ahb_qspi #(
   logic        core_stream_next;
   logic        core_stream_stop;
   logic [31:0] core_stream_write_data;
+  logic [2:0] core_data_bytes;
+  logic [2:0] core_stream_data_bytes;
 
   // START checks
   logic start_requested;
@@ -182,6 +217,7 @@ module ahb_qspi #(
   logic mem_nor_write;
   logic mem_nor_addr_error;
   logic mem_sequential;
+  logic [22:0] mem_next_address;
 
   // Two-cycle AHB error response
   logic error_first_cycle;
@@ -191,11 +227,13 @@ module ahb_qspi #(
 
   assign mem_request        = HMEMSEL && HREADYIN && HTRANS[1];
   assign mem_active         = mem_state != MEM_IDLE;
-  assign mem_bad_access     = mem_request && ((HSIZE != 3'b010) || (HMEMADDR[1:0] != 2'b00));
+  assign mem_bad_access = mem_request && ((HSIZE > 3'b010) || ((HSIZE == 3'b001) && HMEMADDR[0]) || ((HSIZE == 3'b010) && (HMEMADDR[1:0] != 2'b00)));
   assign mem_nor_write      = mem_request && HWRITE && cmd_target;
   assign mem_nor_addr_error = mem_request && cmd_target && HMEMADDR[22];
 
-  assign mem_sequential = mem_request && !mem_bad_access && !mem_nor_write && !mem_nor_addr_error && (HMEMADDR == (mem_address + 23'd4)) && (HWRITE == mem_write) && (cmd_target == mem_target);
+  assign mem_sequential = mem_request && !mem_bad_access && !mem_nor_write && !mem_nor_addr_error && (HMEMADDR == mem_next_address) && (HWRITE == mem_write) && (cmd_target == mem_target);
+
+  assign mem_next_address = mem_address + ((mem_size == 3'b000) ? 23'd1 : (mem_size == 3'b001) ? 23'd2 : 23'd4);
 
   assign core_start = manual_core_start || mapped_core_start;
 
@@ -207,10 +245,12 @@ module ahb_qspi #(
   assign core_opcode            = mem_active ? (mem_write ? MEM_WRITE_OPCODE : (ctrl_quad_mode ? MEM_QUAD_READ_OPCODE : MEM_READ_OPCODE)) : cmd_opcode;
   assign core_address           = mem_active ? {1'b0, mem_address} : address_reg;
   assign core_write_data        = mem_active ? mem_write_data : data_reg;
+  assign core_data_bytes        = mem_active ? ((mem_size == 3'b000) ? 3'd1 : (mem_size == 3'b001) ? 3'd2 : 3'd4) : 3'd4;
+  assign core_stream_data_bytes = (HSIZE == 3'b000) ? 3'd1 : (HSIZE == 3'b001) ? 3'd2 : 3'd4;
   assign core_stream_enable     = mem_active;
   assign core_stream_next       = mem_state == MEM_CONTINUE;
   assign core_stream_stop       = (mem_state == MEM_STOP) || (mem_state == MEM_RESTART_STOP);
-  assign core_stream_write_data = HWDATA;
+  assign core_stream_write_data = mapped_write_payload(HWDATA, HMEMADDR[1:0], HSIZE);
 
   // AHB access size / byte lanes
   always_comb begin
@@ -434,6 +474,7 @@ module ahb_qspi #(
       mem_address       <= 23'h000000;
       mem_write         <= 1'b0;
       mem_target        <= 1'b0;
+      mem_size          <= 3'b010;
       mem_write_data    <= 32'h0000_0000;
       mem_read_data     <= 32'h0000_0000;
       mem_complete      <= 1'b0;
@@ -453,6 +494,7 @@ module ahb_qspi #(
               mem_address <= HMEMADDR;
               mem_write   <= HWRITE;
               mem_target  <= cmd_target;
+              mem_size    <= HSIZE;
               mem_state   <= MEM_START;
             end
           end
@@ -460,7 +502,7 @@ module ahb_qspi #(
 
         MEM_START: begin
           if (!core_busy) begin
-            if (mem_write) mem_write_data <= HWDATA;
+            if (mem_write) mem_write_data <= mapped_write_payload(HWDATA, mem_address[1:0], mem_size);
             mapped_core_start <= 1'b1;
             mem_state <= MEM_WAIT_WORD;
           end
@@ -468,7 +510,7 @@ module ahb_qspi #(
 
         MEM_WAIT_WORD: begin
           if (core_word_done) begin
-            if (!mem_write) mem_read_data <= core_read_data;
+            if (!mem_write) mem_read_data <= mapped_read_result(core_read_data, mem_address[1:0], mem_size);
             mem_complete <= 1'b1;
             mem_state <= MEM_STREAM_READY;
           end
@@ -481,12 +523,14 @@ module ahb_qspi #(
               mem_state <= MEM_STOP;
             end else if (mem_sequential) begin
               mem_address <= HMEMADDR;
-              mem_state <= MEM_CONTINUE;
+              mem_size    <= HSIZE;
+              mem_state   <= MEM_CONTINUE;
             end else begin
               mem_address <= HMEMADDR;
               mem_write   <= HWRITE;
               mem_target  <= cmd_target;
               mem_state   <= MEM_RESTART_STOP;
+              mem_size    <= HSIZE;
             end
           end else begin
             mem_state <= MEM_STOP;
@@ -507,6 +551,7 @@ module ahb_qspi #(
               mem_write   <= HWRITE;
               mem_target  <= cmd_target;
               mem_state   <= core_done ? MEM_START : MEM_RESTART_STOP;
+              mem_size    <= HSIZE;
             end
           end else if (core_done) begin
             mem_state <= MEM_IDLE;
@@ -589,6 +634,7 @@ module ahb_qspi #(
     .opcode       (core_opcode),
     .address      (core_address),
     .write_data   (core_write_data),
+    .data_bytes        (core_data_bytes),
 
     // Stage 2 only adds the serial-engine continuation primitive. The manual
     // AHB register path deliberately keeps it disabled until the mapped path
@@ -597,6 +643,7 @@ module ahb_qspi #(
     .stream_next       (core_stream_next),
     .stream_stop       (core_stream_stop),
     .stream_write_data (core_stream_write_data),
+    .stream_data_bytes (core_stream_data_bytes),
 
     .busy              (core_busy),
     .done              (core_done),
