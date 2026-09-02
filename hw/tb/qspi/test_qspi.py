@@ -84,6 +84,9 @@ async def reset_dut(dut):
     dut.HWRITE.value = 0
     dut.HREADYIN.value = 1
     dut.HSEL.value = 0
+    dut.HMEMSEL.value = 0
+    dut.HMEMADDR.value = 0
+
     dut.qspi_sio_i.value = 0
 
     for _ in range(5):

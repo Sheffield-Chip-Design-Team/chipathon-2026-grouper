@@ -5,7 +5,8 @@ module periph_ss #(
   parameter int                      DATA_WIDTH     = 32,
   parameter int                      EXT_ADDR_WIDTH = 8,
   parameter int                      EXT_DATA_WIDTH = 8,
-  parameter int                      NUM_GPIO       = 16
+  parameter int                      NUM_GPIO       = 16,
+  parameter logic [ADDR_WIDTH-1:0]   QSPI_MEM_BASE  = 32'h8002_0000
 ) (
   input logic                        HCLK,
   input logic                        HRESETn,
@@ -111,6 +112,8 @@ module periph_ss #(
   logic                  qpsi_HWRITE;
   logic                  qpsi_HREADYIN;
   logic                  qpsi_HSEL;
+  logic                  qpsi_HMEMSEL;
+  logic [22:0]           qpsi_HMEMADDR;
   logic [DATA_WIDTH-1:0] qpsi_HRDATA;
   logic                  qpsi_HREADYOUT;
   logic                  qpsi_HRESP;
@@ -195,8 +198,9 @@ logic [3:0] mux_qspi_sio_oe;
 //--- Interconnect ----------------------------------------------------------------------
 
   interconnect_ss #(
-    .ADDR_WIDTH (ADDR_WIDTH),
-    .DATA_WIDTH (DATA_WIDTH)
+    .ADDR_WIDTH    (ADDR_WIDTH),
+    .DATA_WIDTH    (DATA_WIDTH),
+    .QSPI_MEM_BASE (QSPI_MEM_BASE)
   ) u_interconnect (
 
     // Clock and Reset
@@ -257,6 +261,8 @@ logic [3:0] mux_qspi_sio_oe;
     .qpsi_HWRITE            (qpsi_HWRITE),
     .qpsi_HREADYIN          (qpsi_HREADYIN),
     .qpsi_HSEL              (qpsi_HSEL),
+    .qpsi_HMEMSEL           (qpsi_HMEMSEL),
+    .qpsi_HMEMADDR          (qpsi_HMEMADDR),
     .qpsi_HRDATA            (qpsi_HRDATA),
     .qpsi_HREADYOUT         (qpsi_HREADYOUT),
     .qpsi_HRESP             (qpsi_HRESP),
@@ -374,6 +380,8 @@ logic [3:0] mux_qspi_sio_oe;
 
     .HREADYIN     (qpsi_HREADYIN),
     .HSEL         (qpsi_HSEL),
+    .HMEMSEL      (qpsi_HMEMSEL),
+    .HMEMADDR     (qpsi_HMEMADDR),
 
     .qspi_sck_o   (mux_qspi_sck_o),
     .qspi_ce_n_o  (mux_qspi_ce_n_o),

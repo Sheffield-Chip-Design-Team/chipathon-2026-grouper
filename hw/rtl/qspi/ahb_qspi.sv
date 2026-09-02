@@ -36,6 +36,12 @@ module ahb_qspi #(
   input  logic                  HREADYIN,
   input  logic                  HSEL,
 
+  // Memory-aperture sideband. Stage 4 consumes these signals.
+  /* verilator lint_off UNUSEDSIGNAL */
+  input  logic                  HMEMSEL,
+  input  logic [22:0]           HMEMADDR,
+  /* verilator lint_on UNUSEDSIGNAL */
+
   output logic                  qspi_sck_o,
   output logic [1:0]            qspi_ce_n_o,
   input  logic [3:0]            qspi_sio_i,
