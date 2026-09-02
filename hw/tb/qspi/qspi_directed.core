@@ -24,3 +24,18 @@ targets:
         - --trace
     filesets: [rtl]
     toplevel: ahb_qspi
+
+  stream:
+    flow: sim
+    flow_options:
+      tool: verilator
+      cocotb_module: hw.tb.qspi.test_qspi_stream
+      verilator_options:
+        - -Wno-TIMESCALEMOD
+        - --sv
+        - --trace
+        - --trace-fst
+      run_options:
+        - --trace
+    filesets: [rtl]
+    toplevel: qspi

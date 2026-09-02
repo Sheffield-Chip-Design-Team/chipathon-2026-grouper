@@ -31,9 +31,18 @@ module qspi (
   input  logic [23:0] address,
   input  logic [31:0] write_data,
 
+  // Streaming DATA continuation. These controls are intentionally internal
+  // to the serial engine at this stage; the existing AHB manual interface
+  // keeps stream_enable low until the memory-mapped path is added later.
+  input  logic        stream_enable,
+  input  logic        stream_next,
+  input  logic        stream_stop,
+  input  logic [31:0] stream_write_data,
+
   output logic        busy,
   output logic        done,
   output logic        rx_valid,
+  output logic        word_done,
   output logic [31:0] read_data,
 
   output logic        qspi_sck_o,
@@ -49,6 +58,7 @@ module qspi (
     ST_ADDRESS,
     ST_DUMMY,
     ST_DATA,
+    ST_STREAM_WAIT,
     ST_FINISH,
     ST_CS_HIGH
   } state_t;
@@ -62,6 +72,7 @@ module qspi (
   logic        quad_mode_latched;
   logic        cpol_latched;
   logic        cpha_latched;
+  logic        stream_latched;
   logic [7:0]  clkdiv_latched;
   logic [7:0]  dummy_latched;
   logic [31:0] write_data_latched;
@@ -107,7 +118,7 @@ module qspi (
     qspi_sio_o  = 4'b0000;
     qspi_sio_oe = 4'b0000;
 
-    if ((state == ST_COMMAND) || (state == ST_ADDRESS) || (state == ST_DUMMY) || (state == ST_DATA) || (state == ST_FINISH)) begin
+    if ((state == ST_COMMAND) || (state == ST_ADDRESS) || (state == ST_DUMMY) || (state == ST_DATA) || (state == ST_STREAM_WAIT) || (state == ST_FINISH)) begin
       qspi_ce_n_o = target_latched ? 2'b01 : 2'b10;
     end
 
@@ -132,6 +143,7 @@ module qspi (
       quad_mode_latched  <= 1'b0;
       cpol_latched       <= 1'b0;
       cpha_latched       <= 1'b0;
+      stream_latched     <= 1'b0;
       clkdiv_latched     <= 8'h00;
       dummy_latched      <= 8'h00;
       write_data_latched <= 32'h0000_0000;
@@ -150,9 +162,11 @@ module qspi (
 
       done               <= 1'b0;
       rx_valid           <= 1'b0;
+      word_done          <= 1'b0;
     end else begin
-      done     <= 1'b0;
-      rx_valid <= 1'b0;
+      done      <= 1'b0;
+      rx_valid  <= 1'b0;
+      word_done <= 1'b0;
 
       unique case (state)
         ST_IDLE: begin
@@ -169,6 +183,7 @@ module qspi (
             quad_mode_latched  <= quad_mode;
             cpol_latched       <= cpol;
             cpha_latched       <= cpha;
+            stream_latched     <= stream_enable;
             clkdiv_latched     <= clkdiv;
             dummy_latched      <= dummy;
             write_data_latched <= write_data;
@@ -249,7 +264,12 @@ module qspi (
                     end
                   end
 
-                  ST_DATA: state <= ST_FINISH;
+                  ST_DATA: begin
+                    word_done <= 1'b1;
+                    if (dir_latched && stream_latched) rx_valid <= 1'b1;
+                    state <= stream_latched ? ST_STREAM_WAIT : ST_FINISH;
+                  end
+
                   default: state <= ST_FINISH;
                 endcase
               end else begin
@@ -295,6 +315,22 @@ module qspi (
           end
         end
 
+        ST_STREAM_WAIT: begin
+          // Keep CE# asserted and SCK at the idle polarity while the caller
+          // decides whether the sequential transfer continues or terminates.
+          sck_level     <= cpol_latched;
+          divider_count <= 8'h00;
+          phase_count   <= 6'd0;
+
+          if (stream_stop) begin
+            state <= ST_FINISH;
+          end else if (stream_next) begin
+            if (!dir_latched) shift_reg <= byte_swap32(stream_write_data);
+            else rx_shift <= 32'h0000_0000;
+            state <= ST_DATA;
+          end
+        end
+
         ST_FINISH: begin
           // Keep CE# active at idle SCK polarity for one final half period.
           sck_level <= cpol_latched;
@@ -319,7 +355,7 @@ module qspi (
             if (cs_high_half) begin
               state <= ST_IDLE;
               done  <= 1'b1;
-              if (dir_latched && data_en_latched) rx_valid <= 1'b1;
+              if (dir_latched && data_en_latched && !stream_latched) rx_valid <= 1'b1;
             end else begin
               cs_high_half <= 1'b1;
             end

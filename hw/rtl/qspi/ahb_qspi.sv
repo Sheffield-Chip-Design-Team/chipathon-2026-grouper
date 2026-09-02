@@ -414,13 +414,22 @@ module ahb_qspi #(
 
     .dummy        (cmd_dummy),
     .opcode       (cmd_opcode),
-    .address      (address_reg),
-    .write_data   (data_reg),
+    .address           (address_reg),
+    .write_data        (data_reg),
 
-    .busy         (core_busy),
-    .done         (core_done),
-    .rx_valid     (core_rx_valid),
-    .read_data    (core_read_data),
+    // Stage 2 only adds the serial-engine continuation primitive. The manual
+    // AHB register path deliberately keeps it disabled until the mapped path
+    // is introduced in a later stage.
+    .stream_enable     (1'b0),
+    .stream_next       (1'b0),
+    .stream_stop       (1'b0),
+    .stream_write_data (32'h0000_0000),
+
+    .busy              (core_busy),
+    .done              (core_done),
+    .rx_valid          (core_rx_valid),
+    .word_done         (),
+    .read_data         (core_read_data),
 
     .qspi_sck_o   (qspi_sck_o),
     .qspi_ce_n_o  (qspi_ce_n_o),
