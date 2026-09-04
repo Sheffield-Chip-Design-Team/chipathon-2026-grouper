@@ -32,7 +32,6 @@ typedef union {
 } qspi_ctrl_t;
 
 // CMD register.
-//
 // DIR applies only to the DATA phase:
 //   0 = transmit data
 //   1 = receive data
@@ -73,10 +72,8 @@ void qspi_config(uint8_t clkdiv, bool quad_mode, bool mode3);
 qspi_status_t qspi_status(void);
 
 // Execute one arbitrary QSPI command.
-//
-// data points to the byte to transmit when read=false.
-// For a read, the received byte is written back through data.
-//
+// data points to the 32-bit word to transmit when read=false.
+// For a read, the received 32-bit word is written back through data.
 // Returns false if the transaction does not complete before timeout_cycles.
 bool qspi_command(
     uint8_t opcode,
@@ -86,7 +83,7 @@ bool qspi_command(
     bool data_en,
     uint8_t dummy,
     bool target_nor,
-    uint8_t *data,
+    uint32_t *data,
     uint32_t timeout_cycles
 );
 
