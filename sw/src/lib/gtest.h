@@ -32,6 +32,17 @@ bool g_check_eq_str(const char *got, const char *expect, const char *expr,
                                             #got, __LINE__)
 #define G_CHECK_STR(got, exp)  g_check_eq_str((got), (exp), #got, __LINE__)
 
+// Tagged variants. Same checks, but the caller supplies a short label instead
+// of the stringified expression. A check on a call with a long argument list
+// costs ~85 bytes of .rodata when stringified, which a test linked for the
+// 4 KiB RAM (sw/boot/ram.ld) cannot always afford. The FAIL line still carries
+// __LINE__, so the call site is identified either way - the tag only has to
+// distinguish the checks from each other at a glance.
+#define G_CHECK_T(cond, tag)         g_check((cond), (tag), __LINE__)
+#define G_CHECK_EQ_T(got, exp, tag)  g_check_eq_u((uint32_t)(got), \
+                                                  (uint32_t)(exp), (tag), \
+                                                  __LINE__)
+
 // Prints the TEST_RESULT line and does not return - it hands off to
 // g_sim_exit(). Returns int only so `return g_test_end();` reads naturally.
 int g_test_end(void) __attribute__((noreturn));

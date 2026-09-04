@@ -7,6 +7,7 @@ filesets:
   rtl:
     files:
       - clk_div.sv:          {file_type: systemVerilogSource}
+      - clk_div_prog.sv:     {file_type: systemVerilogSource}
       - clk_gate.sv:         {file_type: systemVerilogSource}
       - clk_out.sv:          {file_type: systemVerilogSource}
       - downcounter.sv:      {file_type: systemVerilogSource}

@@ -61,4 +61,4 @@ The pad mux itself lives in `hw/rtl/io_ss.sv`, not in this block, so the
 routing requirement `GRPR-GPIO-003` is only checked here to the extent that
 `gpio_alt_sel` reflects the register. Actual pin routing, and the
 `GPIO_SYNC_EN_N` bypass at `grouper_soc_top`, are covered by the SoC-level
-test in `sw/tests/test_gpio.c`.
+tests in `sw/tests/test_gpio_regs.c` and `sw/tests/test_gpio_echo.c`.

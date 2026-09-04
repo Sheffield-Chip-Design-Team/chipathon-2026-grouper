@@ -13,7 +13,7 @@ targets:
     flow: sim
     flow_options:
       tool: verilator
-      cocotb_module: hw.tb.spi_s.test_spi_m
+      cocotb_module: hw.tb.spi_m.test_spi_m
       verilator_options:
         - -Wno-TIMESCALEMOD
         - --sv

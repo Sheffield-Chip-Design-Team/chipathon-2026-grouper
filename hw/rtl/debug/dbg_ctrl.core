@@ -1,0 +1,31 @@
+CAPI=2:
+
+name: sharc:soc_ip:ahb_debug_unit:0.0.1
+description: >
+  Debug Unit (dbg_ctrl) - bus mastering, lock/release, and register file for
+  the debug port defined in docs/hardware/design/blocks/Debug Unit.md
+  (RTL only, no testbench). Not an AHB peripheral: it has neither an
+  AHB-Lite manager nor subordinate interface (GRPR-DBG-002); it is
+  instantiated inside cpu_ss.
+
+filesets:
+  rtl:
+    files:
+      - dbg_ctrl.sv:     {file_type: systemVerilogSource}
+
+targets:
+  default: &rtl
+    filesets: [rtl]
+    toplevel: dbg_ctrl
+
+  lint:
+    <<: *rtl
+    description: Verilator lint-only check (no simulation)
+    flow: sim
+    flow_options:
+      tool: verilator
+      mode: lint-only
+      verilator_options:
+        - --sv
+        - -Wall
+        - -Wno-fatal

@@ -4,11 +4,6 @@ module ram_ss #(
   parameter bit USE_MACRO_RAM = 1
 ) (
   input  logic                  clk,
-  // Only the flop-array path resets its read register; the SRAM macro has no
-  // reset input, so rst_n is unused when USE_MACRO_RAM is set.
-  /* verilator lint_off UNUSEDSIGNAL */
-  input  logic                  rst_n,
-  /* verilator lint_on UNUSEDSIGNAL */
   input  logic [ADDR_WIDTH-1:0] ram_addr,
   input  logic                  ram_read,
   input  logic                  ram_write,
@@ -46,10 +41,8 @@ module ram_ss #(
               memory[ram_addr][i*8 +: 8] <= ram_wdata[i*8 +: 8];
     
       // Read Port
-      always_ff @(posedge clk, negedge rst_n)
-        if (~rst_n)
-          ram_rdata <= '0;
-        else if (ram_read)
+      always_ff @(posedge clk)
+        if (ram_read)
           ram_rdata <= memory[ram_addr];
     end
   endgenerate

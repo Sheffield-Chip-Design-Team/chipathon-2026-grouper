@@ -4,7 +4,7 @@
 **Status:** Specified, RTL in progress. This document is the design contract — it was written before the RTL and `hw/rtl/gpio/ahb_gpio_ctrl.sv` is built to it, rather than being reverse-engineered from finished RTL. The block currently instantiated in the `GPIO CTRL` slot is `ahb_stub_slave`, which errors on every access.
 **Source:** [Schematic Review](../../Schematic%20Review.md) §"Block-Level Design Checklists → 2. AHB GPIO Multiplexer". The source checklist for this block is a single bullet; the pin-sharing scheme, register map and error behaviour below were decided during design and are now firm, superseding the "not yet documented" state of the earlier revision of this file.
 
-**Related:** [Grouper SoC Specification](../Grouper%20SoC%20Specification.md) — memory map, pin-sharing context | [GPIO Mux Verification Plan](../../verification/blocks/GPIO%20Mux%20Verification%20Plan.md) | [SPI Slave](SPI%20Slave.md), [SPI Master](SPI%20Master.md), [QSPI](QSPI.md) — the peripherals whose pins this block owns
+**Related:** [Grouper SoC Specification](../Grouper%20SoC%20Specification.md) — memory map, pin-sharing context | [GPIO Mux Verification Plan](../../verification/blocks/GPIO%20Mux%20Verification%20Plan.md) | [SPI Slave](SPI%20Slave%20Specification.md), [SPI Master](SPI%20Master%20Specification.md), [QSPI](QSPI%20Specification.md) — the peripherals whose pins this block owns
 
 ---
 
@@ -39,7 +39,14 @@ The block also owns the pad-electrical controls (input enable, pull-up/down, inp
 | `GRPR-GPIO-007` | `GPIO_RO_MASK` shall mark pads read-only. A write to `GPIO_OUT` that will never change the value of a RO masked pin. The rest of the unmasked bits may change. |
 | `GRPR-GPIO-008` | A write to `GPIO_IN`, or to any reserved offset in the register block, shall raise an error response per `GRPR-GPIO-010`. |
 | `GRPR-GPIO-009` | The block shall support byte, halfword and word writes, decoded with `generate_byte_select_32`. |
+| `GRPR-GPIO-016` | `io_ss` shall gate pad 3's (`spi_s_miso`) output enable with a dedicated hardware term, ANDed against `mux_n_oe[3]` in addition to `ALTSEL[3]`, that defaults **off** at reset and is driven by the Debug Unit's `dbg_lock_active` output ([`GRPR-DBG-044`](Debug%20Unit.md#bus-mastering-and-ownership)). This is a hardware term inside `io_ss`, **not** a new `ahb_gpio_ctrl` register bit — nothing in § Register Map changes. Pad 3 is selected as the SPI Slave's alternate function from reset (`GRPR-SOC-028`) but does not drive the pad until a debug lock is accepted. |
 
+`GRPR-GPIO-016` exists because reachability and drive are different
+properties here: an external host must be able to *send* to the SPI Slave
+with nothing configured (pads 0–2), but the chip must not *drive* `MISO`
+until something has actually been decoded and accepted — driving early would
+contend with whatever else might be on that pin, and gives no information
+that a driven idle level wouldn't already give away for free.
 
 ### Note on `GRPR-GPIO-001`
 The synchroniser flops themselves are instantiated externally to the peripheral.
@@ -79,6 +86,12 @@ Mux behaviour per pad *n*:
 | 1 | `mux_n_o[n]` | `mux_n_oe[n]` | `gpio_in[n]` |
 
 Forcing the function's input to idle when its pad is in GPIO mode is required, not cosmetic: without it, toggling a GPIO would clock the SPI slave. For the active-low `spi_s_ss` the idle level is 1; every other muxed input idles at 0.
+
+**Pad 3 (`spi_s_miso`) is a documented exception to this table.** Its
+`mux_n_oe[3]` is not simply `1` whenever `ALTSEL[3]` selects it; it is further
+ANDed with a hardware gate that defaults off at reset (`GRPR-GPIO-016`), so
+row `ALTSEL[n]=1` for `n=3` reads as `mux_n_oe[3] = mux_n_oe[3] AND
+dbg_lock_active`. No other pad has this second term.
 
 ## Parameters and Configurations
 
@@ -126,9 +139,31 @@ Field meanings, all active high: `GPIO_OE` 1 = drive the pad. `GPIO_ALTSEL` 1 = 
 
 ### Reset state and a bring-up warning
 
-Reset leaves every pad an un-driven, un-pulled, synchronised input with the **input buffer disabled**, and every pad assigned to GPIO rather than its alternate function. Nothing is driven and no serial peripheral is connected to a pin until firmware says so.
+Reset leaves every pad un-driven and un-pulled. Pads 4–15 additionally reset
+assigned to GPIO with their input buffer disabled — nothing is driven and no
+serial peripheral is connected on those pins until firmware says so.
 
-> **Firmware must set `GPIO_IE` before `GPIO_IN` reads anything.** With the reset value of 0, `GPIO_IN` reads 0 no matter what is on the pad. This applies to the serial peripherals too: the SPI slave cannot receive until `GPIO_IE` is set for pads 0–2 and `GPIO_ALTSEL` for pads 0–3.
+**Pads 0–3 are the exception**, and reset already assigned to the SPI Slave's
+alternate function (`GRPR-SOC-027`, `GRPR-SOC-028`) rather than to GPIO — see
+`GRPR-GPIO-016` below for why. This is what lets an external host reach the
+SPI Slave with no firmware running at all
+([`GRPR-SOC-030`](../Grouper%20SoC%20Specification.md#boot-flow)); it does not
+by itself make the SPI Slave itself do anything with what it receives, since
+`CTRL.DEBUG_PORT_EN` and the Debug Unit's own consent gates still reset closed
+(`GRPR-SOC-029`) until `DBG_ENABLE` sets them.
+
+> **`GPIO_IE` is a separate, electrical concern from `GPIO_ALTSEL` and does
+> not gate `mux_n_i`.** In `io_ss`, `mux_n_i = gpio_in & alt_sel` — the digital
+> path the SPI Slave receives on is a function of `GPIO_ALTSEL` alone, so pads
+> 0–2 reach the SPI Slave from reset with no `GPIO_IE` write needed, which is
+> what makes `DBG_ENABLE` reachable with no firmware running (`GRPR-SOC-030`).
+> `GPIO_IE` instead controls whether the pad's own input buffer is physically
+> enabled — this is a real electrical property of the pad cell, not purely a
+> digital gate — so firmware still needs to set it for `GPIO_IN` to read a
+> pad's live value, and a chip whose electrical default for `GPIO_IE` turns
+> out to disable the input buffer at the transistor level (not just digitally
+> mask it) would need that reconciled with `GRPR-SOC-030` before tape-out;
+> flagged as `GPIO-SPEC-001` in § Open Items.
 
 ## Invalid Access Rules
 
@@ -170,7 +205,20 @@ TBD. Dominated by 11 × 16 = 176 register flops plus 16 2:1 output muxes; the pa
 
 - `GPIO_SYNC_EN_N` cannot be verified at SoC level until [hw/tb/top/grouper_soc_hello_tb.sv](../../../../hw/tb/top/grouper_soc_hello_tb.sv) instantiates `grouper_soc_top` instead of `digital_ss` — the synchronisers sit above the current DUT boundary. The testbench already carries a FIXME for this.
 - `GPIO_RO_MASK` gates `GPIO_OUT` only. Extending it to `GPIO_OE` and `GPIO_ALTSEL` — which also change who drives a pad — and making `GPIO_RO_MASK` self-locking so a locked configuration cannot be undone, are both deliberate non-goals of this revision.
-- Pad 15 has no alternate function. If a fifth serial signal is ever needed, it is the free one.
+- Pad 15 has no alternate function. If a fifth serial signal is ever needed, it is the free one. (An earlier revision used pad 15 as a sampled debug strap; that mechanism is withdrawn — see [Debug Unit `DBG-SPEC-001`](Debug%20Unit.md#open-items) — and pad 15 is the spare again, unconditionally.)
+- `GPIO-SPEC-001` — **Open: `GPIO_IE`'s reset default is a real electrical
+  property, not just a digital gate, and `GRPR-SOC-030` needs it not to
+  matter for pads 0–2.** The digital mux path the SPI Slave receives on
+  (`mux_n_i = gpio_in & alt_sel`) does not depend on `GPIO_IE`, so pads 0–2
+  reach the SPI Slave from reset regardless of `GPIO_IE`'s value. But if the
+  pad cell's actual reset default for its input buffer enable is "disabled"
+  at the transistor level — which `GPIO_IE`'s digital reset value of 0 may or
+  may not reflect faithfully, depending on the pad cell's implementation —
+  then `gpio_in[n]` itself could be stuck low regardless of what the digital
+  mux does with it, and `DBG_ENABLE`/`GRPR-SOC-030` would be unreachable in
+  silicon despite being correct on paper. This needs checking against the pad
+  cell's actual electrical behaviour before tape-out, not just against
+  `ahb_gpio_ctrl`'s register-level reset value.
 - The [GPIO Mux Verification Plan](../../verification/blocks/GPIO%20Mux%20Verification%20Plan.md) lists the GPIO agent as missing; `hw/dv/uvc/gpio/` now exists. That plan also lists `V-GPIO-STM-003`/`V-GPIO-COV-001` as blocked on the pin-sharing scheme, which this document now defines — both are unblocked and the plan needs updating.
 
 ## Verification Cross-Reference
@@ -192,5 +240,6 @@ TBD. Dominated by 11 × 16 = 176 register flops plus 16 2:1 output muxes; the pa
 | `GRPR-GPIO-013` | `V-GPIO-CHK-011` |
 | `GRPR-GPIO-014` | `V-GPIO-CHK-008` (same waveform check) |
 | `GRPR-GPIO-015` | `V-GPIO-CHK-012` |
+| `GRPR-GPIO-016` | `V-GPIO-CHK-013` (pad 3 does not drive at reset despite `ALTSEL[3]`=1; drives exactly when `dbg_lock_active` asserts), `V-GPIO-DIR-001` (negative check: no new register bit exists for this gate) |
 
 See [GPIO Mux Verification Plan](../../verification/blocks/GPIO%20Mux%20Verification%20Plan.md) for the full item definitions and test list.

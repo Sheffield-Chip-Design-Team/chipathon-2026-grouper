@@ -1,0 +1,32 @@
+CAPI=2:
+
+name: sharc:soc_ip:ahb_debug_unit_directed:0.0.1
+description: Directed cocotb testbench for the Debug Unit (hw/tb/debug/test_debug_unit.py)
+
+# DUT is dbg_ctrl standalone, against the CpuStub of hw/tb/debug/cpu_stub.py
+# rather than a real picorv32 - see docs/hardware/verification/blocks/Debug
+# Unit Verification Plan.md § The CPU stub for why a real core is not the
+# right DUT companion for most of this bench.
+#
+#   fusesoc run --no-export sharc:soc_ip:ahb_debug_unit_directed
+
+filesets:
+  rtl:
+    depend:
+      - sharc:soc_ip:ahb_debug_unit:0.0.1
+
+targets:
+  default:
+    flow: sim
+    flow_options:
+      tool: verilator
+      cocotb_module: hw.tb.debug.test_debug_unit
+      verilator_options:
+        - -Wno-TIMESCALEMOD
+        - --sv
+        - --trace
+        - --coverage
+      run_options:
+        - --trace
+    filesets: [rtl]
+    toplevel: dbg_ctrl

@@ -64,7 +64,8 @@ module io_ss #(
   output wire [NUM_GPIO-1:0]     gpio_pu,
   output wire [NUM_GPIO-1:0]     gpio_pd,
 
-  output wire [NUM_GPIO-1:0]     gpio_sync_en_n
+  output wire [NUM_GPIO-1:0]     gpio_sync_en_n,
+  input  wire                    dbg_lock_active  // Gate pad 3 output enable until the debug lock is removed.
 
 );
 
@@ -169,9 +170,12 @@ module io_ss #(
     mux_n_o  = '0;
     mux_n_oe = '0;
 
-    // SPI slave: three pad inputs, one output.
+    // SPI slave: three pad inputs, one output. The output's enable is
+    // additionally gated by dbg_lock_active (GRPR-GPIO-016): pad 3 is
+    // selected as this alternate function from reset (GRPR-SOC-028), but
+    // must not drive until a debug lock is accepted.
     mux_n_o [PIN_SPI_S_MISO] = spi_s_miso_o;
-    mux_n_oe[PIN_SPI_S_MISO] = 1'b1;
+    mux_n_oe[PIN_SPI_S_MISO] = dbg_lock_active;
 
     // SPI master: three pad outputs, one input.
     mux_n_o [PIN_SPI_M_SS]   = spi_m_ss_o;

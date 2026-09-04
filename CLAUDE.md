@@ -13,10 +13,10 @@ The SoC is a `picorv32` (RV32EMC) CPU with an AHB-Lite bus fabric and a set of A
 | UART | `hw/rtl/uart/` | `hw/tb/uart/`, `hw/dv/ahb_uart/` | yes |
 | GPIO Mux | `hw/rtl/gpio/` (+ `hw/rtl/io_ss.sv`) | `hw/tb/gpio/` | yes (inside `io_ss`) |
 | SPI Slave | `hw/rtl/spi_s/` | `hw/tb/spi_s/` | yes |
-| SPI Master | `hw/rtl/spi_m/` | — | **no — slot holds `ahb_stub_slave`** |
-| QSPI | `hw/rtl/qspi/` | `hw/tb/qspi/` | **no — slot holds `ahb_stub_slave`** |
+| SPI Master | `hw/rtl/spi_m/` | `hw/tb/spi_m/` (18/21 pass — see `spi_m_bugs.md`) | yes |
+| QSPI | `hw/rtl/qspi/` | `hw/tb/qspi/` | yes |
 
-SPI Master and QSPI exist as standalone cores that lint and (for QSPI) have a directed TB, but `periph_ss` still instantiates `u_spi_m_stub` / `u_qspi_stub` in their fabric slots. Both are marked `FIXME` in `hw/rtl/periph_ss.sv`. Wiring them up is outstanding work.
+Both SPI Master and QSPI are now wired into `periph_ss`; no fabric slot holds a stub any more. The SPI Master's pads reach GPIO pins 4–7 through `io_ss`, and `sw/tests/test_spi_m.c` drives it at the top level against an APS6404L PSRAM model (`hw/tb/models/aps6404l.py`) — the `sw_spi_m` CI leg. Its block-level TB still has three real failures; see `hw/rtl/spi_m/spi_m_bugs.md` (`SPIM-ISSUE-027`).
 
 CPU memory is planned as a unified 4 KiB SRAM built from four `gf180mcu_ocd_ip_sram__sram1024x8m8wm1` macros (1024 × 8-bit words each, with byte/bit write enables) — see `ip/gf180mcu_ocd_ip_sram/` (vendored as a git submodule). **This is not yet integrated.** `hw/rtl/memory/ram_ss.sv` and `hw/pd/wrappers/sram1024x8_wrapper.sv` exist but are instantiated nowhere; `hw/rtl/memory/ahb_ram.sv` is still a behavioural `logic [] memory []` array, so the current hardened netlist implements RAM as a flop array. See "Outstanding RAM work" below.
 
@@ -51,7 +51,7 @@ fusesoc run --no-export --target=tb_top sharc:soc_ip:grouper_soc_tb
 fusesoc run --no-export sharc:soc_ip:grouper_soc_directed
 
 # pick a firmware top level from sw/tests (build_fw.sh --list shows them)
-FW_TEST=gpio fusesoc run --no-export sharc:soc_ip:grouper_soc_directed
+FW_TEST=gpio_regs fusesoc run --no-export sharc:soc_ip:grouper_soc_directed
 ```
 
 `grouper_soc` is **RTL-only** (`default`, `lint`). The testbenches are separate cores: `sharc:soc_ip:grouper_soc_tb` (`hw/tb/top/grouper_soc_tb.core` — `tb_top`, `tb_top_debug`, `tb_top_trace`) and `sharc:soc_ip:grouper_soc_directed` (`hw/tb/top/grouper_soc_directed.core` — `default`, `debug`, `trace`).
@@ -70,7 +70,7 @@ fusesoc run ahb_qspi_directed
 fusesoc run ahb_spi_s_directed
 ```
 
-`.github/sim-ci-targets.yaml` is the authoritative matrix — it lists every core/target CI runs and which legs are `fail_ok: true` (currently `ahb_uart_mdv`, `ahb_qspi_directed`, `ahb_spi_s_directed`, `sw_stdlib_str`). Add a new block's legs there.
+`.github/sim-ci-targets.yaml` is the authoritative matrix — it lists every core/target CI runs and which legs are `fail_ok: true` (currently `ahb_uart_mdv` and `ahb_spi_s_directed`). Add a new block's legs there.
 
 `hw/dv/` holds the pyuvm layer: reusable UVCs (`hw/dv/uvc/{ahb3lite,uart,gpio}`) and the `hw/dv/ahb_uart/` suite. `hw/tb/` holds the lighter directed cocotb tests plus shared helpers in `hw/tb/tb_utils/`.
 
@@ -79,6 +79,34 @@ fusesoc run ahb_spi_s_directed
 Firmware images consumed by the ROM (`hw/rtl/memory/ahb_rom.sv`, default `code.hex`/`code.vmem`, overridable via `` `PROG_FILE_HEX``/`` `PROG_FILE_VMEM` `` defines) live in `sw/`. `sw/scripts/build_fw.sh` rebuilds them; `sw/scripts/build_rom_boot.sh` builds the separate 64-byte dry-run boot ROM in `sw/dry_run/`.
 
 Anything at the top level runs `build_fw.sh` as a pre-build hook, so it needs a bare-metal RISC-V GCC on `PATH` supporting `-march=rv32emc -mabi=ilp32e`. Default prefix `riscv64-unknown-elf-`, override with `CROSS`. Lint and block-level targets need no toolchain.
+
+#### The 4 KiB RAM budget for `sw/tests`
+
+The CI software legs run the `default` target, which links a **RAM-resident**
+image (`sw/boot/ram.ld`): code, rodata, data, bss *and* the stack share one
+4 KiB region. That is the binding constraint on anything in `sw/tests`, and it
+is much tighter than it looks, because the fixed cost is most of it:
+
+| | bytes |
+|---|---|
+| library + startup + `g_test_*` harness (mostly the `printf` formatter, ~1.2 KiB) | ~2330 |
+| `.irq` — `irq_regs` (48) + IRQ stack (384) | 432 |
+| main stack — measured worst case is ~250 (`g_check_eq_str` → `printf` → `g_vfprintf` → `emit_num`) | ≥320 |
+| **left for the test itself** | **~1000** |
+
+So a test file gets roughly **1 KiB** of its own code and rodata. Each
+`G_CHECK*` costs ~75 bytes — the call site plus the stringified expression in
+rodata — so ~13 checks is a full image. When one stops fitting, the linker
+says `region 'RAM' overflowed by N bytes`; split it into two more specific
+tests and give each its own CI leg rather than trimming checks.
+
+To check a test without running a simulation:
+
+```bash
+FW_TEST=<name> ./sw/scripts/build_fw.sh --link ram --baud 625000 --no-disasm
+grep -E '_eirq|_estack' sw/build/firmware.map     # stack = _estack - _eirq
+```
+
 
 ### Physical design
 
@@ -112,7 +140,8 @@ grouper_soc_top          (clk, async_rst_n, uart_tx/rx, gpio_{in,out,oe,cs,sl,ie
             ├─ ahb_uart              wraps hw/rtl/uart/{uart,uart_tx,uart_rx,uart_clk_div}.sv
             ├─ io_ss                 pad control + ahb_gpio_ctrl
             ├─ ahb_spi_s
-            ├─ ahb_stub_slave ×2     QSPI and SPI Master slots (FIXME)
+            ├─ ahb_qspi              pads via io_ss, GPIO 8-14
+            ├─ ahb_spi_m             pads via io_ss, GPIO 4-7
             ├─ (ext periph slot)     brought out as digital_ss's ext_ahb_m_if_* ports,
             │                        tied off at grouper_soc_top
             └─ ahb_debug             DEBUG_PERIPH only

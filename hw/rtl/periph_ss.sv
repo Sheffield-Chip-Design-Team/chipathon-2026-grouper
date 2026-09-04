@@ -11,7 +11,7 @@ module periph_ss #(
   input logic                        HCLK,
   input logic                        HRESETn,
 
-  // AHB Slave Interface (From CPU)
+  // AHB Slave Interface (From CPU/Debug Unit)
   input logic [ADDR_WIDTH-1:0]       HADDR,
   input logic [2:0]                  HBURST,
   input logic                        HMASTLOCK,
@@ -50,6 +50,24 @@ module periph_ss #(
   input  logic                       trace_valid,
   input  logic [35:0]                trace_data,
   /* verilator lint_on UNUSED */
+
+  // Debug Unit lock-active indication (GRPR-DBG-044), passed straight
+  // through to io_ss's pad-3 output-enable gate (GRPR-GPIO-016).
+  input  logic                       dbg_lock_active,
+
+  // Debug port pass-through: ahb_spi_s is the master (it frames commands
+  // from its wire/register-window sides), cpu_ss is the slave. This block
+  // just forwards between them, so its own directions mirror ahb_spi_s's.
+  output logic                       dbg_req_valid,
+  input  logic                       dbg_req_ready,
+  output logic [3:0]                 dbg_req_cmd,
+  output logic [31:0]                dbg_req_addr,
+  output logic [31:0]                dbg_req_wdata,
+  output logic [1:0]                 dbg_req_size,
+  input  logic                       dbg_rsp_valid,
+  output logic                       dbg_rsp_ready,
+  input  logic [31:0]                dbg_rsp_rdata,
+  input  logic                       dbg_rsp_err,
 
   // External AHB master interface
   output logic [EXT_ADDR_WIDTH-1:0]  ext_HADDR,
@@ -118,7 +136,7 @@ module periph_ss #(
   logic                  qpsi_HREADYOUT;
   logic                  qpsi_HRESP;
 
-  // FIXME - slot wired to ahb_stub_slave
+  // FIXME - slot wired to a sized, pad-connected ahb_stub_slave, not ahb_spi_m
   logic [ADDR_WIDTH-1:0] spi_m_HADDR;
   logic [2:0]            spi_m_HBURST;
   logic                  spi_m_HMASTLOCK;
@@ -184,10 +202,15 @@ module periph_ss #(
 
 // --- Internal Signals -----------------------------------------------------------------
 
-logic mux_spi_s_ss_i;      // internal signal for SPI slave chip select
-logic mux_spi_s_sck_i;     // internal signal for SPI slave clock
-logic mux_spi_s_mosi_i;    // internal signal for SPI slave master out slave in
-logic mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
+logic       mux_spi_s_ss_i;      // internal signal for SPI slave chip select
+logic       mux_spi_s_sck_i;     // internal signal for SPI slave clock
+logic       mux_spi_s_mosi_i;    // internal signal for SPI slave master out slave in
+logic       mux_spi_s_miso_o;    // internal signal for SPI slave master in slave out
+
+logic       mux_spi_m_ss_o;      //  internal signal for SPI master chip select 
+logic       mux_spi_m_sck_o;     //  internal signal for SPI master clock       
+logic       mux_spi_m_mosi_o;    //  internal signal for SPI master data out    
+logic       mux_spi_m_miso_i;    //  internal signal for SPI master data in     
 
 logic       mux_qspi_sck_o;
 logic [1:0] mux_qspi_ce_n_o;
@@ -207,7 +230,7 @@ logic [3:0] mux_qspi_sio_oe;
     .HCLK             (HCLK),
     .HRESETn          (HRESETn),
    
-    // CPU Slave interface
+    // CPU/Debug Slave interface
     .HADDR            (HADDR),
     .HBURST           (HBURST),
     .HMASTLOCK        (HMASTLOCK),
@@ -394,14 +417,22 @@ logic [3:0] mux_qspi_sio_oe;
 
   //--- SPI Master ------------------------------------------------------------------------
   
-  // FIXME - replace with actual SPI Master peripheral
-  ahb_stub_slave #(
-    .ADDR_WIDTH (ADDR_WIDTH),
-    .DATA_WIDTH (DATA_WIDTH)
-  ) u_spi_m_stub (
+  // ahb_spi_m's register file spans 0x00-0x18, so it decodes five address bits
+  // and takes HADDR[4:0]. Its pad ports are named for the SPI wires rather
+  // than for the io_ss mux, hence the rename onto mux_spi_m_*: CS_N is the
+  // io_ss "ss" pad, and the mux drives that pad's output enable itself.
+  //
+  // irq is left unconnected to match the QSPI slot above: cpu_ss's irq vector
+  // is {uart_rx_error_irq, uart_rx_irq} and has no spare line for this block.
+  ahb_spi_m #(
+    .ADDR_WIDTH (5),
+    .DATA_WIDTH (DATA_WIDTH),
+    .FIFO_DEPTH (4)
+  ) u_spi_m (
     .HCLK         (HCLK),
     .HRESETn      (HRESETn),
-    .HADDR        (spi_m_HADDR),
+
+    .HADDR        (spi_m_HADDR[4:0]),
     .HBURST       (spi_m_HBURST),
     .HMASTLOCK    (spi_m_HMASTLOCK),
     .HPROT        (spi_m_HPROT),
@@ -409,50 +440,29 @@ logic [3:0] mux_qspi_sio_oe;
     .HTRANS       (spi_m_HTRANS),
     .HWDATA       (spi_m_HWDATA),
     .HWRITE       (spi_m_HWRITE),
+
     .HRDATA       (spi_m_HRDATA),
     .HREADYOUT    (spi_m_HREADYOUT),
     .HRESP        (spi_m_HRESP),
+
     .HREADYIN     (spi_m_HREADYIN),
-    .HSEL         (spi_m_HSEL)
+    .HSEL         (spi_m_HSEL),
+
+    .spi_m_mosi_o (mux_spi_m_mosi_o),
+    .spi_m_sck_o  (mux_spi_m_sck_o),
+    .spi_m_cs_n_o (mux_spi_m_ss_o),
+    .spi_m_miso_i (mux_spi_m_miso_i),
+
+    .irq          ()
   );
 
   //--- SPI Slave -------------------------------------------------------------------------
 
-`ifdef DRY_RUN
-
-  // The SPI slave is out of scope for the dry run - occupy its fabric slot
-  // with the same placeholder the not-yet-implemented peripherals use, so the
-  // interconnect still sees eight slaves.
-  ahb_stub_slave #(
-    .ADDR_WIDTH (ADDR_WIDTH),
-    .DATA_WIDTH (DATA_WIDTH)
-  ) u_spi_s_stub (
-    .HCLK         (HCLK),
-    .HRESETn      (HRESETn),
-    .HADDR        (spi_s_HADDR),
-    .HBURST       (spi_s_HBURST),
-    .HMASTLOCK    (spi_s_HMASTLOCK),
-    .HPROT        (spi_s_HPROT),
-    .HSIZE        (spi_s_HSIZE),
-    .HTRANS       (spi_s_HTRANS),
-    .HWDATA       (spi_s_HWDATA),
-    .HWRITE       (spi_s_HWRITE),
-    .HRDATA       (spi_s_HRDATA),
-    .HREADYOUT    (spi_s_HREADYOUT),
-    .HRESP        (spi_s_HRESP),
-    .HREADYIN     (spi_s_HREADYIN),
-    .HSEL         (spi_s_HSEL)
-  );
-
-  // io_ss still drives mux_spi_s_{ss,sck,mosi}_i towards the (absent) slave;
-  // with no consumer those three pad-input paths fall out in synthesis.
-  assign mux_spi_s_miso_o = 1'b0;
-
-`else
 
   ahb_spi_s #(
-    .ADDR_WIDTH (ADDR_WIDTH),
-    .DATA_WIDTH (DATA_WIDTH)
+    .ADDR_WIDTH    (ADDR_WIDTH),
+    .DATA_WIDTH    (DATA_WIDTH),
+    .DEBUG_PORT_EN (1)
   ) u_spi_s (
     .HCLK         (HCLK),
     .HRESETn      (HRESETn),
@@ -471,16 +481,24 @@ logic [3:0] mux_qspi_sio_oe;
     .HREADYIN     (spi_s_HREADYIN),
     .HSEL         (spi_s_HSEL),
 
-    // TODO - add IRQs
+    .spi_s_ss     (mux_spi_s_ss_i),
+    .spi_s_sck    (mux_spi_s_sck_i),
+    .spi_s_mosi   (mux_spi_s_mosi_i),
+    .spi_s_miso   (mux_spi_s_miso_o),
 
-    .spi_ss       (mux_spi_s_ss_i),
-    .spi_sck      (mux_spi_s_sck_i),
-    .spi_mosi     (mux_spi_s_mosi_i),
-    .spi_miso     (mux_spi_s_miso_o)
+    // Debug port (GRPR-DBG-042 on the cpu_ss side; ahb_spi_s is the master).
+    .dbg_req_valid (dbg_req_valid),
+    .dbg_req_ready (dbg_req_ready),
+    .dbg_req_cmd   (dbg_req_cmd),
+    .dbg_req_addr  (dbg_req_addr),
+    .dbg_req_wdata (dbg_req_wdata),
+    .dbg_req_size  (dbg_req_size),
+    .dbg_rsp_valid (dbg_rsp_valid),
+    .dbg_rsp_ready (dbg_rsp_ready),
+    .dbg_rsp_rdata (dbg_rsp_rdata),
+    .dbg_rsp_err   (dbg_rsp_err),
+    .irq           ( )
   );
-
-`endif
-
   //--- Input/Output Subsystem (GPIO MUX) -----------------------------------------------------------------
 
   io_ss #(
@@ -512,11 +530,10 @@ logic [3:0] mux_qspi_sio_oe;
     .spi_s_mosi_i    (mux_spi_s_mosi_i),
     .spi_s_miso_o    (mux_spi_s_miso_o),
 
-    // FIXME - tied off until the SPI master is implemented
-    .spi_m_sck_o     (1'b0),
-    .spi_m_mosi_o    (1'b0),
-    .spi_m_miso_i    (),
-    .spi_m_ss_o      (1'b1),
+    .spi_m_sck_o     (mux_spi_m_sck_o),
+    .spi_m_mosi_o    (mux_spi_m_mosi_o),
+    .spi_m_miso_i    (mux_spi_m_miso_i),
+    .spi_m_ss_o      (mux_spi_m_ss_o),
 
     .qspi_sck_o       (mux_qspi_sck_o),
     .qspi_ce_n_o      (mux_qspi_ce_n_o),
@@ -533,7 +550,10 @@ logic [3:0] mux_qspi_sio_oe;
     .gpio_ie         (gpio_ie),
     .gpio_pu         (gpio_pu),
     .gpio_pd         (gpio_pd),
-    .gpio_sync_en_n  (gpio_sync_en_n)
+    .gpio_sync_en_n  (gpio_sync_en_n),
+
+    // Debug Unit lock-active indication (GRPR-GPIO-016's pad-3 gate).
+    .dbg_lock_active (dbg_lock_active)
   );
 
   //--- External Peripheral -------------------------------------------------------------------------
@@ -564,6 +584,7 @@ logic [3:0] mux_qspi_sio_oe;
 
   //--- Debug Peripheral -------------------------------------------------------------------------
   // Only instantiated if DEBUG_PERIPH is defined, otherwise the trace signals are unused.
+  // Simulation only
 
 `ifdef DEBUG_PERIPH
   ahb_debug #(

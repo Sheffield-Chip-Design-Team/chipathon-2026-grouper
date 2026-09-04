@@ -598,3 +598,606 @@ segment, rather than another blind global config-variable adjustment.
 
 `src/rtl/picorv32_hello_top.sdc` clock-period comment updated to match
 (16 MHz / 62.5 ns) -- from the original session, still valid.
+
+## Session 3: hardening the RAM, and a four-stage fight with legalisation
+
+Top level is now `grouper_soc_chip_core`, not `picorv32_hello_top`, and the
+behavioural RAM has been replaced by four `gf180mcu_ocd_ip_sram__sram1024x8m8wm1`
+macros. That single change drove everything below: the macros take 621,654um^2
+of the core, cut rows around themselves, and dictate the PDN pitch. Most of the
+session was spent getting detailed placement to legalise afterwards.
+
+Commits `b0b2953`..`6af9b91`.
+
+### 1. Four config bugs that predated the session, none of which could have worked
+
+Found while getting the first run to start. Listing them because three were
+silent -- the flow would have run and produced something wrong rather than
+failing:
+
+- **`DESIGN_NAME` was missing entirely**, dropped in `ae7757e` ("rework RAM dir
+  structure"). Restored as `grouper_soc_chip_core`. Hard failure, caught first.
+- **`PNR_SDC_FILE`/`SIGNOFF_SDC_FILE`/`FALLBACK_SDC` pointed at
+  `grouper_chip_top.sdc`, which does not exist.** Of the two SDCs that did,
+  `grouper_chip_core.sdc` constrained chip_top's `*_PAD` port names -- which
+  this top level does not have, so `get_ports` would have returned empty
+  collections and every I/O would have signed off unconstrained. The file that
+  actually matched the design was `dry_run.sdc`; it has since been renamed onto
+  `grouper_chip_core.sdc`.
+- **The `MACROS` instance keys were four levels of hierarchy too shallow.**
+  They read `u_ram_ss.gen_macro_ram.gen_sram[N]...`; the real path is
+  `u_grouper_soc_top.u_grouper_soc_dig_ss.u_periph_ss.u_ram.u_ram_ss...`.
+  Confirmed against the netlist once a run got far enough to print instance
+  names.
+- **The SRAM was reading its `tt` Liberty in all three corners.** The `lib`
+  block used a single `"*"` fallback. The tell in the log is the tt file being
+  read for `max_ss_125C_3v00` and `min_ff_n40C_3v60`, followed by
+  `[WARNING STA-1140] library ... already exists`. The submodule ships
+  `__ss_125C_3v00.lib` and `__ff_n40C_3v60.lib`, exact matches for our corners.
+  This one matters more than it looks: **the macro's hold requirement is closed
+  at the fast corner** (tch ~1.0ns at ff, ~3.0ns at ss), and it was being
+  checked against typical. Fixing it made hold repair at the macro interface do
+  real work it had never done before -- see finding 4.
+
+### 2. The PDN pitch is not a free parameter once the SRAMs are placed
+
+The macro obstructs Metal1-Metal3 across its interior (LEF OBS
+`3.0 3.0 .. 298.3 512.81`) and exposes VDD/VSS on Metal3 only in the 3um frame
+outside that box. The dense, reliable power tabs are the two **vertical edge
+bands** at the macro's own x=0..3 and x=298.3..301.3, which carry both nets in
+alternating y slices for the full height. The top and bottom tab rows are sparse
+-- the VSS row has a ~36.6um hole.
+
+Checked the old 180um pitch against the real LEF geometry at the new macro
+positions and found **the right-hand column of macros had zero VSS tap area**.
+Not degraded: zero. A floating rail that nothing in the flow would have reported
+except `check_power_grid`.
+
+The fix is arithmetic. The two edge bands are 298.3um apart, so a stripe lattice
+whose **half period divides 298.3 an odd number of times** puts opposite nets on
+the two bands of every macro. 298.3/5 = 59.66, rounded to 59.92 (107 x 0.56
+tracks), giving:
+
+    PDN_VPITCH   119.84   (2 x 59.92)
+    PDN_VSPACING  54.88   (59.92 - 5.04)
+    PDN_VOFFSET   14.98
+
+and macro columns spaced 6 x 59.92 = 359.52um apart, at x = 319.76 and 679.28.
+Result: 580-622um^2 of Metal4-over-Metal3 overlap per net per macro, with a
+full-width strap on each edge band. **The macro x-coordinates and the PDN pitch
+are one unit** -- changing either alone re-floats a rail.
+
+Two smaller things fell out of the same work:
+
+- `PDN_VOFFSET` positions the stripe **centre**, not its edge
+  (`OpenROAD/src/pdn/src/straps.cpp`, `Straps::makeStraps`:
+  `strap_start = group_pos - half_width`). The 14.98 above is chosen so edges
+  land at 0.14 mod 0.56, which is the Session-2 lesson about track phase.
+- The Metal3 rungs in `pdn_cfg.tcl` were still using `PDN_HWIDTH`/`PDN_HOFFSET`,
+  which are whole numbers of **0.90um Metal5** tracks, on a 0.56um layer. Every
+  rung edge was off-grid -- the exact defect Session 2 fixed for Metal2. Now
+  hardcoded to 0.56 multiples (width 5.04, pitch 299.04, offset 14.98).
+
+### 3. Detailed placement, four failures, in order
+
+Each row is a real run. "Reached" is the last step that passed.
+
+| # | change | reached | failure |
+|---|---|---|---|
+| 1 | 1000x1500, 2x2 macros, `DPL_CELL_PADDING: 2` | global placement | `DPL-0034`, **560** instances |
+| 2 | `DPL_CELL_PADDING: 1`, `DESIGN_REPAIR_MAX_{SLEW,CAP}_PCT: 20 -> 10` | post-GPL repair | `DPL-0036` at `rsz_timing_postcts.tcl` |
+| 3 | **1100x1500**, padding 0, hold margins 0.6/0.5 -> 0.3/0.25 | **global routing** | `DPL-0036` in `antenna_repair.tcl`, **5** instances |
+| 4 | `PL_TARGET_DENSITY_PCT: 68 -> 62` | global routing | **worse**: 24 instances |
+| 5 | revert to 68, add `FP_OBSTRUCTIONS` over the column gap | **detailed routing** | -- |
+
+**The reported utilisation number is not the one that matters.**
+`design__instance__utilization__stdcell` divides by core-minus-macros and
+ignores the rows the macros cut. The honest denominator is
+`design__sites x 2.1952` (site = 0.56 x 3.92um). At 1000x1500 that was 341,814
+sites = 750,350um^2, against 824,136um^2 of naive core-minus-macros -- a
+73,786um^2 gap. Reported 51.6%, actual 56.7%.
+
+**Cell padding is denominated in sites, and the average cell here is 9.76 sites
+wide** (425,581um^2 / 19,873 cells / 3.92um = 5.46um). So `DPL_CELL_PADDING: 2`
+inflates every cell by ~20%, taking 65.6% occupancy to 79% effective. That is
+what failure 1 was.
+
+**Watch which snapshot the metrics come from.** The `or_metrics_out.json` for
+global placement reports 425,581um^2 -- which is exactly the Yosys area 398,861
+plus 21,021 of taps plus 5,699 of endcaps, i.e. **before** `repair_design` ran.
+The number detailed placement actually had to legalise was that plus the
+reported +15.7%, about 492,000um^2. Reading the pre-repair number makes the
+design look ~13% smaller than it is.
+
+**Lowering target density made things worse, not better** (failure 4). The
+theory was that spreading cells leaves more uniform whitespace for late
+insertions. What happened:
+
+    PL_TARGET_DENSITY_PCT   antenna violations   DPL-0036 instances
+    68                      117                  5
+    62                      157                  24
+
+Spreading lengthens nets, more wire is more antenna area, more diodes to insert
+and legalise -- and antenna diodes cannot go "wherever there is room", they must
+land next to the pin they protect. The density knob works against this failure.
+Reverted; do not retry without a theory that explains those two rows.
+
+**The floor, if it is ever lowered again**: `GPL-0302` compares the target
+against utilisation *with* `GPL_CELL_PADDING` applied. 425,581um^2 in
+974,111um^2 of free area is 43.7%, inflated to 52.6% by the 2 sites of padding,
+so anything below ~56 errors out.
+
+### 4. Growing the die eastward is free; growing it any other way is not
+
+1000x1500 -> 1100x1500 was done by moving only the far corner. LibreLane insets
+the core by 6.72um in x and 15.68um in y, so **the core's lower-left stays at
+6.72 15.68** -- and every PDN strap is positioned from that origin. Re-verified
+against the LEF: strap edge phase (0.14 mod 0.56), and all four macro taps
+(622.1um^2 VSS on the west band, 580.7um^2 VDD on the east) came out **identical
+before and after**, with one extra VSS strap fitting in the wider core. The
+macros did not move.
+
+Had the block been shifted east instead, it would have had to move in whole
+59.92um half-periods to keep the taps, and no such position leaves a clean east
+margin. Worth remembering next time the die changes: **grow away from the core
+origin and the PDN is untouched.**
+
+The extra 100um becomes a 102.70um-wide strip of rows east of the macro block --
+183 sites, a real placeable column.
+
+### 5. `FP_OBSTRUCTIONS` over the inter-column channel is what cleared antenna repair
+
+The 58.22um gap between the macro columns leaves, after the 10um halos, rows
+**38.22um long -- 68 sites, walled by SRAM at both ends**. In an open region a
+cell shoves its neighbours a few sites and everyone shifts; in a 68-site pocket
+there is nowhere to shove to. When antenna repair drops a diode next to a pin in
+that pocket, some existing cell has to move and cannot. The instances in the
+`DPL-0034` list were `wire*` and `load_slew*` repair buffers -- exactly the
+cells that get scattered into leftover slivers. It also explains why failure 4
+was worse: a lower density target pushes *more* cells into marginal regions.
+
+    FP_OBSTRUCTIONS:
+      - [621.06, 15.68, 679.28, 1125.57]
+
+"Placement sites are never generated at these locations, which guarantees that
+it will remain empty throughout the entire flow." Routing over the area is
+unaffected. Costs 42,420um^2 -- 4.7% of placeable area, and the least useful
+4.7% in the design. **The rectangle is derived from the macro coordinates and
+must move with them.**
+
+General lesson, which cost four runs to learn: **area is a global number,
+legalisation is a local one.** `DPL-0036` never means "the chip is full"; it
+means one cell needs a run of contiguous free sites in a row *near where it
+already is*, and there isn't one. Several of these failures were at ~55%
+occupancy.
+
+### 6. Escape hatch, not yet needed
+
+`OpenROAD.RepairAntennas` skips itself when `DIODE_CELL` is unset:
+
+    if self.config["DIODE_CELL"] is None:
+        info(f"'DIODE_CELL' not set. Skipping '{self.id}'…")
+
+That drops the GRT diode pass and leaves antennas to the jumpers (fixing ~40
+nets per run) plus detailed routing's own repair (`DRT_ANTENNA_REPAIR_ITERS:
+10`). Trades antenna risk for progress; the signoff check still reports the
+truth. Only reach for it if the obstruction stops being enough.
+
+### 7. Open items
+
+- **Detailed routing is the current unknown.** It starts around 23,000
+  violations and was at 17,777 entering iteration 3. The 1400x1400 run in this
+  document's history went 5817 -> 1987 -> 1944 -> 113 -> 9 and settled at 30.
+  This design is 19,877 instances against that one's 10,749, so some of the gap
+  is legitimate, but it is a worse starting position. **The signal to watch is
+  the `DRT-0199` end-of-iteration trend, not any single number** -- large
+  factor-of-two drops mean it is converging, the same figure for 4-5 iterations
+  at a high value is the plateau failure this document records at smaller die
+  sizes. Note the good run finished at 30 violations, not zero.
+- **`dlyc_1` is Session 2's `dlyb` bug in a different cell family.**
+  `RSZ-0027/0028` inserted 18 input and 113 output port buffers using
+  `gf180mcu_fd_sc_mcu7t5v0__dlyc_1` -- a delay cell -- because
+  `EXTRA_EXCLUDED_CELLS` lists only `dlyb_1/2/4`. 131 cells is noise against
+  5343 repair buffers so it is not an area problem, but delay cells sitting on
+  every I/O path is a timing-quality one. Needs the `dlyc_*` cell list
+  confirmed from the PDK before excluding, or `DESIGN_REPAIR_BUFFER_*_PORTS`
+  turned off.
+- **All density numbers above were measured under `SYNTH_STRATEGY: "DELAY 2"`.**
+  It has since been changed to `"AREA 0"` with `SYNTH_ABC_USE_MFS3` enabled,
+  which should move the std cell area and therefore every occupancy figure in
+  finding 3. Re-measure before treating those numbers as current.
+- **Hold margins were cut to buy area** (0.6/0.5 -> 0.3/0.25, against a
+  LibreLane default of 0.1). Still 3x default, but this is the first thing to
+  raise if signoff reports hold violations -- and the right response to a hold
+  failure is more margin *plus* more die, not less margin.
+- Metal5 ownership with the parent integration, carried over from Session 2,
+  is still unresolved.
+
+### 8. Simulation side, for completeness
+
+The RTL half of this work, since it constrains what the config can assume:
+
+- `ahb_ram.sv` builds the macros under `MACRO_RAM` via `ram_ss`. The macro is
+  single-port synchronous, so reads are issued in the AHB address phase (Q is
+  valid in the following cycle, which is the data phase -- no read-data register
+  of our own) and writes in the data phase, where `HWDATA` exists. The one
+  collision, a read whose address phase falls in a write's data phase, costs one
+  wait state; everything else runs at zero. Verified against a reference model
+  with a pipelined AHB master: 0 errors, exactly 6 wait states, one per
+  read-after-write.
+- **`ram_ss.sv` drove `WEN` active high.** The macro's `WEN` is active low
+  (`write_flag = !CEN & !GWEN & !(&WEN)`), so every write was a no-op. Fixed.
+- **Neither vendor sim model is usable in this flow.** The behavioural `.v` is
+  rejected by Verilator (`Can't find definition of variable: 'Tdly'`, a
+  specparam used as a delay outside `specify`), and under an event simulator it
+  samples CEN/GWEN/A **100ps after** the clock edge -- zero-delay RTL has
+  already driven the next cycle's values, so the last access of a burst is
+  silently dropped. Confirmed by probing: the macro reports `read_flag=1` with
+  the right address, then never latches Q. `hw/tb/models/` has an
+  edge-sampled equivalent for the cocotb flow;
+  `fusesoc run --target=macro_ram sharc:soc_ip:grouper_soc_directed` runs the
+  SoC test suite against it and passes.
+
+## Session 4: sizing the peripheral stubs, and measuring the blocks they stand in for
+
+Three of the eight fabric slots hold `ahb_stub_slave` rather than a real
+peripheral: QSPI and SPI master always, SPI slave under `DRY_RUN`. Until this
+session those placeholders were identical to each other -- a fixed pair of
+32-bit counters, ~64 flops -- and their serial ports were tied off at the `io_ss`
+instantiation, so pads 4-14 had their alternate-function paths constant-folded
+away. Neither the area nor the pad routing in a dry run meant anything.
+
+The stub now takes a `TARGET_GE` parameter and drives/consumes the real `io_ss`
+signals. Sizing it needed an actual number per block, which is what the rest of
+this section records.
+
+### 1. Gate equivalents in this PDK
+
+One GE is the area of one `gf180mcu_fd_sc_mcu7t5v0__nand2_1`. Derived from the
+cell table in `build.log` against the 7-track site (0.56 x 3.92 = 2.1952 um^2):
+
+| Cell | Area | Sites | GE |
+|---|---|---|---|
+| `tieh` | 8.781 um^2 | 4 | 0.80 |
+| `nand2_1` | **10.976 um^2** | **5** | **1.00** |
+| `inv_2` | 13.171 um^2 | 6 | 1.20 |
+| `nor4_1` | 21.952 um^2 | 10 | 2.00 |
+| `mux2_2` | 32.937 um^2 | 15 | 3.00 |
+| `dffq_1` | 63.660 um^2 | 29 | 5.80 |
+| `dffrnq_1` | 74.637 um^2 | 34 | 6.80 |
+
+Every one of those lands on a whole number of sites, so the 5-site figure for
+`nand2_1` is solid (its own row reads 4.99 only because the log prints
+`1.33E+04` for 1215 cells, to three significant figures).
+
+**1 GE = 10.976 um^2.** `scripts/report_ge.py` does the division.
+
+### 2. Measuring the blocks: read `stat.rpt`, never `post_dff.rpt`
+
+`librelane/measure/{spi_s,spi_m,qspi}.yaml` are synthesis-only configs for the
+three real-but-uninstantiated blocks, run with `make measure-ge` (~15s each).
+
+The Yosys synthesis step writes several stats and **they are not
+interchangeable**. `reports/post_dff.rpt` is taken after `dfflibmap` but before
+`abc`: the flops are mapped to library cells but every combinational gate is
+still a generic `$_AND_`/`$_MUX_` with no area in the liberty, so it counts
+flops and almost nothing else. For `ahb_spi_m` it reports 8,701.8 um^2 against
+the real 14,402.7 um^2 -- a 40% undercount, and it silently looks like a
+plausible answer. `reports/stat.rpt` is the post-`abc` figure and agrees exactly
+with `design__instance__area` in the step's `metrics.json`; that agreement is
+the check worth doing.
+
+`report_ge.py` now selects on content -- it prefers a stat with no generic cells
+left, and falls back to `design__instance__area` from `metrics.json` if that is
+all there is. `--list` shows every area report in a run with a "fully mapped"
+column.
+
+### 3. Measured areas and the multipliers applied
+
+`TARGET_GE` = (measured area of today's RTL) x (a multiplier for the features
+still to be built). The multiplier is a judgement call from each block's open
+`TODO`/`FIXME` markers and its spec under `planning/Hardware/design/blocks/`:
+
+| Block | Measured | Multiplier | `TARGET_GE` | Why that multiplier |
+|---|---|---|---|---|
+| `ahb_spi_s` | 3,483.8 um^2 = **317 GE** | **2.0x** | **635** | No two-cycle error response (`ahb_spi_s.sv:218`), no IRQs (`periph_ss.sv` TODO), and no FIFOs at all -- `GRPR-SPIS-012`'s 1.25 MB/s firmware-load throughput cannot be met by the current single shift register, so the FIFOs are a real addition, not a tidy-up. |
+| `ahb_spi_m` | 14,402.7 um^2 = **1,312 GE** | **1.3x** | **1,706** | One open marker (`ahb_spi_m.sv:123`, `GRPR-SPIM-005`). Already has both FIFOs, the clock divider, and the full opcode/address/dummy/data command set -- by far the most complete of the three, so most of what remains is refinement. |
+| `ahb_qspi` | 18,481.4 um^2 = **1,684 GE** | **2.0x** | **3,368** | Five open markers: arbitrary-command interface (x2), real register map, byte-lane addressing, and real `HREADYOUT` wait-state handling (it is hardwired to 1 today). On top of that the `GRPR-QSPI-021` initialisation FSM -- PSRAM QPI entry, <=1 ms -- does not exist in any form. |
+
+Total across the three slots: **5,709 GE = ~62,700 um^2**, replacing the ~2,400
+GE the three identical placeholders used to cost. That is roughly **+13% on a
+~300k um^2 core**, not the +30% first guessed from hand flop counts.
+
+### 4. `GRPR-SPIM-015` was right; the hand estimates were not
+
+The SPI master spec states 1,500-2,000 GE and flags it "not yet confirmed by
+synthesis". Measured 1,312 GE x 1.3 = 1,706 GE lands inside that range, so the
+figure is now confirmed and the requirement can drop its caveat.
+
+Worth recording because the first pass at this used hand flop counts instead,
+which came out at ~230 flops for `ahb_spi_m` against an actual ~120-135, and
+produced a `TARGET_GE` of 5,400 -- three times too large. **Hand-counting flops
+from RTL was consistently ~3x pessimistic across all three blocks.** `spi_s` and
+`qspi` have no stated GE figure at all (both "TBD" in their specs and in
+`Schematic Review.md`), so the numbers above are the first real ones for them
+and should be folded back into those documents.
+
+### 5. What the stub does with the area, and why it is shaped that way
+
+`ahb_stub_slave` turns `TARGET_GE` into a ballast register of
+`(TARGET_GE - GE_FIXED) / GE_PER_BIT` bits (13 GE/bit, 60 GE fixed -- a starting
+estimate, see below). Its next state is a rotate-left-by-one feeding an
+incrementer, with `HADDR`, `HWDATA` and `pad_in` XOR'd in.
+
+Two constraints shaped that:
+
+- **It must not be prunable.** A constant `HRDATA` leaves the write path with no
+  consumer and the read path with no driver, and the whole slot collapses to tie
+  cells. The rotate puts every bit in one feedback ring, the low bits reach
+  `HRDATA` directly, and every bus and pad input has a real endpoint.
+- **It must not become the critical path.** A single adder across 254 bits would
+  have. The increment runs 32 bits at a time; the last lane takes the remainder,
+  so `TARGET_GE` is honoured exactly rather than rounded up to a whole lane. An
+  earlier version rounded up and overshot the SPI slave target by 40%.
+
+Achieved widths are 254 / 126 / 44 bits for QSPI / SPI M / SPI S, predicting
+3,362 / 1,698 / 632 GE against targets of 3,368 / 1,706 / 635.
+
+Because the three instances sit at three different widths, **one synthesis run
+gives three points on `GE = GE_FIXED + GE_PER_BIT * BALLAST_W`** -- fit the line
+and write the fitted constants back into `ahb_stub_slave.sv`. `make
+report-stub-ge` prints the per-instance areas (`--keep-hierarchy` keeps them as
+three distinct `$paramod` modules). That calibration has not been done yet; 13
+and 60 are still the estimates.
+
+### 6. Open items
+
+- `GE_PER_BIT` / `GE_FIXED` are unfitted estimates -- see the three-point fit
+  above.
+- The pad side is now live but meaningless: the placeholders free-run, so with
+  `GPIO_ALTSEL` set the pads, including the QSPI data pads' output enables,
+  toggle continuously. `GPIO_ALTSEL` resets to 0 so firmware has to opt in, and
+  a `DRY_RUN` build is not functional silicon regardless.
+- The floorplan has not been re-run at the new area. `DIE_AREA` is unchanged at
+  1100x1500 and `PL_TARGET_DENSITY_PCT` at 68; whether +13% needs a larger die
+  is the next measurement, not a decision to take in advance.
+
+## Session 5: getting DRC detail out of a run that never returns, and two root causes
+
+Detailed routing plateaued again -- 21 violations that did not move across an
+entire stubborn-tiles iteration. Most of this session was spent learning how to
+*see* the violations at all; once visible, both root causes fell out in minutes.
+
+### 1. `DRT_OPT_ITERS` does not bound the phase that eats the wall clock
+
+Two different iteration counters appear in the DRT log and they are easy to
+conflate:
+
+- `DRT-0199` -- optimization (search-and-repair) iterations. **This** is what
+  `DRT_OPT_ITERS` caps, via `-droute_end_iter`.
+- `DRT-0195` -- *stubborn tiles* iterations, a separate loop that runs after the
+  optimization iterations finish if violations remain. It clusters the residual
+  DRVs into regions and re-routes each with many different cost-weight
+  configurations. **No exposed cap in this LibreLane version.**
+
+A run sat at `Start 21st stubborn tiles iteration` reporting a flat 35
+violations from 10% through 80% of tiles. Lowering `DRT_OPT_ITERS` had no effect
+because that phase was already over. A violation count that does not move within
+a single stubborn-tiles iteration is a converged fixed point, not slow progress
+-- there is nothing to wait for.
+
+Also worth separating: "21" in one log line was an *iteration index*, and 35 was
+the violation count. Read `DRT-0195`/`DRT-0199` lines carefully before treating
+a number as a DRC total.
+
+### 2. `DRT_SAVE_DRC_REPORT_ITERS` is how you get violations out of a run that never finishes
+
+`-output_drc` is only passed when `detailed_route` **returns**
+(`scripts/openroad/drt.tcl:17`), so a killed or still-grinding DRT leaves no
+marker file and `Checker.TrDRC` never runs. The knob that fixes this:
+
+```
+-c 'DRT_SAVE_DRC_REPORT_ITERS=1'   # -> -drc_report_iter_step 1 (drt.tcl:82)
+```
+
+Writes a DRC report every N iterations, so the markers are readable while the
+run is still going -- read one, kill the job. `DRT_SAVE_SNAPSHOTS` implies
+`-drc_report_iter_step 1` (drt.tcl:78) but also writes full snapshots, so it is
+the heavier way to get the same thing. Do not leave it at 1 permanently.
+
+Run it as a second, concurrent job rather than cancelling the first: a distinct
+`--run-tag` is full isolation (`runs/<tag>/`), `-i <first run>/*-globalrouting/
+state_out.json` is a read-only reseed that skips synthesis through CTS, and
+`-c 'DRT_THREADS=N'` matters because `DRT_THREADS` otherwise defaults to the
+whole process limit (`steps/openroad.py:2001`) and both jobs fight for every
+core. **Never combine `--last-run` with `--overwrite` while a run is live** --
+it resolves to the running job's own directory.
+
+### 3. Root cause A: orphan Metal3 rung fragments, off the routing-grid phase
+
+17 of the 21 violations shared an identical x range -- `1013.4600 - 1013.6000`,
+Metal2, VDD against a signal net, at 17 different y from 83 to 1128. One defect,
+not 17. The gap is 0.14um where Metal2 minimum spacing is 0.28um.
+
+The offending geometry, found by dumping every x coordinate in the DEF's
+`SPECIALNETS` section and looking for 1013.60:
+
+```
+NEW Metal3 10080 + SHAPE STRIPE ( 2027200 1855560 ) ( 2200000 1855560 )
+                                  ^ x=1013.60        ^ x=1100.00 = die edge
+```
+
+Four Metal3 rung fragments (y spaced by exactly `pdn_rung_pitch` 299.04),
+each running from x=1013.60 to the **die** boundary -- past `core_urx` 1093.12.
+`-extend_to_boundary` created them after the SRAM Metal3 obstruction trimmed the
+main rung bodies.
+
+**1013.60 = 1810 x 0.56 exactly, residue 0.00.** Constraint 1 in config.yaml
+already spells out why that is fatal: at residue 0.14 the neighbouring track
+sits exactly 0.28um away and is usable; **at 0.00 both neighbouring tracks are
+0.14um away and are illegal to route on**. The router was being handed a shape
+it could not legally route beside, which is exactly why the count plateaus
+rather than converging.
+
+**The gap in the original reasoning:** pdn_cfg.tcl grid-checks the rungs' *Y*
+edges (`core_lly + 14.98 - 5.04/2 = 28.14 ; 28.14 % 0.56 = 0.14`), which is the
+right dimension for a horizontal stripe's own spacing. Nothing constrained their
+*X* endpoints -- those come from `-extend_to_boundary` and from wherever the
+SRAM trim happens to cut. **Both dimensions of a stripe need grid phase checked,
+not just the one its own spacing rule uses.**
+
+Fix: drop `{*}$arg_list` from the rung `add_pdn_stripe` only. The rungs exist
+solely to give Metal2-Metal4 a real perpendicular crossing inside the core; they
+carry no current and gain nothing from reaching the boundary. This does not
+touch `PDN_VWIDTH/VPITCH/VOFFSET`, so constraint 3 (SRAM tapping) is unaffected
+-- but still re-run `check_power_grid -net VDD` / `-net VSS`.
+
+**Unresolved:** the rungs sit at 4 discrete y in that x range, but the
+violations are at 17. The Metal2 shapes are presumably the via enclosures
+stacking down off the fragment ends (`add_pdn_connect Metal2 Metal3`), since a
+`SPECIALNETS` grep found no Metal2 power geometry anywhere near x=1013.5. Not
+confirmed. Removing the fragments removes their vias too, so the fix stands
+either way, but do not assume all 17 clear.
+
+### 4. Root cause B: north-edge pins colliding with the PDN at the die edge
+
+The remaining 4 entries are 2 sites reported twice each, both at
+y = 1499.26 - 1500.00 -- the north die edge, `DIE_AREA` being 1500 tall:
+
+| Site | x | = VSS stripe right edge |
+|---|---|---|
+| `bidir_out[6]` <-> VSS | 323.82 | 318.78 + 5.04 |
+| `net1363` <-> VSS | 1042.86 | 1037.82 + 5.04 |
+
+Both exactly on a VSS stripe's right edge. `PDN_EXTEND_TO: boundary` runs the
+stripes to y=1500 and `bidir_out\[\d+\]` was assigned to the north edge in
+pin_order.cfg, so pin escape routing and stripe ends compete for the same
+sliver. Fix: moved `bidir_out` to the south edge, which was empty. The
+alternative -- dropping `PDN_EXTEND_TO: boundary` -- is more general but
+disturbs every stripe, so it was not taken.
+
+### 5. Notes
+
+- Neither root cause is related to the Session 4 stub sizing. The only violation
+  carrying a real instance name is `u_cpu.genblk2.pcpi_div.quotient[13]`, and
+  both causes are PDN/pin geometry that predates it. 21 violations against a
+  historical best of 30 says the +13% core area did not hurt routability.
+- `FP_OBSTRUCTIONS` is not a lever for routing DRCs. It blocks placement sites
+  only -- routing over the area is unaffected, as the comment at its definition
+  in config.yaml already records.
+- `Checker.TrDRC` has no `ERROR_ON_*` override, unlike `ERROR_ON_MAGIC_DRC`. To
+  get characterisation numbers past a routing-DRC plateau, disable the step in
+  `meta.substituting_steps` (`Checker.TrDRC: null`) rather than looking for a
+  variable.
+
+### 7. OPEN: an off-lattice VDD strap pair with Metal2/Metal4 misaligned by one track
+
+Spotted in the GDS as "two stripes too close together" on the right, and
+confirmed from the post-PDN DEF. Dumping every vertical Metal2/Metal4 strap with
+its net gives a flawless ladder at `21.70 + n x 59.92`, alternating VDD/VSS, from
+21.70 to 980.42 (VDD) and 1040.34 (VSS) -- and then this:
+
+```
+VSS  Metal2  x=1040.34  y=   0.00..1500.00     <- correct: coincident, full height
+VSS  Metal4  x=1040.34  y=   0.00..1500.00
+
+VDD  Metal4  x=1016.68  y=  15.38..1229.34     <- wrong on three counts
+VDD  Metal2  x=1016.12  y=  19.30.. 553.02
+VDD  Metal2  x=1016.12  y= 583.78..1133.18
+```
+
+1. **x is off-lattice.** 1016 is not `21.70 + n x 59.92`; the ladder goes 980.42
+   then 1040.34 with nothing between.
+2. **Metal2 and Metal4 are 0.56um apart** -- exactly one Metal2 track -- where
+   this file requires them coincident ("same pitch, offset and spacing"). Every
+   other strap pair in the design is exactly coincident; compare VSS at 1040.34.
+3. **Neither reaches the boundary**, unlike every lattice strap (0.00..1500.00).
+
+Parallel, same-direction, non-coincident Metal2/Metal4 is precisely the
+configuration the "why the Metal3 rungs exist" note above describes as having no
+well-defined via intersection -- the one that produced degenerate 0.01um slivers
+and 1524 `PSM-0069` violations when the Metal3 mesh was removed.
+
+**Do not fix by deleting one of them.** `via1_2_10080_1200` sits at x=1016.12, so
+the Metal2 strap carries real Metal1 rail vias for the standard-cell strip east
+of the SRAMs (x = 990.64 .. 1093.12, i.e. right macro edge + 10um halo out to
+core_urx). The lattice cannot serve that strip: the next position after 1040.34
+is 1100.26, outside core_urx. Something -- pdngen improvising, most likely -- is
+covering for that gap, and removing it blind would float VDD for those rows.
+
+Next step is `check_power_grid -net VDD` / `-net VSS` on this run's DB
+(`--last-run --flow OpenInOpenROAD`). If VDD reports disconnected nodes in that
+column it is the sliver failure and blocks tapeout; if it passes, the straps are
+electrically sound and this is a robustness fix to make deliberately, probably by
+choosing a die width whose core is a whole number of 59.92um strap positions so
+the eastern strip gets a real lattice strap instead of an improvised one.
+
+Note the current 1100x1500 die leaves 52.78um of core east of the last strap
+against 14.98um west of the first -- the asymmetry that creates the gap.
+### 6. Outcome: both fixes hold, flow completes to GDS
+
+Applied together, the two fixes cleared the plateau and the classic flow ran all
+the way through `Magic.StreamOut` for the first time on this die.
+
+**This was not a bypass.** `Checker.TrDRC` was left enabled -- it is absent from
+`meta.substituting_steps`, and it has no `ERROR_ON_*` override (see the note in
+Session 2 where 16 Metal2 violations hard-failed the flow). Reaching streamout
+therefore means detailed routing genuinely converged rather than the check being
+skipped. The `Checker.TrDRC: null` escape hatch considered above was not needed
+and has not been added.
+
+Two other changes landed in the same window and are worth separating from the
+DRC work when attributing the improvement:
+
+- `SYNTH_ABC_USE_MFS3` was removed (commit `229a262`). It had been uncommented
+  in `4eb7f89` alongside the `deferred_flatten` switch, and was crashing ABC in
+  `Abc_TtExpand` (`utilTruth.h:2257`, assertion `pCut[i] == pCut0[k]`) while
+  mapping picorv32 -- the known `&mfs` assertion family, YosysHQ/yosys#1962.
+  LibreLane flags the option experimental. `deferred_flatten` was kept.
+- `DRT_ANTENNA_REPAIR_ITERS` cut to 10, to reach a DRC verdict sooner.
+
+### 8. Fix for section 7: shift the strap lattice west to fit a 19th strap
+
+Root cause of the improvised strap was floorplan arithmetic, not the PDN recipe.
+The core is 6.72..1093.28 = 1086.56um, which is 18.13 strap half-periods, so the
+lattice ran out at n=17 (1040.34) leaving 50.42um of core -- the whole
+standard-cell strip east of the SRAM column -- with no strap of its own.
+
+The obvious move, shrinking the core to a whole 18 x 59.92 = 1078.56um, is the
+wrong lever: it costs 7.84um of core and still yields 18 straps. Straps run while
+`centre + PDN_VWIDTH/2 <= core_urx`, so the 19th at 1100.26 missed by only
+7.14um. Dropping the offset gains it outright:
+
+| | before | after |
+|---|---|---|
+| `PDN_VOFFSET` | 14.98 | **4.34** |
+| first / last strap centre | 21.70 / 1040.34 | 11.06 / **1089.62** |
+| straps | 18 | **19** |
+| core margin W / E | 12.46 / 50.42 | 1.82 / 1.14 |
+| straps over the east strip | 1 | **2** |
+| macro columns x | 319.76 / 679.28 | **309.12 / 668.64** |
+| `FP_OBSTRUCTIONS` x | 621.06 .. 679.28 | **610.42 .. 668.64** |
+
+`PDN_VOFFSET` must keep residue 0.42 mod 0.56 so the stripe's left edge lands on
+the legal 0.14 phase (constraint 2). In the legal window [2.52, 5.32] that gives
+2.66 / 3.22 / 3.78 / 4.34 / 4.90; 4.34 balances the two margins best.
+
+**The macros moved 10.64um west with the lattice.** Constraint 3 depends only on
+the macros' phase *relative* to the straps, so moving both by the same amount
+preserves it -- moving either alone is what "silently floats an SRAM rail" means.
+Re-derived after the move: col0 west band 309.12 catches VSS at 310.66 and east
+band 607.42 catches VDD at 610.26; col1 west band 668.64 catches VSS at 670.18
+and east band 966.94 catches VDD at 969.78. Correct parity on all four.
+
+Side benefit: the east strip grows from 102.70 to 113.34um of placeable rows.
+
+**Verified only arithmetically.** The next run must confirm with
+`check_power_grid -net VDD` / `-net VSS` before anything else is trusted, and it
+should be run on its own rather than bundled with other changes, so a broken SRAM
+tap is unambiguous. Also confirm the improvised strap at x~1016 is gone -- the
+whole point of the change -- by re-running the vertical-strap dump from section
+7, which should now show a clean 19-entry alternating ladder and nothing else.
+
+`pdn_rung_offset` in pdn_cfg.tcl stays at 14.98. It is a Y offset from core_lly
+for the horizontal rungs and was never coupled to `PDN_VOFFSET`; they merely
+shared a value. Comment added there to stop anyone resyncing them.

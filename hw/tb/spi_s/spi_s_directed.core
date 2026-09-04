@@ -9,7 +9,7 @@ filesets:
       - sharc:comms_ip:ahb_spi_s:0.0.1
 
 targets:
-  default:
+  default: &directed
     flow: sim
     flow_options:
       tool: verilator
@@ -19,6 +19,23 @@ targets:
         - --sv
         - --trace
         - --coverage
+      run_options:
+        - --trace
+    filesets: [rtl]
+    toplevel: ahb_spi_s
+
+  debug_port:
+    description: Same TB with the dedicated debug opcode set elaborated in (DEBUG_PORT_EN=1)
+    flow: sim
+    flow_options:
+      tool: verilator
+      cocotb_module: hw.tb.spi_s.test_spi_s_debug
+      verilator_options:
+        - -Wno-TIMESCALEMOD
+        - --sv
+        - --trace
+        - --coverage
+        - -GDEBUG_PORT_EN=1
       run_options:
         - --trace
     filesets: [rtl]
