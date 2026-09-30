@@ -8,6 +8,10 @@ filesets:
     depend:
       - sharc:comms_ip:ahb_qspi:0.0.1
 
+  aperture_rtl:
+    files:
+      - ../../rtl/interconnect_ss.sv: {file_type: systemVerilogSource}
+
 targets:
   default:
     flow: sim
@@ -24,3 +28,33 @@ targets:
         - --trace
     filesets: [rtl]
     toplevel: ahb_qspi
+
+  stream:
+    flow: sim
+    flow_options:
+      tool: verilator
+      cocotb_module: hw.tb.qspi.test_qspi_stream
+      verilator_options:
+        - -Wno-TIMESCALEMOD
+        - --sv
+        - --trace
+        - --trace-fst
+      run_options:
+        - --trace
+    filesets: [rtl]
+    toplevel: qspi
+
+  aperture:
+    flow: sim
+    flow_options:
+      tool: verilator
+      cocotb_module: hw.tb.qspi.test_qspi_aperture
+      verilator_options:
+        - -Wno-TIMESCALEMOD
+        - --sv
+        - --trace
+        - --trace-fst
+      run_options:
+        - --trace
+    filesets: [aperture_rtl]
+    toplevel: interconnect_ss

@@ -22,9 +22,7 @@ void qspi_config(uint8_t clkdiv, bool quad_mode, bool mode3) {
 
 qspi_status_t qspi_status(void) {
     qspi_status_t status;
-
     status.raw = g_rd32(QSPI_STATUS_ADDR);
-
     return status;
 }
 
@@ -37,7 +35,7 @@ bool qspi_command(
     bool data_en,
     uint8_t dummy,
     bool target_nor,
-    uint8_t *data,
+    uint32_t *data,
     uint32_t timeout_cycles
 ) {
     qspi_cmd_t cmd = {0};
@@ -52,13 +50,8 @@ bool qspi_command(
         (1u << 6)    // ADDR_ERR
     );
 
-    if (addr_en) {
-        g_wr32(QSPI_ADDR_ADDR, address & 0x00FFFFFFu);
-    }
-
-    if (data_en && !read && data != 0) {
-        g_wr8(QSPI_DATA_ADDR, *data);
-    }
+    if (addr_en) g_wr32(QSPI_ADDR_ADDR, address & 0x00FFFFFFu);
+    if (data_en && !read && data != 0) g_wr32(QSPI_DATA_ADDR, *data);
 
     cmd.s.start = 1;
     cmd.s.dir = read ? 1 : 0;
@@ -71,18 +64,10 @@ bool qspi_command(
     g_wr32(QSPI_CMD_ADDR, cmd.raw);
 
     // Wait for the transaction to complete.
-    if (!g_poll(
-            QSPI_STATUS_ADDR,
-            (1u << 2),
-            (1u << 2),
-            timeout_cycles)) {
-        return false;
-    }
+    if (!g_poll(QSPI_STATUS_ADDR, (1u << 2), (1u << 2), timeout_cycles)) return false;
 
     // Return received data to the caller.
-    if (data_en && read && data != 0) {
-        *data = g_rd8(QSPI_DATA_ADDR);
-    }
+    if (data_en && read && data != 0) *data = g_rd32(QSPI_DATA_ADDR);
 
     return true;
 }

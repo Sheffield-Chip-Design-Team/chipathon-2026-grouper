@@ -18,6 +18,7 @@
 module interconnect_ss #(
   parameter int ADDR_WIDTH = 32,
   parameter int DATA_WIDTH = 32,
+  parameter logic [ADDR_WIDTH-1:0] QSPI_MEM_BASE = 32'h8002_0000,
 `ifdef DEBUG_PERIPH
   localparam int NUM_SLAVES = 7
 `else
@@ -86,6 +87,8 @@ module interconnect_ss #(
   output logic                   qpsi_HWRITE,
   output logic                   qpsi_HREADYIN,
   output logic                   qpsi_HSEL,
+  output logic                   qpsi_HMEMSEL,
+  output logic [22:0]            qpsi_HMEMADDR,
   input  logic [DATA_WIDTH-1:0]  qpsi_HRDATA,
   input  logic                   qpsi_HREADYOUT,
   input  logic                   qpsi_HRESP,
@@ -162,6 +165,8 @@ module interconnect_ss #(
   localparam int SLOT_SPI_M      = 3;
   localparam int SLOT_SPI_S      = 4;
   localparam int SLOT_EXT_PERIPH = 5;
+
+  localparam logic [ADDR_WIDTH-1:0] QSPI_MEM_SIZE = 32'h0080_0000;
 `ifdef DEBUG_PERIPH
   localparam int SLOT_DEBUG      = 6;
 `endif
@@ -176,12 +181,17 @@ module interconnect_ss #(
   logic [NUM_SLAVES-1:0] mux_sel;
   logic                  invalid_addr;
   logic                  invalid_addr_r;
+  logic                  qspi_reg_sel;
+  logic                  qspi_mem_sel;
+  logic [ADDR_WIDTH-1:0] qspi_mem_offset;
 
   // --- Address decode --------------------------------------------------------
 
   always_comb begin
     invalid_addr = '0;
     hsel = '0;
+    qspi_reg_sel = 1'b0;
+    qspi_mem_sel = 1'b0;
     case (HADDR) inside
       
       // Everything sits in the 0x8000_0000 aperture.
@@ -189,14 +199,24 @@ module interconnect_ss #(
 
       [32'h8000_3000 : 32'h8000_3fff]: hsel[SLOT_UART]       = '1; // UART - 4KiB
       [32'h8000_4000 : 32'h8000_4fff]: hsel[SLOT_GPIO_CTRL]  = '1; // GPIO - 4KiB
-      [32'h8000_5000 : 32'h8000_5fff]: hsel[SLOT_QPSI]       = '1; // QPSI - 4KiB
+      [32'h8000_5000 : 32'h8000_5fff]: begin
+        hsel[SLOT_QPSI] = '1;
+        qspi_reg_sel = 1'b1;
+      end
       [32'h8000_6000 : 32'h8000_6fff]: hsel[SLOT_SPI_M]      = '1; // SPI Master - 4KiB
       [32'h8000_7000 : 32'h8000_7fff]: hsel[SLOT_SPI_S]      = '1; // SPI Slave  - 4KiB
       [32'h8001_0000 : 32'h8001_ffff]: hsel[SLOT_EXT_PERIPH] = '1; // External Peripherals - 64KiB
     `ifdef DEBUG_PERIPH
       [32'hf8000_2000 : 32'hf8000_2fff]: hsel[SLOT_DEBUG]      = '1; // Debug - 4KiB
     `endif
-      default: invalid_addr = '1;
+      default: begin
+        if ((HADDR >= QSPI_MEM_BASE) && (HADDR < (QSPI_MEM_BASE + QSPI_MEM_SIZE))) begin
+          hsel[SLOT_QPSI] = '1;
+          qspi_mem_sel = 1'b1;
+        end else begin
+          invalid_addr = 1'b1;
+        end
+      end
     endcase
   end
 
@@ -255,7 +275,10 @@ module interconnect_ss #(
   assign qpsi_HWDATA                = HWDATA;
   assign qpsi_HWRITE                = HWRITE;
   assign qpsi_HREADYIN              = HREADY;
-  assign qpsi_HSEL                  = hsel[SLOT_QPSI];
+  assign qpsi_HSEL                  = qspi_reg_sel;
+  assign qpsi_HMEMSEL               = qspi_mem_sel;
+  assign qspi_mem_offset            = HADDR - QSPI_MEM_BASE;
+  assign qpsi_HMEMADDR              = qspi_mem_offset[22:0];
   assign slot_HRDATA[SLOT_QPSI]     = qpsi_HRDATA;
   assign slot_HREADYOUT[SLOT_QPSI]  = qpsi_HREADYOUT;
   assign slot_HRESP[SLOT_QPSI]      = qpsi_HRESP;

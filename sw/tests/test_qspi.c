@@ -62,11 +62,10 @@ int main(void) {
         false  // mode 0
     );
 
-    // Issue one known command/address/data transaction.
-    //
+    // Issue one known command/address/32-bit-data transaction.
     // The top-level Python test will observe this on the actual GPIO-facing
     // QSPI pads and check the values.
-    uint8_t tx_data = 0xC3;
+    uint32_t tx_data = 0x11223344;
 
     ok = qspi_command(
         0xA5,       // arbitrary opcode
