@@ -1240,37 +1240,22 @@ async def drive_qspi(dut, uart):
     # First transaction from test_qspi.c:
     # bare 0x35 command in single-bit SPI mode.
     opcode = await capture_single_spi_byte(dut)
-
-    log.info(
-        "QSPI single-bit command: 0x%02x",
-        opcode,
-    )
-
+    log.info("QSPI single-bit command: 0x%02x", opcode)
     assert opcode == 0x35
 
-    # Second transaction:
-    # A5 + 123456 + C3 in quad mode.
-    groups = await capture_quad_transaction(
-        dut,
-        groups=10,
-    )
-
-    log.info(
-        "QSPI quad groups: %s",
-        " ".join(f"{x:x}" for x in groups),
-    )
+    # Second transaction: A5 + 123456 + 11223344 in quad mode.
+    # AHB byte lane 0 is the lowest addressed byte, so the QSPI wire bytes are
+    # 44 33 22 11 while each byte remains MSB-first on SIO[3:0].
+    groups = await capture_quad_transaction(dut, groups=16)
+    log.info("QSPI quad groups: %s", " ".join(f"{x:x}" for x in groups))
 
     expected = [
-        0xA, 0x5,              # opcode A5
-        0x1, 0x2, 0x3,
-        0x4, 0x5, 0x6,        # address 123456
-        0xC, 0x3,              # data C3
+        0xA, 0x5,                                # opcode A5
+        0x1, 0x2, 0x3, 0x4, 0x5, 0x6,          # address 123456
+        0x4, 0x4, 0x3, 0x3, 0x2, 0x2, 0x1, 0x1,  # data 11223344 -> 44 33 22 11
     ]
 
-    assert groups == expected, (
-        f"QSPI transaction mismatch: "
-        f"got {groups}, expected {expected}"
-    )
+    assert groups == expected, f"QSPI transaction mismatch: got {groups}, expected {expected}"
 
     await uart.wait_for("QSPI_TRANSACTION_DONE")
     await expect_test_result(uart, "qspi")

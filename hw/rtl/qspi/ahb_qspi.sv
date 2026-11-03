@@ -26,15 +26,21 @@ module ahb_qspi #(
   input  logic [1:0]            HTRANS,
   input  logic [DATA_WIDTH-1:0] HWDATA,
   input  logic                  HWRITE,
-  
+
   // Slave -> Master
   output logic [DATA_WIDTH-1:0] HRDATA,
   output logic                  HREADYOUT,
   output logic                  HRESP,
- 
+
   // Decoder Signals
   input  logic                  HREADYIN,
   input  logic                  HSEL,
+
+  // Memory-aperture sideband. Stage 4 consumes these signals.
+  /* verilator lint_off UNUSEDSIGNAL */
+  input  logic                  HMEMSEL,
+  input  logic [22:0]           HMEMADDR,
+  /* verilator lint_on UNUSEDSIGNAL */
 
   output logic                  qspi_sck_o,
   output logic [1:0]            qspi_ce_n_o,
@@ -51,6 +57,42 @@ module ahb_qspi #(
   localparam logic [2:0] REG_ADDR   = 3'd3; // 0x0C
   localparam logic [2:0] REG_DATA   = 3'd4; // 0x10
 
+  localparam logic [7:0] MEM_READ_OPCODE = 8'h03;
+  localparam logic [7:0] MEM_QUAD_READ_OPCODE = 8'hEB;
+  localparam logic [7:0] MEM_WRITE_OPCODE = 8'h02;
+
+  function automatic logic [31:0] mapped_write_payload(input logic [31:0] value, input logic [1:0] address, input logic [2:0] size);
+    unique case (size)
+      3'b000: begin
+        unique case (address)
+          2'b00: mapped_write_payload = {24'h000000, value[7:0]};
+          2'b01: mapped_write_payload = {24'h000000, value[15:8]};
+          2'b10: mapped_write_payload = {24'h000000, value[23:16]};
+          default: mapped_write_payload = {24'h000000, value[31:24]};
+        endcase
+      end
+
+      3'b001: mapped_write_payload = address[1] ? {16'h0000, value[31:16]} : {16'h0000, value[15:0]};
+      default: mapped_write_payload = value;
+    endcase
+  endfunction
+
+  function automatic logic [31:0] mapped_read_result(input logic [31:0] value, input logic [1:0] address, input logic [2:0] size);
+    unique case (size)
+      3'b000: begin
+        unique case (address)
+          2'b00: mapped_read_result = {24'h000000, value[7:0]};
+          2'b01: mapped_read_result = {16'h0000, value[7:0], 8'h00};
+          2'b10: mapped_read_result = {8'h00, value[7:0], 16'h0000};
+          default: mapped_read_result = {value[7:0], 24'h000000};
+        endcase
+      end
+
+      3'b001: mapped_read_result = address[1] ? {value[15:0], 16'h0000} : {16'h0000, value[15:0]};
+      default: mapped_read_result = value;
+    endcase
+  endfunction
+
   // CTRL
   logic       ctrl_cpha;
   logic       ctrl_cpol;
@@ -61,7 +103,6 @@ module ahb_qspi #(
   logic [7:0] ctrl_clkdiv;
 
   // CMD
-  //
   // [0]     START
   // [1]     DIR, DATA phase only: 0=write, 1=read
   // [2]     ADDR_EN
@@ -78,7 +119,7 @@ module ahb_qspi #(
   logic [7:0] cmd_opcode;
 
   logic [23:0] address_reg;
-  logic [7:0]  data_reg;
+  logic [31:0] data_reg;
 
   // STATUS
   logic status_init_done;
@@ -89,9 +130,8 @@ module ahb_qspi #(
   logic status_addr_err;
 
   // CPU-driven PSRAM initialisation tracking
-  //
   // APS6404L starts in single-bit SPI mode. A successful bare PSRAM 0x35
-  // command in single-bit mode marks the SPI -> QPI initialisation complete
+  // command in single-bit mode marks the SPI -> QPI initialisation complete.
   typedef enum logic {
     INIT_WAIT_QPI_CMD,
     INIT_COMPLETE
@@ -100,6 +140,26 @@ module ahb_qspi #(
   init_state_t init_state;
   logic        init_cmd_in_flight;
 
+  typedef enum logic [2:0] {
+    MEM_IDLE,
+    MEM_START,
+    MEM_WAIT_WORD,
+    MEM_STREAM_READY,
+    MEM_CONTINUE,
+    MEM_STOP,
+    MEM_RESTART_STOP
+  } mem_state_t;
+
+  mem_state_t mem_state;
+  logic [22:0] mem_address;
+  logic        mem_write;
+  logic        mem_target;
+  logic [2:0]  mem_size;
+  logic [31:0] mem_write_data;
+  logic [31:0] mem_read_data;
+  logic        mem_complete;
+  logic        mem_error_pending;
+
   // AHB pipeline
   logic       access;
   logic       transfer_valid;
@@ -107,16 +167,34 @@ module ahb_qspi #(
   logic       read_pending;
   logic       access_error_r;
   logic [2:0] register_r;
-
   logic [3:0] byte_select;
   logic [3:0] byte_select_r;
 
   // QSPI core interface
-  logic       core_start;
-  logic       core_busy;
-  logic       core_done;
-  logic       core_rx_valid;
-  logic [7:0] core_read_data;
+  logic        core_start;
+  logic        manual_core_start;
+  logic        mapped_core_start;
+  logic        core_busy;
+  logic        core_done;
+  logic        core_rx_valid;
+  logic [31:0] core_read_data;
+
+  logic        core_dir;
+  logic        core_addr_en;
+  logic        core_data_en;
+  logic [7:0]  core_dummy;
+  logic [7:0]  core_opcode;
+  logic [23:0] core_address;
+  logic [31:0] core_write_data;
+
+  logic        core_target;
+  logic        core_word_done;
+  logic        core_stream_enable;
+  logic        core_stream_next;
+  logic        core_stream_stop;
+  logic [31:0] core_stream_write_data;
+  logic [2:0] core_data_bytes;
+  logic [2:0] core_stream_data_bytes;
 
   // START checks
   logic start_requested;
@@ -124,18 +202,22 @@ module ahb_qspi #(
   logic start_addr_en;
   logic start_data_en;
   logic start_target;
-
   logic start_blocked_flash;
   logic start_bad_address;
   logic start_bad_mode;
   logic start_busy_error;
   logic start_accepted;
-
   logic ctrl_write_while_busy;
-
   logic cfg_error_event;
   logic write_blocked_event;
   logic addr_error_event;
+  logic mem_request;
+  logic mem_active;
+  logic mem_bad_access;
+  logic mem_nor_write;
+  logic mem_nor_addr_error;
+  logic mem_sequential;
+  logic [22:0] mem_next_address;
 
   // Two-cycle AHB error response
   logic error_first_cycle;
@@ -143,29 +225,49 @@ module ahb_qspi #(
 
   assign access = HSEL && HREADYIN && HTRANS[1];
 
+  assign mem_request        = HMEMSEL && HREADYIN && HTRANS[1];
+  assign mem_active         = mem_state != MEM_IDLE;
+  assign mem_bad_access = mem_request && ((HSIZE > 3'b010) || ((HSIZE == 3'b001) && HMEMADDR[0]) || ((HSIZE == 3'b010) && (HMEMADDR[1:0] != 2'b00)));
+  assign mem_nor_write      = mem_request && HWRITE && cmd_target;
+  assign mem_nor_addr_error = mem_request && cmd_target && HMEMADDR[22];
+
+  assign mem_sequential = mem_request && !mem_bad_access && !mem_nor_write && !mem_nor_addr_error && (HMEMADDR == mem_next_address) && (HWRITE == mem_write) && (cmd_target == mem_target);
+
+  assign mem_next_address = mem_address + ((mem_size == 3'b000) ? 23'd1 : (mem_size == 3'b001) ? 23'd2 : 23'd4);
+
+  assign core_start = manual_core_start || mapped_core_start;
+
+  assign core_dir               = mem_active ? !mem_write : cmd_dir;
+  assign core_addr_en           = mem_active ? 1'b1 : cmd_addr_en;
+  assign core_data_en           = mem_active ? 1'b1 : cmd_data_en;
+  assign core_target            = mem_active ? mem_target : cmd_target;
+  assign core_dummy             = mem_active ? ((mem_write || !ctrl_quad_mode) ? 8'h00 : cmd_dummy) : cmd_dummy;
+  assign core_opcode            = mem_active ? (mem_write ? MEM_WRITE_OPCODE : (ctrl_quad_mode ? MEM_QUAD_READ_OPCODE : MEM_READ_OPCODE)) : cmd_opcode;
+  assign core_address           = mem_active ? {1'b0, mem_address} : address_reg;
+  assign core_write_data        = mem_active ? mem_write_data : data_reg;
+  assign core_data_bytes        = mem_active ? ((mem_size == 3'b000) ? 3'd1 : (mem_size == 3'b001) ? 3'd2 : 3'd4) : 3'd4;
+  assign core_stream_data_bytes = (HSIZE == 3'b000) ? 3'd1 : (HSIZE == 3'b001) ? 3'd2 : 3'd4;
+  assign core_stream_enable     = mem_active;
+  assign core_stream_next       = mem_state == MEM_CONTINUE;
+  assign core_stream_stop       = (mem_state == MEM_STOP) || (mem_state == MEM_RESTART_STOP);
+  assign core_stream_write_data = mapped_write_payload(HWDATA, HMEMADDR[1:0], HSIZE);
+
   // AHB access size / byte lanes
   always_comb begin
     byte_select    = 4'b0000;
     transfer_valid = 1'b0;
 
     unique case (HSIZE)
-
       3'b000: begin
         // Byte access
-        byte_select =
-            4'b0001 << HADDR[1:0];
-
+        byte_select    = 4'b0001 << HADDR[1:0];
         transfer_valid = 1'b1;
       end
 
       3'b001: begin
         // Halfword access
         if (!HADDR[0]) begin
-          byte_select =
-              HADDR[1]
-              ? 4'b1100
-              : 4'b0011;
-
+          byte_select    = HADDR[1] ? 4'b1100 : 4'b0011;
           transfer_valid = 1'b1;
         end
       end
@@ -182,16 +284,10 @@ module ahb_qspi #(
         byte_select    = 4'b0000;
         transfer_valid = 1'b0;
       end
-
     endcase
 
-    // Five implemented registers inside the local 4 KiB peripheral window
-    if (
-      (HADDR[11:5] != 7'h00) ||
-      (HADDR[4:2] > REG_DATA)
-    ) begin
-      transfer_valid = 1'b0;
-    end
+    // Five implemented registers inside the local 4 KiB peripheral window.
+    if ((HADDR[11:5] != 7'h00) || (HADDR[4:2] > REG_DATA)) transfer_valid = 1'b0;
   end
 
   always_ff @(posedge HCLK or negedge HRESETn) begin
@@ -211,90 +307,34 @@ module ahb_qspi #(
   end
 
   // Effective CMD byte-0 fields for a write that may update CMD and START
-  // in the same AHB transfer
-  assign start_dir =
-      byte_select_r[0]
-      ? HWDATA[1]
-      : cmd_dir;
+  // in the same AHB transfer.
+  assign start_dir     = byte_select_r[0] ? HWDATA[1] : cmd_dir;
+  assign start_addr_en = byte_select_r[0] ? HWDATA[2] : cmd_addr_en;
+  assign start_data_en = byte_select_r[0] ? HWDATA[3] : cmd_data_en;
+  assign start_target  = byte_select_r[0] ? HWDATA[4] : cmd_target;
 
-  assign start_addr_en =
-      byte_select_r[0]
-      ? HWDATA[2]
-      : cmd_addr_en;
-
-  assign start_data_en =
-      byte_select_r[0]
-      ? HWDATA[3]
-      : cmd_data_en;
-
-  assign start_target =
-      byte_select_r[0]
-      ? HWDATA[4]
-      : cmd_target;
-
-  assign start_requested =
-      write_pending &&
-      !access_error_r &&
-      (register_r == REG_CMD) &&
-      byte_select_r[0] &&
-      HWDATA[0];
-
-  assign start_busy_error =
-      start_requested &&
-      core_busy;
+  assign start_requested = write_pending && !access_error_r && (register_r == REG_CMD) && byte_select_r[0] && HWDATA[0];
+  assign start_busy_error = start_requested && core_busy;
 
   // Only SPI modes 0 and 3 are supported:
   //   CPOL=0 CPHA=0
   //   CPOL=1 CPHA=1
-  assign start_bad_mode =
-      start_requested &&
-      !core_busy &&
-      (ctrl_cpha != ctrl_cpol);
+  assign start_bad_mode = start_requested && !core_busy && (ctrl_cpha != ctrl_cpol);
 
-  // APS6404L uses a 23-bit address
-  assign start_bad_address =
-      start_requested &&
-      !core_busy &&
-      start_addr_en &&
-      !start_target &&
-      address_reg[23];
+  // APS6404L uses a 23-bit address.
+  assign start_bad_address = start_requested && !core_busy && start_addr_en && !start_target && address_reg[23];
 
-  // NOR write-directed transactions require FLASH_WRITE_EN
-  //
-  // DIR is only the DATA direction. It does not select an opcode
-  assign start_blocked_flash =
-      start_requested &&
-      !core_busy &&
-      start_target &&
-      start_data_en &&
-      !start_dir &&
-      !ctrl_flash_write_en;
+  // NOR write-directed transactions require FLASH_WRITE_EN.
+  // DIR is only the DATA direction. It does not select an opcode.
+  assign start_blocked_flash = start_requested && !core_busy && start_target && start_data_en && !start_dir && !ctrl_flash_write_en;
 
-  assign ctrl_write_while_busy =
-      write_pending &&
-      !access_error_r &&
-      (register_r == REG_CTRL) &&
-      core_busy;
+  assign ctrl_write_while_busy = write_pending && !access_error_r && (register_r == REG_CTRL) && core_busy;
+  assign cfg_error_event       = ctrl_write_while_busy || start_busy_error || start_bad_mode || mem_bad_access;
+  assign write_blocked_event   = start_blocked_flash || mem_nor_write;
+  assign addr_error_event      = start_bad_address || mem_nor_addr_error;
+  assign start_accepted        = start_requested && !core_busy && !start_bad_mode && !start_bad_address && !start_blocked_flash;
 
-  assign cfg_error_event =
-      ctrl_write_while_busy ||
-      start_busy_error ||
-      start_bad_mode;
-
-  assign write_blocked_event =
-      start_blocked_flash;
-
-  assign addr_error_event =
-      start_bad_address;
-
-  assign start_accepted =
-      start_requested &&
-      !core_busy &&
-      !start_bad_mode &&
-      !start_bad_address &&
-      !start_blocked_flash;
-
-  // --- AHB Write Logic -----------------------------------------
+  // --- AHB Write Logic -------------------------------------------------------
 
   always_ff @(posedge HCLK or negedge HRESETn) begin
     if (!HRESETn) begin
@@ -314,7 +354,7 @@ module ahb_qspi #(
       cmd_opcode          <= 8'h00;
 
       address_reg         <= 24'h000000;
-      data_reg            <= 8'h00;
+      data_reg            <= 32'h0000_0000;
 
       status_init_done     <= 1'b0;
       status_done          <= 1'b0;
@@ -325,50 +365,24 @@ module ahb_qspi #(
 
       init_state         <= INIT_WAIT_QPI_CMD;
       init_cmd_in_flight <= 1'b0;
-
-      core_start <= 1'b0;
+      manual_core_start         <= 1'b0;
     end else begin
-      core_start <= 1'b0;
+      manual_core_start <= 1'b0;
 
-      // STATUS W1C fields
-      //
-      // Hardware events later in this block have priority over software
-      // clears if both happen in the same cycle
-      if (
-        write_pending &&
-        !access_error_r &&
-        (register_r == REG_STATUS) &&
-        byte_select_r[0]
-      ) begin
-        if (HWDATA[2]) begin
-          status_done <= 1'b0;
-        end
-
-        if (HWDATA[3]) begin
-          status_rx_valid <= 1'b0;
-        end
-
-        if (HWDATA[4]) begin
-          status_cfg_err <= 1'b0;
-        end
-
-        if (HWDATA[5]) begin
-          status_write_blocked <= 1'b0;
-        end
-
-        if (HWDATA[6]) begin
-          status_addr_err <= 1'b0;
-        end
+      // STATUS W1C fields. Hardware events later in this block have priority
+      // over software clears if both happen in the same cycle.
+      if (write_pending && !access_error_r && (register_r == REG_STATUS) && byte_select_r[0]) begin
+        if (HWDATA[2]) status_done          <= 1'b0;
+        if (HWDATA[3]) status_rx_valid      <= 1'b0;
+        if (HWDATA[4]) status_cfg_err       <= 1'b0;
+        if (HWDATA[5]) status_write_blocked <= 1'b0;
+        if (HWDATA[6]) status_addr_err      <= 1'b0;
       end
 
-      if (
-        write_pending &&
-        !access_error_r
-      ) begin
+      if (write_pending && !access_error_r) begin
         unique case (register_r)
-
           REG_CTRL: begin
-            // CTRL writes while BUSY are ignored
+            // CTRL writes while BUSY are ignored.
             if (!core_busy) begin
               if (byte_select_r[0]) begin
                 ctrl_cpha           <= HWDATA[0];
@@ -379,17 +393,14 @@ module ahb_qspi #(
                 ctrl_ie_err         <= HWDATA[5];
               end
 
-              if (byte_select_r[1]) begin
-                ctrl_clkdiv <= HWDATA[15:8];
-              end
+              if (byte_select_r[1]) ctrl_clkdiv <= HWDATA[15:8];
             end
           end
 
           REG_CMD: begin
-            // START while BUSY rejects the entire CMD write
-            //
-            // Descriptor-only writes while BUSY remain permitted because the
-            // core latches the active transaction descriptor at START
+            // START while BUSY rejects the entire CMD write. Descriptor-only
+            // writes while BUSY remain permitted because the core latches the
+            // active transaction descriptor at START.
             if (!start_busy_error) begin
               if (byte_select_r[0]) begin
                 cmd_dir     <= HWDATA[1];
@@ -398,64 +409,40 @@ module ahb_qspi #(
                 cmd_target  <= HWDATA[4];
               end
 
-              if (byte_select_r[1]) begin
-                cmd_dummy <= HWDATA[15:8];
-              end
-
-              if (byte_select_r[2]) begin
-                cmd_opcode <= HWDATA[23:16];
-              end
+              if (byte_select_r[1]) cmd_dummy  <= HWDATA[15:8];
+              if (byte_select_r[2]) cmd_opcode <= HWDATA[23:16];
             end
 
             if (start_accepted) begin
-              core_start <= 1'b1;
+              manual_core_start <= 1'b1;
 
-              // CPU-driven APS6404L single-bit SPI -> QPI initialisation
-              if (
-                (init_state == INIT_WAIT_QPI_CMD) &&
-                !ctrl_quad_mode &&
-                !start_target &&
-                !start_addr_en &&
-                !start_data_en &&
-                (
-                  byte_select_r[2]
-                  ? (HWDATA[23:16] == 8'h35)
-                  : (cmd_opcode == 8'h35)
-                )
-              ) begin
+              // CPU-driven APS6404L single-bit SPI -> QPI initialisation.
+              if ((init_state == INIT_WAIT_QPI_CMD) && !ctrl_quad_mode && !start_target && !start_addr_en && !start_data_en && (byte_select_r[2] ? (HWDATA[23:16] == 8'h35) : (cmd_opcode == 8'h35))) begin
                 init_cmd_in_flight <= 1'b1;
               end
             end
           end
 
           REG_ADDR: begin
-            if (byte_select_r[0]) begin
-              address_reg[7:0] <= HWDATA[7:0];
-            end
-
-            if (byte_select_r[1]) begin
-              address_reg[15:8] <= HWDATA[15:8];
-            end
-
-            if (byte_select_r[2]) begin
-              address_reg[23:16] <= HWDATA[23:16];
-            end
+            if (byte_select_r[0]) address_reg[7:0]   <= HWDATA[7:0];
+            if (byte_select_r[1]) address_reg[15:8]  <= HWDATA[15:8];
+            if (byte_select_r[2]) address_reg[23:16] <= HWDATA[23:16];
           end
 
           REG_DATA: begin
-            if (byte_select_r[0]) begin
-              data_reg <= HWDATA[7:0];
-            end
+            if (byte_select_r[0]) data_reg[7:0]   <= HWDATA[7:0];
+            if (byte_select_r[1]) data_reg[15:8]  <= HWDATA[15:8];
+            if (byte_select_r[2]) data_reg[23:16] <= HWDATA[23:16];
+            if (byte_select_r[3]) data_reg[31:24] <= HWDATA[31:24];
           end
 
           default: begin
-            // STATUS W1C handled above
+            // STATUS W1C handled above.
           end
-
         endcase
       end
 
-      if (core_done) begin
+      if (core_done && !mem_active) begin
         status_done <= 1'b1;
 
         if (init_cmd_in_flight) begin
@@ -465,39 +452,130 @@ module ahb_qspi #(
         end
       end
 
-      if (core_rx_valid) begin
+      if (core_rx_valid && !mem_active) begin
         status_rx_valid <= 1'b1;
 
-        // Deliberately retain the shared DATA-register behaviour identified
-        // in PR #23: completed RX replaces the previous transmit byte
+        // Retain the shared DATA-register behaviour: completed RX replaces
+        // the previous transmit word.
         data_reg <= core_read_data;
       end
 
-      if (cfg_error_event) begin
-        status_cfg_err <= 1'b1;
-      end
-
-      if (write_blocked_event) begin
-        status_write_blocked <= 1'b1;
-      end
-
-      if (addr_error_event) begin
-        status_addr_err <= 1'b1;
-      end
+      if (cfg_error_event)     status_cfg_err       <= 1'b1;
+      if (write_blocked_event) status_write_blocked <= 1'b1;
+      if (addr_error_event)    status_addr_err      <= 1'b1;
     end
   end
 
-  // --- AHB Read Logic -----------------------------------------
+  // --- Memory-mapped transaction control -----------------------------------
+
+  always_ff @(posedge HCLK or negedge HRESETn) begin
+    if (!HRESETn) begin
+      mem_state         <= MEM_IDLE;
+      mem_address       <= 23'h000000;
+      mem_write         <= 1'b0;
+      mem_target        <= 1'b0;
+      mem_size          <= 3'b010;
+      mem_write_data    <= 32'h0000_0000;
+      mem_read_data     <= 32'h0000_0000;
+      mem_complete      <= 1'b0;
+      mem_error_pending <= 1'b0;
+      mapped_core_start <= 1'b0;
+    end else begin
+      mem_complete      <= 1'b0;
+      mem_error_pending <= 1'b0;
+      mapped_core_start <= 1'b0;
+
+      unique case (mem_state)
+        MEM_IDLE: begin
+          if (mem_request) begin
+            if (mem_bad_access || mem_nor_write || mem_nor_addr_error) begin
+              mem_error_pending <= 1'b1;
+            end else begin
+              mem_address <= HMEMADDR;
+              mem_write   <= HWRITE;
+              mem_target  <= cmd_target;
+              mem_size    <= HSIZE;
+              mem_state   <= MEM_START;
+            end
+          end
+        end
+
+        MEM_START: begin
+          if (!core_busy) begin
+            if (mem_write) mem_write_data <= mapped_write_payload(HWDATA, mem_address[1:0], mem_size);
+            mapped_core_start <= 1'b1;
+            mem_state <= MEM_WAIT_WORD;
+          end
+        end
+
+        MEM_WAIT_WORD: begin
+          if (core_word_done) begin
+            if (!mem_write) mem_read_data <= mapped_read_result(core_read_data, mem_address[1:0], mem_size);
+            mem_complete <= 1'b1;
+            mem_state <= MEM_STREAM_READY;
+          end
+        end
+
+        MEM_STREAM_READY: begin
+          if (mem_request) begin
+            if (mem_bad_access || mem_nor_write || mem_nor_addr_error) begin
+              mem_error_pending <= 1'b1;
+              mem_state <= MEM_STOP;
+            end else if (mem_sequential) begin
+              mem_address <= HMEMADDR;
+              mem_size    <= HSIZE;
+              mem_state   <= MEM_CONTINUE;
+            end else begin
+              mem_address <= HMEMADDR;
+              mem_write   <= HWRITE;
+              mem_target  <= cmd_target;
+              mem_state   <= MEM_RESTART_STOP;
+              mem_size    <= HSIZE;
+            end
+          end else begin
+            mem_state <= MEM_STOP;
+          end
+        end
+
+        MEM_CONTINUE: begin
+          mem_state <= MEM_WAIT_WORD;
+        end
+
+        MEM_STOP: begin
+          if (mem_request) begin
+            if (mem_bad_access || mem_nor_write || mem_nor_addr_error) begin
+              mem_error_pending <= 1'b1;
+              if (core_done) mem_state <= MEM_IDLE;
+            end else begin
+              mem_address <= HMEMADDR;
+              mem_write   <= HWRITE;
+              mem_target  <= cmd_target;
+              mem_state   <= core_done ? MEM_START : MEM_RESTART_STOP;
+              mem_size    <= HSIZE;
+            end
+          end else if (core_done) begin
+            mem_state <= MEM_IDLE;
+          end
+        end
+
+        MEM_RESTART_STOP: begin
+          if (core_done) mem_state <= MEM_START;
+        end
+
+        default: mem_state <= MEM_IDLE;
+      endcase
+    end
+  end
+
+  // --- AHB Read Logic --------------------------------------------------------
 
   always_comb begin
     HRDATA = '0;
 
-    if (
-      read_pending &&
-      !access_error_r
-    ) begin
+    if (mem_complete && !mem_write) begin
+      HRDATA = mem_read_data;
+    end else if (read_pending && !access_error_r) begin
       unique case (register_r)
-
         REG_CTRL: begin
           HRDATA[0]    = ctrl_cpha;
           HRDATA[1]    = ctrl_cpol;
@@ -528,48 +606,50 @@ module ahb_qspi #(
           HRDATA[6] = status_addr_err;
         end
 
-        REG_ADDR: begin
-          HRDATA[23:0] = address_reg;
-        end
-
-        REG_DATA: begin
-          HRDATA[7:0] = data_reg;
-        end
-
-        default: begin
-          HRDATA = '0;
-        end
-
+        REG_ADDR: HRDATA[23:0] = address_reg;
+        REG_DATA: HRDATA[31:0] = data_reg;
+        default:  HRDATA = '0;
       endcase
     end
   end
 
-  // --- QSPI Serial engine -----------------------------------------
+  // --- QSPI Serial engine ---------------------------------------------------
 
   qspi u_qspi (
     .clk          (HCLK),
     .rst_n        (HRESETn),
 
     .start        (core_start),
-    .dir          (cmd_dir),
-    .addr_en      (cmd_addr_en),
-    .data_en      (cmd_data_en),
-    .target       (cmd_target),
+    .dir          (core_dir),
+    .addr_en      (core_addr_en),
+    .data_en      (core_data_en),
+    .target       (core_target),
 
     .quad_mode    (ctrl_quad_mode),
     .cpol         (ctrl_cpol),
     .cpha         (ctrl_cpha),
     .clkdiv       (ctrl_clkdiv),
 
-    .dummy        (cmd_dummy),
-    .opcode       (cmd_opcode),
-    .address      (address_reg),
-    .write_data   (data_reg),
+    .dummy        (core_dummy),
+    .opcode       (core_opcode),
+    .address      (core_address),
+    .write_data   (core_write_data),
+    .data_bytes        (core_data_bytes),
 
-    .busy         (core_busy),
-    .done         (core_done),
-    .rx_valid     (core_rx_valid),
-    .read_data    (core_read_data),
+    // Stage 2 only adds the serial-engine continuation primitive. The manual
+    // AHB register path deliberately keeps it disabled until the mapped path
+    // is introduced in a later stage.
+    .stream_enable     (core_stream_enable),
+    .stream_next       (core_stream_next),
+    .stream_stop       (core_stream_stop),
+    .stream_write_data (core_stream_write_data),
+    .stream_data_bytes (core_stream_data_bytes),
+
+    .busy              (core_busy),
+    .done              (core_done),
+    .rx_valid          (core_rx_valid),
+    .word_done         (core_word_done),
+    .read_data         (core_read_data),
 
     .qspi_sck_o   (qspi_sck_o),
     .qspi_ce_n_o  (qspi_ce_n_o),
@@ -578,33 +658,22 @@ module ahb_qspi #(
     .qspi_sio_oe  (qspi_sio_oe)
   );
 
-  //  ---- AHB-Lite ERROR response --------------------------------------------
-  // Cycle 1:
-  //   HRESP     = 1 , HREADYOUT = 0
-  // Cycle 2:
-  //   HRESP     = 1,  HREADYOUT = 1
+  // --- AHB-Lite ERROR response ---------------------------------------------
+  // Cycle 1: HRESP = 1, HREADYOUT = 0
+  // Cycle 2: HRESP = 1, HREADYOUT = 1
 
-  assign error_first_cycle = !error_second_cycle // FIXME - can this be simplifies?
-  && (
-     ((write_pending || read_pending) && access_error_r) 
-      || start_blocked_flash );
+  assign error_first_cycle = !error_second_cycle && (((write_pending || read_pending) && access_error_r) || start_blocked_flash || mem_error_pending);
 
   always_ff @(posedge HCLK or negedge HRESETn) begin
-    if (!HRESETn) begin
-      error_second_cycle <= 1'b0;
-    end else if (error_second_cycle) begin
-      error_second_cycle <= 1'b0;
-    end else if (error_first_cycle) begin
-      error_second_cycle <= 1'b1;
-    end
+    if (!HRESETn) error_second_cycle <= 1'b0;
+    else if (error_second_cycle) error_second_cycle <= 1'b0;
+    else if (error_first_cycle) error_second_cycle <= 1'b1;
   end
 
-  assign HRESP = error_first_cycle || error_second_cycle;
-  assign HREADYOUT = !error_first_cycle;
-  
-  // ---- Combined interrupt ---------------------------------------------------
-  assign irq = ((status_done && ctrl_ie_done) || 
-  (( status_cfg_err || status_write_blocked   || status_addr_err)
-                                              && ctrl_ie_err ));
+  assign HRESP     = error_first_cycle || error_second_cycle;
+  assign HREADYOUT = ((mem_state == MEM_IDLE) || (mem_state == MEM_STREAM_READY) || (mem_state == MEM_STOP)) && !error_first_cycle;
+
+  // --- Combined interrupt ---------------------------------------------------
+  assign irq = (status_done && ctrl_ie_done) || ((status_cfg_err || status_write_blocked || status_addr_err) && ctrl_ie_err);
 
 endmodule
