@@ -491,11 +491,7 @@ module ahb_qspi #(
 
   always_comb begin
     HRDATA = '0;
-
-    if (
-      read_pending &&
-      !access_error_r
-    ) begin
+    if (read_pending && !access_error_r) begin
       unique case (register_r)
 
         REG_CTRL: begin
