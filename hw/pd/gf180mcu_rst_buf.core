@@ -1,0 +1,38 @@
+CAPI=2:
+
+name: sharc:pd_ip:gf180mcu_rst_buf:0.0.1
+description: >
+  Global reset buffer (gf180mcu_rst_buf_wrapper) that grouper_soc_top
+  instantiates as the root of the reset tree. fusesoc only ever builds it
+  against the simulation model (a plain assign); the technology-mapped cell,
+  tech/gf180mcu_rst_buf_mapped.v, is listed directly by the LibreLane configs.
+  Both define gf180mcu_rst_buf, so exactly one may be in a build.
+
+filesets:
+  wrapper:
+    files:
+      - wrappers/gf180mcu_rst_buf_wrapper.sv:   {file_type: systemVerilogSource}
+
+  gl_model:
+    files:
+      - gl/gf180mcu_rst_buf_gl_model.v:         {file_type: systemVerilogSource}
+
+targets:
+  default: &default
+    description: Wrapper + simulation model.
+    filesets: [gl_model, wrapper]
+    toplevel: gf180mcu_rst_buf_wrapper
+
+  # fusesoc run --no-export --target=lint sharc:pd_ip:gf180mcu_rst_buf
+  lint:
+    <<: *default
+    description: Lint the wrapper against the simulation model (no simulation).
+    flow: sim
+    flow_options:
+      tool: verilator
+      mode: lint-only
+      verilator_options:
+        - --sv
+        - -Wall
+        - -Wno-fatal
+        - -Wno-TIMESCALEMOD
