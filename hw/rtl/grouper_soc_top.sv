@@ -26,23 +26,36 @@ module grouper_soc_top #(
   logic [NUM_GPIO-1:0] gpio_in_sync;
   logic [NUM_GPIO-1:0] gpio_in_dig;
 
-  logic                rst_n_sync;       // Reset synchronised to sysclk
+  logic                clk_soc;          // sysclk, gated by the reset controller
+  logic                rst_n_ctrl;       // reset controller output
+  logic                rst_n_soc;        // global reset, after the root buffer
 
   // --- Clock and Reset Control (CRG) ---------------------------------------------------
+  //
+  // The reset controller asserts reset asynchronously and releases it while
+  // clk_soc is stopped, restarting the clock 2**CTR_WIDTH cycles later. The
+  // reset tree (~1000 async reset pins) therefore never has to meet
+  // single-cycle recovery/removal - the SDC carries a multicycle exception
+  // through u_rst_buf instead.
+  //
+  // No whole-chip reset request source exists yet; dbg_ctrl's cpu_rst_req
+  // only holds picorv32 and stays inside cpu_ss.
 
+  reset_controller #(
+    .CTR_WIDTH   (3)
+  ) u_reset_controller (
+    .clk_i       (clk),
+    .rst_n_i     (async_rst_n),
+    .rst_request (1'b0),
+    .clk_o       (clk_soc),
+    .rst_n_o     (rst_n_ctrl)
+  );
 
-
-
-  // --- Reset re-synchronizer ------------------------------------------------------------
-
-    sync #(
-      .DEPTH       (2)
-    ) u_rst_resync_sync (
-      .clk         (clk),
-      .rst_n       (1'b1),
-      .data_i      (async_rst_n),
-      .data_o      (rst_n_sync)
-    );
+  // Instance name is load-bearing (we hook SDCs onto it)
+  gf180mcu_rst_buf_wrapper u_glbl_rst_buf (
+    .rst_n_i     (rst_n_ctrl),
+    .rst_n_o     (rst_n_soc)
+  );
 
   // --- IO synchroniser -----------------------------------------------------------------s
   //
@@ -59,8 +72,8 @@ module grouper_soc_top #(
     sync #(
       .DEPTH       (2)
     ) u_gpio_sync (
-      .clk         (clk),
-      .rst_n       (async_rst_n),
+      .clk         (clk_soc),
+      .rst_n       (rst_n_soc),
       .data_i      (gpio_in[i]),
       .data_o      (gpio_in_sync[i])
     );
@@ -76,8 +89,8 @@ module grouper_soc_top #(
     .NUM_GPIO                  (NUM_GPIO)
     
   ) u_grouper_soc_dig_ss (
-    .clk                       (clk),
-    .rst_n                     (rst_n_sync),
+    .clk                       (clk_soc),
+    .rst_n                     (rst_n_soc),
 
     .uart_tx                   (uart_tx),
     .uart_rx                   (uart_rx),
