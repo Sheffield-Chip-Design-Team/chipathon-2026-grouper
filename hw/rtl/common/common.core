@@ -1,7 +1,7 @@
 CAPI=2:
 
 name: sharc:common_ip:common:0.0.1
-description: Shared RTL building blocks (sync, clock div/gate/out, pulse sync, FIFO, shift reg, downcounter)
+description: Shared RTL building blocks (sync, reset controller, clock div/gate/out, pulse sync, FIFO, shift reg, downcounter)
 
 filesets:
   rtl:
@@ -15,6 +15,7 @@ filesets:
       - shift_reg.sv:        {file_type: systemVerilogSource}
       - small_sync_fifo.sv:  {file_type: systemVerilogSource}
       - sync.sv:             {file_type: systemVerilogSource}
+      - reset_controller.sv: {file_type: systemVerilogSource}
 
 targets:
   default:

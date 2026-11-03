@@ -100,20 +100,6 @@ if { [info exists ::env(OPENLANE_SDC_IDEAL_CLOCKS)] && $::env(OPENLANE_SDC_IDEAL
 # net through cpu_ss into spi_m/spi_s/uart_rx/the RAM macro wrappers - worst
 # slack -26.86 ns. That's timing pressure on a mode-select signal that was
 # never meant to close same-cycle.
-#
-# `-hierarchical` doesn't help here: Yosys.Synthesis flattens the design (see
-# grouper_soc_chip_core.nl.v), so by the time OpenROAD reads this SDC there is
-# no hierarchy left for -hierarchical to descend - just one flat net whose
-# name happens to contain literal dots from the flattening scheme:
-# `u_grouper_soc_top.u_grouper_soc_dig_ss.u_cpu_ss.dbg_own`. get_nets with a
-# bare, non-wildcarded `dbg_own` pattern does an exact match against that
-# whole flat name and finds nothing - confirmed as
-# "Warning: grouper_chip_core.sdc line 103, net 'dbg_own' not found." in
-# every corner's 10-openroad-staprepnr/*/sta.log (job 5347, the run this
-# exception was meant to fix, and still present at 53-openroad-stapostpnr -
-# the exception never took, which is why job 5347's max_ss violations went
-# up (409) instead of down from job 5342's 394). A leading glob picks up the
-# flat name by suffix instead of requiring an exact match.
 set_false_path -through [get_nets {*dbg_own}]
 
 # gpio_*_bidir_in, when gpio_sync_en_n[i] is set, bypasses the 2-FF
@@ -134,3 +120,29 @@ set_false_path -through [get_nets {*dbg_own}]
 # special about these two. Revisit whether all *_bidir_in ports should carry
 # this exception instead of just the two that happened to fail this run.
 set_false_path -from [get_ports {gpio_1_bidir_in gpio_15_bidir_in}]
+
+# ---------------------------------------------------------------------------
+# Multicycle: global reset tree
+# ---------------------------------------------------------------------------
+#
+# hw/rtl/common/reset_controller.sv releases rst_n with the SoC clock stopped
+# and only restarts it 2**CTR_WIDTH cycles later (CTR_WIDTH = 3 in
+# grouper_soc_top.sv), and asserts it on the same edge the clock stops. So no
+# flop on the reset tree sees a clock edge within 8 cycles of rst_n moving,
+# and the recovery/removal checks across the ~1000-load tree (job 4315's
+# worst setup path was this net's buffer tree) only need to close in 8.
+#
+# Anchored on the explicitly instantiated root buffer
+# (hw/pd/tech/gf180mcu_rst_buf_mapped.v, reached as
+# u_grouper_soc_top.u_glbl_rst_buf.u_rst_buf.u_buf) because the controller's
+# output flop has no stable name once flattened. Leading glob for the same
+# reason as *dbg_own above.
+# -hold 7 keeps the removal check at the launch edge rather than moving it
+# with the setup multiplier. If CTR_WIDTH changes, change these with it.
+set rst_root [get_pins {*u_glbl_rst_buf.u_rst_buf.u_buf/Z}]
+if { [llength $rst_root] == 0 } {
+    puts "\[WARNING] reset root buffer u_glbl_rst_buf.u_rst_buf.u_buf/Z not found - reset multicycle NOT applied"
+} else {
+    set_multicycle_path -setup 8 -through $rst_root
+    set_multicycle_path -hold  7 -through $rst_root
+}
