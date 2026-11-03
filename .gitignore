@@ -25,3 +25,4 @@ sw/fw_id.svh
 new/*
 !sw/boot/code.hex
 !sw/boot/code.vmem
+sw/boot/legacy/bootloader/out/*
