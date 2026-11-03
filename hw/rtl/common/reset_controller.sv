@@ -58,7 +58,12 @@ module reset_controller #(
       state   <= next_state;
       rst_n_o <= (next_state == ST_RST_DIS_CLK_DIS) || (next_state == ST_RUN);
       clk_en  <= (next_state == ST_RST_EN_CLK_EN) || (next_state == ST_RUN);
-      if (state != ST_RUN) begin
+      
+      // Hold the counter at zero in ST_RUN so a rst_request is seen on the
+      // first cycle it is raised
+      if (next_state == ST_RUN) begin
+        ctr <= '0;
+      end else begin
         ctr <= CTR_WIDTH'(ctr + 'd1);
       end
     end
