@@ -127,7 +127,9 @@ make sim / sim-gl    # cocotb/chip_top_tb.py against RTL / the netlist in final/
 
 ```
 grouper_soc_top          (clk, async_rst_n, uart_tx/rx, gpio_{in,out,oe,cs,sl,ie,pu,pd}[15:0])
-  ├─ sync × (1 + NUM_GPIO)   reset resynchroniser + 2-FF synchroniser per GPIO input,
+  ├─ reset_controller        async-assert reset + clock gate -> clk_soc (see "Reset controller")
+  ├─ gf180mcu_rst_buf_wrapper  u_glbl_rst_buf, named reset-tree root for the SDC -> rst_n_soc
+  ├─ sync × NUM_GPIO         2-FF synchroniser per GPIO input (on clk_soc),
   │                          each bypassable via gpio_sync_en_n (a deliberate CDC opt-out)
   └─ digital_ss
        ├─ cpu_ss       picorv32 + native-memory-interface → AHB-Lite master bridge
@@ -183,6 +185,112 @@ Three things block the macro RAM, in order:
 1. **`ram_ss` is not instantiated.** Wire it into `ahb_ram` behind the `USE_MACRO_RAM` parameter and add `ram_ss.sv` to the `rtl` fileset in `grouper_soc.core`. `ram_ss` is four byte-lane macros of 1024 × 8 b, i.e. 1024 words × 32 b = 4 KiB, so `ahb_ram`'s default `MEM_WIDTH=11` (2 KiB) has to become 12 to match — and the RAM decode window is already 4 KiB. The macro placements in `librelane/classic/config.yaml` already name `u_ram_ss.gen_macro_ram.gen_sram[N].u_wrapper.u_sram_macro`, so they are aspirational until this lands.
 2. **`ahb_ram` cannot drive a single-port SRAM.** Its read path uses address-phase `word_address` while its write path uses registered `word_address_r`; a flop array serves both in one cycle, a single-port macro with one `A` port cannot. `HREADYOUT` is hardwired to `'1`, so there is no stall mechanism. Needs a wait state on write-followed-by-read, or a write-data bypass.
 3. **Gate-level simulation needs the macro's behavioural model** (`ip/gf180mcu_ocd_ip_sram/cells/.../sram1024x8m8wm1.v`). Synthesis consumes `__blackbox_pp.v`, so the netlist instance is empty. The model carries its own `specify` timing checks and requires `CEN` to be seen high before its first falling edge, or it latches "memory is not operational". Use Icarus, not Verilator — Verilator has no `$sdf_annotate` and ignores `specify` blocks.
+
+### Reset controller and reset multicycle
+
+`grouper_soc_top` drives the SoC from `reset_controller` (`hw/rtl/common/reset_controller.sv`).
+It asserts reset asynchronously, then releases it while `clk_soc` is gated off, and restarts the
+clock 2**`CTR_WIDTH` = 8 cycles later. The reset then passes through a named root buffer:
+
+```
+grouper_soc_top.u_glbl_rst_buf   gf180mcu_rst_buf_wrapper  (hw/pd/wrappers/)
+  .u_rst_buf                     gf180mcu_rst_buf          mapped: hw/pd/tech/gf180mcu_rst_buf_mapped.v (LibreLane)
+                                                           model:  hw/pd/gl/gf180mcu_rst_buf_gl_model.v (fusesoc, via hw/pd/gf180mcu_rst_buf.core)
+    .u_buf                       gf180mcu_fd_sc_mcu7t5v0__buf_16
+```
+
+`librelane/classic/grouper_chip_core.sdc` hangs `set_multicycle_path -setup 8 -hold 7` on
+`*u_glbl_rst_buf.u_rst_buf.u_buf/Z`. The instance names are load-bearing, and so is `CTR_WIDTH`:
+if the pin isn't found, `sta.log` prints `reset root buffer … not found`. As of 2026-11-03 this
+had **not yet been through synthesis or PnR**. The cell name and `I`/`Z` pins, yosys-slang
+resolving a std cell instantiated in RTL, and how clock-tree synthesis copes with the
+latch + AND `clk_gate` at the clock root are all unverified.
+
+What the multicycle does and doesn't buy:
+
+- It relaxes reset *recovery* (the setup-type check) across the ~1600 async reset pins.
+- `-hold 7` keeps reset *removal* (the hold-type check) at the normal edge rather than demanding
+  7 cycles. That matters because reset now launches from the ungated `clk` and is captured at the
+  end of the gated `clk_soc` tree. Without the exception, that skew creates min_ff removal
+  violations.
+- It does nothing for data-path hold or congestion directly. The only gain there is that repair
+  stops upsizing the reset tree for timing.
+
+The macro pin order is already grouped per pad. `librelane/classic/pin_order.cfg` gives
+`gpio_N_{in,out,oe,ie,cs,pu,pd,sl}` contiguously on each edge (S: 0–5, E: 6–9, N: 10–15), and
+`final/def/` confirms the placed order. The config notes say moving pads between edges has broken
+legalisation in the SE corner before (jobs 5329/5331).
+
+### Plan: reduce area (in progress — continue on the NFS/SGE machine)
+
+Goal: make the chip smaller without losing functionality, and ease the reported congestion and hold
+issues on the 1675 × 1110 floorplan.
+
+**Starting point.** Job 5357 (`librelane/classic/results/sdc_falsepath_fix_01_09_26/`, = `final/`):
+
+- Timing: hold clean in every corner. max_ss setup has 244 violations, WNS −20.1 ns.
+- 7499 max-slew violations and 644 max-cap violations.
+- 32.5k logic cells and 3524 flops: 1628 `dffrnq` (with reset) and 1896 `dffq` (no reset).
+
+Per block, from `final/nl/`; instance names keep their hierarchy prefix, so you can grep the counts:
+
+| Block | Cells | Flops |
+|---|---|---|
+| picorv32 core (`u_cpu_ss.u_cpu`) | 15,683 (48%) | 1,864 |
+| ↳ mul (`genblk1`) / div (`genblk2`) | 1,750 / 1,757 | 254 / 199 |
+| unnamed repair/CTS buffers | 3,683 | – |
+| spi_s / spi_m / dbg_ctrl | 2,813 / 2,152 / 1,772 | 366 / 330 / 304 |
+| qspi / io_ss / uart | 1,615 / 1,556 / 1,166 | 207 / 169 / 172 |
+
+The 9.7k `nand2` cells are mostly the regfile read muxes.
+
+Steps, in order:
+
+1. **Baseline the reset controller.** Run full PnR on the current `config.yaml` (`run-pnr` skill),
+   then read it with `pnr-results`. Collect:
+   - per-corner hold WNS/TNS, and whether the hold violators end on reset (`RN`) or data (`D`) pins;
+   - GRT overflow;
+   - reset-tree buffer count;
+   - confirmation that the "not found" warning is absent.
+
+   Check the open questions listed under the reset controller section above. Everything below is
+   compared against this run.
+2. **Single-port register file.** Set `.ENABLE_REGS_DUALPORT (0)` in `hw/rtl/cpu_ss.sv`.
+   - Expected saving: one 32-bit 20:1 read mux, roughly 1.5–2.5k cells.
+   - Same ISA, no firmware change. Instructions that read two registers take an extra cycle.
+3. **Remove reset from storage-only flops.**
+   - `hw/rtl/common/small_sync_fifo.sv`: move `memory` into its own reset-less
+     `always_ff @(posedge clk)`. Keep reset on the pointers, `full`, `empty` and `rdata`.
+   - In the same file, gate the `rdata` update with `read && !empty`, so that reading an empty FIFO
+     still returns 0 after reset rather than uninitialised memory. This covers six FIFOs:
+     uart, spi_s and spi_m, tx and rx each.
+   - Then audit spi_s, spi_m, qspi, dbg_ctrl and uart for data registers that are always written
+     before being read. Only remove reset where the register never drives a pad, a status bit, an
+     IRQ or an FSM decision straight out of reset.
+   - Leave `shift_reg` alone: uart tx drives the pad from it.
+   - This trades `dffrnq` for the smaller `dffq` and takes pins off the reset tree.
+4. **Synthesis strategy sweep.** Run `--to Yosys.Synthesis` with `SYNTH_STRATEGY` set to
+   AREA 0, 1, 2 and 3. Compare `design__instance__area` and pre-placement max_ss STA, keep the
+   smallest that doesn't worsen setup, and record the table in a `config.yaml` comment.
+5. **Re-run PnR, then resize.** Do a full run with steps 2–4 applied and compare it with step 1.
+   - If std-cell area drops materially, recompute placeable area with the arithmetic in the
+     `config.yaml` comment above `PL_TARGET_DENSITY_PCT`, then shrink `DIE_AREA` in a separate run.
+   - When shrinking, keep the SRAM macro placements valid and watch DPL-0036 in the SE corner.
+
+Deliberately out of scope for now: dropping the picorv32 IRQ q-registers (`ENABLE_IRQ_QREGS`, which
+needs an IRQ-vector and gp/tp firmware rework) and removing MUL/DIV (that changes the ISA).
+
+Verification after each RTL step:
+
+- `fusesoc run --no-export --target=lint sharc:soc_ip:grouper_soc`: 0 `%Error`.
+  The command exits 1 anyway because of an edalize lint-only crash.
+- After step 3, run `block-regression` for uart, spi_s and spi_m.
+- Run `grouper_soc_directed` with `FW_TEST` set to each of `uart_echo`, `gpio_regs`, `spi_m`,
+  `qspi`, `stdlib_*` and `debug_heartbeat`.
+  `gpio_regs` already fails 13/14 on the ALTSEL reset value before any of this, and `tb_top`'s
+  default firmware overflows the ROM by 1428 B — neither is caused by this work.
+- For PnR, compare against step 1: cell area, `dffrnq`/`dffq` counts, per-corner hold/setup,
+  slew/cap counts and GRT overflow.
 
 ## Docs caveat
 
